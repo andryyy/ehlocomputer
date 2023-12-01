@@ -1,0 +1,66 @@
+{% if not request.headers.get("Hx-Request") %}
+  {% extends "base.html" %}
+{% endif %}
+
+{% block body %}
+
+<article class="tls-container">
+  <div class="float tls-header">
+    <b class="float-start">Configure LEGO DNS client</b>
+  </div>
+
+  <hr>
+
+  <form data-loading-disable
+    _="install gatherLegoConfig"
+    hx-target="#body-main"
+    hx-push-url="true"
+    hx-post="{{ url_for("listeners.get_listener", listener_id=request.view_args.get("listener_id")) }}/tls/{{ data.client_name }}/run"
+    hx-ext="json-enc">
+      <input name="domains" value="{{ data.hostname }}" type="hidden">
+      <input name="lego_provider" value="{{ data.client_name }}" type="hidden">
+      <fieldset>
+        <p>Please read the <a href="https://letsencrypt.org/de/repository/#let-s-encrypt-subscriber-agreement" target="_blank">Let's Encrypt Subscriber Agreement</a>.<br>
+        You must agree in order to register with the Let's Encrypt ACME server.</p>
+        <input type="checkbox" data-strict-bool id="agree-le" name="acme_terms_agreed" value="true">
+        <label for="agree-le">I have read and accept the agreement</label>
+      </fieldset>
+      <fieldset>
+        <label>Key type</label>
+        <select name="key_type" required>
+          <option value="EC256">EC256</option>
+          <option value="EC384">EC384</option>
+          <option selected value="RSA2048">RSA2048 (default)</option>
+          <option value="RSA4096">RSA4096</option>
+          <option value="RSA8192">RSA8192</option>
+        </select>
+      </fieldset>
+      <fieldset>
+        <label>ACME server</label>
+        <select name="acme_server" required>
+          <option selected value="https://acme-v02.api.letsencrypt.org/directory">acme-v02.api.letsencrypt.org</option>
+          <option value="https://acme-staging-v02.api.letsencrypt.org/directory">acme-staging-v02.api.letsencrypt.org</option>
+        </select>
+      </fieldset>
+      <label>Email address for ACME account</label>
+      <input type="email" name="acme_email" value="">
+      <hr>
+        <p>Please see <a href="https://go-acme.github.io/lego/dns/#dns-providers" target="_blank">the official Lego DNS providers list</a> for more information</p>
+      {% for client in data.client_data %}
+        <fieldset>
+        {% for k, v in client.items() %}
+          <label>{{ k }}</label>
+          <input name="provider_config" data-env-key="{{ k }}" type="text">
+          <small>{{ v }}</small>
+        {% endfor %}
+        </fieldset>
+      {% endfor %}
+      <button type="submit">Request certificate</button>
+  </form>
+
+  <hr>
+
+  <a href="#" class="secondary" hx-push-url="true" hx-get="{{ url_for("listeners.get_listener", listener_id=request.view_args.get("listener_id")) }}" hx-target="#body-main">Exit TLS configuration</a>
+</article>
+
+{% endblock body %}

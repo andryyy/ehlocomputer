@@ -1,0 +1,37 @@
+<dialog open>
+  <article data-theme="dark" hx-target="unset">
+    <header class="float">
+      <button class="secondary float-end" _="on click
+        remove .active-selection from <.active-selection/>
+        remove closest <dialog/>
+      ">Close</button>
+    </header>
+    {% with
+      delete_button=False
+    %}
+      {% include "objects/includes/table.html" %}
+    {% endwith %}
+    <hr>
+    <button _="on click
+      for data in (@data-object of closest <tr/> to <tbody input:checked/> in closest <article/>)
+        set recipient to (data as Object)
+        set domain to (@data-object of first of closest .domain to .active-selection) as Object
+
+        if textContent of .recipient-name in .active-selection contains recipient.objectName
+          trigger showAlert(genericWarning: {title: 'Duplicate recipient', message: `Skipped duplicate ${recipient.objectName}`})
+          continue
+        end
+
+        set parentObject to (first of closest @data-object to .active-selection) as Object
+
+        render #recipient-template with (recipient:recipient, parentObject:parentObject, domain:domain)
+          put it at the start of .active-selection
+
+        call htmx.process('.active-selection')
+      end
+
+      remove .active-selection from <.active-selection/>
+      remove closest <dialog/>
+    end">Add selected</button>
+  </article>
+</dialog>

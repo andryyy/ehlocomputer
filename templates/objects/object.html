@@ -1,0 +1,31 @@
+{% if not request.headers.get("Hx-Request") %}
+  {% extends "base.html" %}
+{% endif %}
+
+{% block body %}
+
+<h4>Manage {{ data.object_type }}</h4>
+
+<form data-loading-disable
+  hx-trigger="submit throttle:200ms"
+  hx-ext="json-enc"
+  _="on htmx:afterRequest[event.detail.successful==true]
+    trigger search on #{{ data.object_type }}-table-search
+  "
+  hx-post="/objects/{{ data.object_type }}"
+  id="{{ data.object_type }}-form">
+    <label for="name">Name
+    <input type="text" name="name" id="name"
+      autocomplete="off"
+      autocorrect="off"
+      autocapitalize="off"
+      spellcheck="false">
+    </label>
+    <button type="submit" _="install buttonCheckHtmxResponse">Create</button>
+</form>
+
+<article id="{{ data.object_type }}-full-table">
+  {% include "objects/includes/table.html" %}
+</article>
+
+{% endblock body %}

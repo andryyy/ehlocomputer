@@ -1,0 +1,52 @@
+{% if not request.headers.get("Hx-Request") %}
+  {% extends "base.html" %}
+{% endif %}
+
+{% block body %}
+
+<h4>Configs</h4>
+
+<section>
+  <form data-loading-disable
+    hx-trigger="submit throttle:200ms"
+    hx-ext="json-enc"
+    hx-post="/configs"
+    hx-target="#configs-table-body"
+    hx-swap="afterbegin">
+      <label for="name">Name
+      <input type="text" name="name" id="name"
+        autocomplete="off"
+        autocorrect="off"
+        autocapitalize="off"
+        spellcheck="false">
+      </label>
+      <button type="submit" _="install buttonCheckHtmxResponse">Create</button>
+  </form>
+</section>
+
+<hr>
+
+<h6>Select a config</h6>
+<article>
+  <figure>
+    <table>
+      <tbody id="configs-table-body">
+        {% for config in data %}
+        <tr>
+          <td>
+            <a
+              hx-target="#body-main"
+              hx-push-url="true"
+              hx-get="/configs/{{ config.id }}"
+              href="#">
+                {{ config.name }}
+            </a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </figure>
+</article>
+{% endblock body %}
+

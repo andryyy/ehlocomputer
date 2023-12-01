@@ -1,0 +1,126 @@
+{% if not request.headers.get("Hx-Request") %}
+  {% extends "base.html" %}
+{% endif %}
+
+{% block body %}
+
+<h4>Edit config</h4>
+
+<form data-loading-disable
+  id="config-form"
+  hx-trigger="submit throttle:200ms"
+  hx-target="#config-revisions-list"
+  hx-ext="json-enc"
+  hx-patch="/configs/{{ config.id }}"
+  autocomplete="off"
+  autocorrect="off"
+  autocapitalize="off"
+  spellcheck="false">
+    <section>
+      <label>Name
+        <input type="text" name="name" value="{{ config.name }}">
+      </label>
+
+      <label>Select a revision</label>
+      <details class="dropdown" id="config-revisions">
+        <summary>Current</summary>
+        <ul id="config-revisions-list" hx-target="#configuration-json">
+          <li>
+            <a _="on click put 'Current' into previous <summary/> then remove @open from #config-revisions"
+              class="secondary"
+              hx-select="#configuration-json"
+              hx-swap="innerHTML"
+              hx-get="/configs/{{ config.id }}"
+              href="#">Current ({{ config.updated }})
+            </a>
+          </li>
+          {% for historic_config in config.historic if historic_config.revision %}
+            <li>
+              <a _="on click put my innerHTML into previous <summary/> then remove @open from #config-revisions"
+                class="secondary"
+                hx-get="/configs/{{ config.id }}/revision/{{ historic_config.revision }}"
+                href="#">{{ historic_config.revision }}
+              </a>
+            </li>
+          {% endfor %}
+        </ul>
+      </details>
+    </section>
+
+    <article id="config-tree">
+      <fieldset>
+        <a role="button" hx-get="/configs/partials/select-objects/domains" hx-target="#object-dialog">
+          Add a domain
+        </a>
+    </fieldset>
+      <figure>
+        <table hx-target="#object-dialog">
+          <tbody class="domains"></tbody>
+        </table>
+      </figure>
+    </article>
+
+    <div class="flex-space-between">
+      <button class="flex-left" type="submit" _="install buttonCheckHtmxResponse">Save config</button>
+      <button class="delete secondary"
+        _="install confirmButton" hx-on:click="event.preventDefault()"
+        hx-delete="/configs/{{ config.id }}"
+        hx-target="#body-main"
+        hx-confirm="Delete?"
+        hx-trigger="confirmedButton throttle:200ms"
+        hx-ext="json-enc">⚠️ Delete config</button>
+    </div>
+
+    <div id="object-dialog"></div>
+
+    <span hidden id="configuration-json">
+      {{ config.configuration.translated|tojson() }}
+    </span>
+
+    <script type="text/hyperscript">
+      init
+        trigger configLoad on me
+      end
+      on configLoad
+        or htmx:oobAfterSwap from #config-revisions-list // <form/>'s target: renders piggyback'ed config of revision.html
+        or htmx:afterSwap from #configuration-json // renders config after revision select
+          put '' into .domains
+          set configuration to (textContent of #configuration-json) as Object
+          for domain in Object.keys(configuration)
+            set domain_object to configuration[domain].data_object
+            render #domain-template with (domain:domain_object) then put it at the start of .domains
+            set current_domain to first .domain in .domains
+
+            for recipients in configuration[domain].recipients
+              for recipient in Object.keys(recipients)
+                set recipient_object to recipients[recipient].data_object
+                render #recipient-template with (recipient:recipient_object, parentObject:domain_object, domain:domain_object)
+                  put it at the end of .{'recipients-' + domain_object.objectId} in current_domain
+
+                for settings in recipients[recipient].settings
+                  for setting in Object.keys(settings)
+                    set setting_object to settings[setting].data_object
+                    render #setting-template with (setting:setting_object, parentObject:recipient_object, domain:domain_object)
+                      put it at the end of .{'recipient-settings-' + recipient_object.objectId} in current_domain
+                  end
+                end
+              end
+            end
+
+            for settings in configuration[domain].settings
+              for setting in Object.keys(settings)
+                set setting_object to settings[setting].data_object
+                render #setting-template with (setting:setting_object, parentObject:domain_object, domain:domain_object)
+                  put it at the end of .{'domain-settings-' + domain_object.objectId} in current_domain
+              end
+            end
+          end
+          call htmx.process('.domains')
+      end
+    </script>
+</form>
+
+{% include "configs/includes/hyperscript/templates.html" %}
+
+{% endblock body %}
+

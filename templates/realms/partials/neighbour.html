@@ -1,0 +1,50 @@
+<div class="grid neighbour">
+  <div _="on click from .remove-neighbour in me remove me end">
+    <input name="private_key" type="hidden" value="{{ data.private_key }}">
+    <fieldset>
+      <label>*Neighbour address</label>
+      <input name="address" type="text">
+    </fieldset>
+    <fieldset>
+      <label>*Neighbour hostname</label>
+      <input name="hostname" type="text">
+      <small>The neighbour's certificate must match this name.</small>
+    </fieldset>
+    <fieldset>
+      <label>*Neighbour's key</label>
+      <textarea style="font-family:monospace" name="public_key" rows="4"></textarea>
+    </fieldset>
+  </div>
+  <div>
+    <fieldset>
+      <label>Our key</label>
+      <textarea readonly
+        style="font-family:monospace" name="public_key" rows="10">
+        {{- data.public_key -}}
+      </textarea>
+    </fieldset>
+    <p>
+      <a role="button" class="secondary" href="#"
+        _="on click halt the event writeText('{{ data.public_key }}') into the navigator's clipboard
+          put '- ✓ copied' into #copied
+          wait 1s then put '📋' into #copied
+        end">Copy <span id="copied">📋</span>
+      </a>
+    </p>
+    <p>
+      After the initial greeting, for every message a new token will be generated and transmitted
+      in the encoded payload.<br>
+      If a neighbour is <abbr title="Out-Of-Sync">OOS</abbr> (i.e. restored from backup), a resync
+      to this neighbour will be initiated.<br>
+    </p>
+    <div class="flex-space-between">
+      <div class="flex-left"></div>
+      <div>
+        <a role="button" class="secondary outline" href="#"
+          _="on click halt the event remove closest .neighbour end">
+            Remove new element
+        </a>
+      </div>
+    </div>
+  </fieldset>
+</div>

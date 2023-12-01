@@ -1,0 +1,49 @@
+{% if not request.headers.get("Hx-Request") %}
+  {% extends "base.html" %}
+{% endif %}
+
+{% block body %}
+
+
+<article class="tls-container">
+
+  <div id="terminal-container"
+    hx-trigger="load once"
+    hx-get="{{ url_for("listeners.get_listener", listener_id=request.view_args.get("listener_id")) }}/terminal/tls"
+    _="
+      on terminalNormalExit
+          trigger showAlert(genericSuccess: {title: 'Lego ACME succeeded', message: 'Save this configuration to automatically renew the certificate.'}, duration: 10000) on body
+          add @disabled to .back-button
+          remove @disabled from .save-button
+      end
+
+      on terminalAbnormalExit(code)
+        remove @disabled from .back-button
+        trigger showAlert(genericError: {title: 'Test failed', message: `Container did exit with code ${code}`}, duration: 1000000) on body
+      end
+    "></div>
+
+  <div class="float">
+    <button id="save-configuration" class="float-start save-button"
+      hx-push-url="true"
+      hx-target="#body-main"
+      hx-post="{{ url_for("listeners.get_listener", listener_id=request.view_args.get("listener_id")) }}/tls/{{ request.view_args.get("cli_name") }}/renew"
+      disabled>
+        Save configuration
+    </button>
+
+    <button class="float-end secondary back-button"
+      hx-push-url="true"
+      hx-target="#body-main"
+      hx-get="{{ url_for("listeners.get_listener", listener_id=request.view_args.get("listener_id")) }}/tls/{{ request.view_args.get("cli_name") }}"
+      disabled=>
+        Go back
+    </button>
+  </div>
+
+  <hr>
+
+  <a href="#" class="secondary" hx-push-url="true" hx-get="{{ url_for("listeners.get_listener", listener_id=request.view_args.get("listener_id")) }}" hx-target="#body-main">Exit TLS configuration</a>
+</article>
+
+{% endblock body %}

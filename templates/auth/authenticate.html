@@ -1,0 +1,15 @@
+{% if not request.headers.get("Hx-Request") %}
+{% extends "base.html" %}
+{% endif %}
+
+{% block body %}
+<section class="flex-center-w-gap">
+  <h4>👋 Hey</h4>
+  <div>
+    {% include "auth/partials/login_form.html" %}
+    {% with hidden=True %}
+      {% include "auth/partials/register_form.html" %}
+    {% endwith %}
+  </div>
+</section>
+{% endblock body %}

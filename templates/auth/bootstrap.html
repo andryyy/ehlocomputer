@@ -1,0 +1,83 @@
+{% if not request.headers.get("Hx-Request") %}
+{% extends "base.html" %}
+{% endif %}
+
+{% block menu %}
+{% endblock %}
+
+{% block body %}
+<section>
+  <div class="grid">
+    <div></div>
+    <div></div>
+  </div>
+</section>
+
+<section>
+  <div class="flex-center-w-gap">
+  <form data-loading-disable
+      hx-trigger="submit throttle:200ms"
+      hx-ext="json-enc"
+      hx-patch="/realms/bootstrap/{{ data.realm_id }}"
+      autocomplete="off"
+      autocorrect="off"
+      autocapitalize="off"
+      spellcheck="false">
+      <h4>👋 Hey</h4>
+      <h5>Welcome to EHLOcomputer!</h5>
+
+      <article>
+        <b>Let's get started.</b><br>
+        We already created a skeleton for you. Now we need to know some details to proceed.<br>
+        Please note that this site's login is only available using a secure connection (HTTPS).<br><br>
+        Your current connection is <b>{{ "<ins>secure</ins>"|safe if request.scheme == "https" else "<del>insecure</del>"|safe }}</b>.
+      </article>
+
+      <fieldset>
+        <label>Descriptive name</label>
+        <input type="text" name="name" value="Default">
+        <small>A name to be used as description for this realm. The value can be any string.<br></small>
+      </fieldset>
+
+      <fieldset>
+        <label>Origin</label>
+        <input type="text" value="{{ request.headers.Host }}" name="origin">
+        <small>This realm will only be available for logins from the defined origin.<br></small>
+      </fieldset>
+
+      <article>
+        <b>How to login?</b><br>
+        As there's no authenticator available for the first user, the shelltoken method must be used.<br>
+        You will find a link <mark>Use shell token</mark> right below the login mask in the next step.
+      </article>
+
+      <fieldset>
+        <label>
+          Bootstrap token
+          <code id="token-counter">{{ data.token_lifetime if data.token_lifetime > 0 else '<del>token expired</del>'|safe }}</code>
+        </label>
+        <input type="text" name="bootstrap_token">
+        <small>You can find this token in the applicatin logs.</small>
+      </fieldset>
+
+      <div _="init
+        set c to {{ data.token_lifetime }}
+          repeat while c > 0
+            decrement c
+            put c into #token-counter
+            wait 1s
+          end
+          add @disabled to <[type=submit]/>
+          put 'Token expired' into <[type=submit]/>
+        end">
+        <button type="submit">
+          Continue
+        </button>
+      </div>
+
+    </form>
+  </div>
+</section>
+
+
+{% endblock body %}

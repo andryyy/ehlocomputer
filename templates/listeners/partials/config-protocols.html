@@ -1,0 +1,142 @@
+<article>
+  <fieldset>
+    <input type="checkbox" role="switch" id="smtp" name="configuration[smtp]" value="true" {{ "checked" if listener.configuration.smtp == True }}>
+    <label for="smtp">SMTP</label>
+  </fieldset>
+  <details>
+    <summary class="secondary">Show advanced settings</summary>
+    <label>Minimum TLS protocol (maximum is always the highest supported)</label>
+    <select name="configuration[smtp_tls_min_protocol]">
+      <option value="TLSv1" {{ "selected" if "TLSv1" in listener.configuration.smtp_tls_min_protocol }}>TLSv1</option>
+      <option value="TLSv1_1" {{ "selected" if listener.configuration.smtp_tls_min_protocol == "TLSv1_1" }}>TLSv1.1</option>
+      <option value="TLSv1_2" {{ "selected" if listener.configuration.smtp_tls_min_protocol == "TLSv1_2" }}>TLSv1.2</option>
+      <option value="TLSv1_3" {{ "selected" if listener.configuration.smtp_tls_min_protocol == "TLSv1_3" }} or not listener.configuration.smtp_tls_min_protocol }}>TLSv1.3</option>
+    </select>
+    <label>TLS ciphers</label>
+    <input name="configuration[smtp_tls_ciphers]" value="HIGH:!aNULL:!MD5;" type="text">
+    <small>Leave empty to use default.</small>
+    <label>IPv4 binding</label>
+    <div role="group">
+      <input type="text" name="configuration[smtp_ipv4_bind]" value="{{ listener.configuration.smtp_ipv4_bind or "0.0.0.0" }}" required>
+      <input type="number" data-strict-int name="configuration[smtp_ipv4_port]" value="{{ listener.configuration.smtp_ipv4_port or 10025 }}" required>
+    </div>
+    <label>IPv6 binding</label>
+    <div role="group">
+      <input type="text" name="configuration[smtp_ipv6_bind]" value="{{ listener.configuration.smtp_ipv6_bind or "::" }}" required>
+      <input type="number" data-strict-int name="configuration[smtp_ipv6_port]" value="{{ listener.configuration.smtp_ipv6_port or 10025 }}" required>
+    </div>
+    <section>
+      <legend>Proxy protocol (v2)</legend>
+      <input data-strict-bool type="checkbox" role="switch" id="smtp-proxy-protocol" name="configuration[smtp_proxy_protocol]" value="true" {{ "checked" if listener.configuration.smtp_proxy_protocol == True }}>
+      <label for="smtp-proxy-protocol">On</label>
+    </section>
+  </details>
+</article>
+
+<article>
+  <fieldset>
+    <input data-strict-bool type="checkbox" role="switch" id="submission" name="configuration[submission]" value="true" {{ "checked" if listener.configuration.submission == True }}>
+    <label for="submission">Submission</label>
+  </fieldset>
+  <details>
+    <summary class="secondary">Show advanced settings</summary>
+    <label>Minimum TLS protocol (maximum is always the highest supported)</label>
+    <select name="configuration[submission_tls_min_protocol]">
+      <option value="TLSv1" {{ "selected" if "TLSv1" in listener.configuration.submission_tls_min_protocol }}>TLSv1</option>
+      <option value="TLSv1_1" {{ "selected" if listener.configuration.submission_tls_min_protocol == "TLSv1_1" }}>TLSv1.1</option>
+      <option value="TLSv1_2" {{ "selected" if listener.configuration.submission_tls_min_protocol == "TLSv1_2" }}>TLSv1.2</option>
+      <option value="TLSv1_3" {{ "selected" if listener.configuration.submission_tls_min_protocol == "TLSv1_3" }} or not listener.configuration.submission_tls_min_protocol }}>TLSv1.3</option>
+    </select>
+    <label>TLS ciphers</label>
+    <input name="configuration[submission_tls_ciphers]" value="HIGH:!aNULL:!MD5;" type="text">
+    <small>Leave empty to use default.</small>
+    <label>IPv4 binding</label>
+    <div role="group">
+      <input type="text" name="configuration[submission_ipv4_bind]" value="{{ listener.configuration.submission_ipv4_bind or "0.0.0.0" }}" required>
+      <input type="number" data-strict-int name="configuration[submission_ipv4_port]" value="{{ listener.configuration.submission_ipv4_port or 10587 }}" required>
+    </div>
+    <label>IPv6 binding</label>
+    <div role="group">
+      <input type="text" name="configuration[submission_ipv6_bind]" value="{{ listener.configuration.submission_ipv6_bind or "::" }}" required>
+      <input type="number" data-strict-int name="configuration[submission_ipv6_port]" value="{{ listener.configuration.submission_ipv6_port or 10587 }}" required>
+    </div>
+    <section>
+      <legend>Proxy protocol (v2)</legend>
+      <input data-strict-bool
+        type="checkbox"
+        role="switch"
+        id="submission-proxy-protocol" name="configuration[submission_proxy_protocol]" value="true" {{ "checked" if listener.configuration.submission_proxy_protocol == True }}>
+      <label for="submission-proxy-protocol">On</label>
+    </section>
+  </details>
+</article>
+
+<article>
+  <fieldset>
+    <input data-strict-bool type="checkbox" role="switch" id="smtps" name="configuration[smtps]" value="true" {{ "checked" if listener.configuration.smtps == True }}>
+    <label for="smtps">SMTPS</label>
+  </fieldset>
+  <details>
+    <summary class="secondary">Show advanced settings</summary>
+    <label>Minimum TLS protocol (maximum is always the highest supported)</label>
+    <select name="configuration[smtps_tls_min_protocol]">
+      <option value="TLSv1" {{ "selected" if "TLSv1" in listener.configuration.smtps_tls_min_protocol }}>TLSv1</option>
+      <option value="TLSv1_1" {{ "selected" if listener.configuration.smtps_tls_min_protocol == "TLSv1_1" }}>TLSv1.1</option>
+      <option value="TLSv1_2" {{ "selected" if listener.configuration.smtps_tls_min_protocol == "TLSv1_2" }}>TLSv1.2</option>
+      <option value="TLSv1_3" {{ "selected" if listener.configuration.smtps_tls_min_protocol == "TLSv1_3" }} or not listener.configuration.smtps_tls_min_protocol }}>TLSv1.3</option>
+    </select>
+    <label>TLS ciphers</label>
+    <input name="configuration[smtps_tls_ciphers]" value="HIGH:!aNULL:!MD5;" type="text">
+    <small>Leave empty to use default.</small>
+    <label>IPv4 binding</label>
+    <div role="group">
+      <input type="text" name="configuration[smtps_ipv4_bind]" value="{{ listener.configuration.smtps_ipv4_bind or "0.0.0.0" }}" required>
+      <input type="number" data-strict-int name="configuration[smtps_ipv4_port]" value="{{ listener.configuration.smtps_ipv4_port or 10465 }}" required>
+    </div>
+    <label>IPv6 binding</label>
+    <div role="group">
+      <input type="text" name="configuration[smtps_ipv6_bind]" value="{{ listener.configuration.smtps_ipv6_bind or "::" }}" required>
+      <input type="number" data-strict-int name="configuration[smtps_ipv6_port]" value="{{ listener.configuration.smtps_ipv6_port or 10465 }}" required>
+    </div>
+    <section>
+      <legend>Proxy protocol (v2)</legend>
+      <input data-strict-bool type="checkbox" role="switch" id="smtps-proxy-protocol" name="configuration[smtps_proxy_protocol]" value="true" {{ "checked" if listener.configuration.smtps_proxy_protocol == True }}>
+      <label for="smtps-proxy-protocol">On</label>
+    </section>
+  </details>
+</article>
+
+<article>
+  <fieldset>
+    <input data-strict-bool type="checkbox" role="switch" id="imaps" name="configuration[imaps]" value="true" {{ "checked" if listener.configuration.imaps == True }}>
+    <label for="imaps">IMAPS</label>
+  </fieldset>
+  <details>
+    <summary class="secondary">Show advanced settings</summary>
+    <label>Minimum TLS protocol (maximum is always the highest supported)</label>
+    <select name="configuration[imaps_tls_min_protocol]">
+      <option value="TLSv1" {{ "selected" if "TLSv1" in listener.configuration.imaps_tls_min_protocol }}>TLSv1</option>
+      <option value="TLSv1_1" {{ "selected" if listener.configuration.imaps_tls_min_protocol == "TLSv1_1" }}>TLSv1.1</option>
+      <option value="TLSv1_2" {{ "selected" if listener.configuration.imaps_tls_min_protocol == "TLSv1_2" }}>TLSv1.2</option>
+      <option value="TLSv1_3" {{ "selected" if listener.configuration.imaps_tls_min_protocol == "TLSv1_3" }} or not listener.configuration.imaps_tls_min_protocol }}>TLSv1.3</option>
+    </select>
+    <label>TLS ciphers</label>
+    <input name="configuration[imaps_tls_ciphers]" value="HIGH:!aNULL:!MD5;" type="text">
+    <small>Leave empty to use default.</small>
+    <label>IPv4 binding</label>
+    <div role="group">
+      <input type="text" name="configuration[imaps_ipv4_bind]" value="{{ listener.configuration.imaps_ipv4_bind or "0.0.0.0" }}" required>
+      <input type="number" data-strict-int name="configuration[imaps_ipv4_port]" value="{{ listener.configuration.imaps_ipv4_port or 10993 }}" required>
+    </div>
+    <label>IPv6 binding</label>
+    <div role="group">
+      <input type="text" name="configuration[imaps_ipv6_bind]" value="{{ listener.configuration.imaps_ipv6_bind or "::" }}" required>
+      <input type="number" data-strict-int name="configuration[imaps_ipv6_port]" value="{{ listener.configuration.imaps_ipv6_port or 10993 }}" required>
+    </div>
+    <section>
+      <legend>Proxy protocol (v2)</legend>
+      <input data-strict-bool type="checkbox" role="switch" id="imaps-proxy-protocol" name="configuration[imaps_proxy_protocol]" value="true" {{ "checked" if listener.configuration.imaps_proxy_protocol == True }}>
+      <label for="imaps-proxy-protocol">On</label>
+    </section>
+  </details>
+</article>

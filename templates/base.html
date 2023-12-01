@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8">
+    <meta name="htmx-config" content='{"htmx.config.allowScriptTags":"false"}'>
+    <meta name="viewport" content="width=device-width, user-scalable=no" />
+    <title>Gyst</title>
+    <meta name="apple-mobile-web-app-capable" content="yes"/>
+    <link rel="manifest" href="/static/manifest.json" />
+    <link href="/static/css/pico-custom.min.css" rel="stylesheet">
+    <link href="/static/fonts/go.min.css" rel="stylesheet">
+    <script type="text/hyperscript" src="/static/hyperscript/common._hs"></script>
+    <script src="/static/js/_hyperscript/_hyperscript.min.js"></script>
+    <script src="/static/js/_hyperscript/_hyperscript.template.min.js"></script>
+    <script src="/static/js/htmx.org/htmx.org.min.js"></script>
+    <script src="/static/js/htmx.org/htmx.org.loading-states.min.js"></script>
+    <script src="/static/js/htmx.org/htmx.org.json-enc-custom.min.js"></script>
+    <script src="/static/js/nchan/NchanSubscriber.min.js"></script>
+    <script src="/static/js/simplewebauthn-browser/simplewebauthn-browser.min.js"></script>
+    <script defer src="/static/js/custom/custom.min.js"></script>
+  </head>
+  <body _="install bodydefault" hx-ext="loading-states">
+    <header>
+      {% block menu %}
+        {% include "includes/menu.html" %}
+      {% endblock %}
+    </header>
+
+    <main id="body-main" hx-history-elt>
+      {% block body %}
+      {% endblock %}
+    </main>
+
+    <footer>
+      {% include "includes/notifications.html" %}
+      <code class="loading-indicator" data-loading="block">Loading</code>
+      <script>
+        {% if session.get("login") %}
+          var sub = new NchanSubscriber("/sub/user/{{ session.get("login") }}", {reconnect:"persist"})
+          sub.start()
+          sub.reconnect = true
+          sub.on('connect', function(evt) {
+            console.log("Nchan connected")
+          })
+          sub.on("message", function(message, message_metadata) {
+              data = JSON.parse(message)
+              if (data.iam == "_hs") {
+                _hyperscript(data.script)
+              } else if (data.iam == "stream") {
+                element = document.querySelector("#terminal-stream-" + data.id)
+                if (element) {
+                  element.textContent += `[${data.std}] ${data.message}\n`
+                  element.scrollTop = element.scrollTopMax
+                }
+              }
+          })
+        {% endif %}
+      </script>
+    </footer>
+
+  </body>
+</html>

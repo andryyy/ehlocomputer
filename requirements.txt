@@ -1,0 +1,17 @@
+quart
+jinja2
+pydantic
+webauthn
+qrcode
+tinydb
+email-validator
+aiohttp
+trustme
+argon2-cffi
+loguru
+ldap3
+redis
+requests
+podman
+jsondiff
+rich

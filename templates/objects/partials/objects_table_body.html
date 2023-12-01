@@ -1,0 +1,10 @@
+{% include "objects/includes/table_navigation.html" %}
+{% for object in data.objects %}
+  {% if data.object_type == "settings" %}
+    {% include "objects/includes/row/settings.html" %}
+  {% elif data.object_type == "domains" %}
+    {% include "objects/includes/row/domains.html" %}
+  {% elif data.object_type == "recipients" %}
+    {% include "objects/includes/row/recipients.html" %}
+  {% endif %}
+{% endfor %}

@@ -1,0 +1,64 @@
+{#
+Options when included:
+  - data: dict => {
+    object_type: str,
+    page_size: int,
+    chunk: int,
+    chunks: int,
+    elements: int
+  }
+  - footer: bool => With footer including... (default: True)
+    - delete_button: bool => With delete button (default: True)
+    - toggle_all_button: bool => With toggle-all button (default: True)
+#}
+
+{% set footer = True if not footer == False %}
+{% set delete_button = True if not delete_button == False %}
+{% set toggle_all_button = True if not toggle_all_button == False %}
+
+<input id="{{ data.object_type }}-table-search" type="search"
+  {# Restore full table if search string is empty #}
+  hx-trigger="load once, htmx:afterRequest[event.detail.successful==true] from:#{{ data.object_type }}-table-body, keyup changed delay:100ms, search"
+  hx-post="/objects/{{ data.object_type }}/search"
+  hx-target="#{{ data.object_type }}-table-body"
+  hx-ext="json-enc"
+  name="q"
+  placeholder="Type to search"
+  autocomplete="off"
+  autocorrect="off"
+  autocapitalize="off"
+  spellcheck="false">
+
+  <figure>
+    <table id="{{ data.object_type }}-table" role="grid">
+      <tbody id="{{ data.object_type }}-table-body"></tbody>
+      {% if footer and footer == True %}
+      <tfoot>
+        <tr>
+          <th class="flex-space-between" scope="col" colspan="2">
+            {% if toggle_all_button and toggle_all_button == True %}
+            <button class="flex-left outline" _="install toggleObjectSelection">All</button>
+            {% endif %}
+
+            {% if delete_button and delete_button == True %}
+            <button class="delete secondary"
+              _="install confirmButton
+                on htmx:afterRequest[event.detail.successful==true]
+                  set _tr to closest <tr/> to <[name=id]:checked/> in #{{ data.object_type }}-table-body
+                  decrement textContent of #{{ data.object_type }}-objects-count by (length of _tr)
+                  remove _tr
+                end
+              "
+              hx-post="/objects/{{ data.object_type }}/delete"
+              hx-target="#body-main"
+              hx-trigger="confirmedButton throttle:200ms"
+              hx-ext="json-enc"
+              hx-include="[name='id']">Delete</button>
+            {% endif %}
+          </th>
+        </tr>
+      </tfoot>
+      {% endif %}
+
+    </table>
+</figure>

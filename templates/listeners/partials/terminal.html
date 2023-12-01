@@ -1,0 +1,22 @@
+{#
+  Triggers terminalAbnormalExit(code) on body if exit code is > 0
+  Triggers terminalNormalExit on body if exit code is 0
+
+  {% for args in request.view_args %}
+    {{ args }}
+  {% endfor %}
+#}
+
+<article>
+  <div class="float terminal-header">
+    <b class="float-start">
+      Worker "{{ request.view_args.get("worker") }}" <mark class="terminal-status-{{ stream_id }}">Stream connected</mark>
+    </b>
+
+    <a class="float-end" href="#" _="on click remove closest <article/> end">
+      Close terminal
+    </a>
+  </div>
+  <hr>
+  <pre class="terminal-stream" id="terminal-stream-{{ stream_id }}"></pre>
+</article>

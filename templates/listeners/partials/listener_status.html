@@ -1,0 +1,72 @@
+{% if listener_containers == False  %}
+<center>An error occured contacting Podman</center>
+
+{% elif listener_containers == {}  %}
+<center>No containers in listener</center>
+
+{% else %}
+<div class="grid">
+  {% for worker, worker_stats in listener_containers.items() %}
+  <article>
+    <ul class="padded-buttons">
+      <li>
+        <b>Name:</b> {{ worker|upper }}
+        <br>
+        <b>Status:</b> {{ worker_stats.State }} (code {{ worker_stats.ExitCode }})
+      </li>
+      <li>
+        <b>Command:</b>
+        <pre>{{worker_stats.Command|join(' ')}}</pre>
+      </li>
+      <li>
+        <button
+          class="secondary"
+          hx-get="{{ url_for("listeners.get_listener", listener_id=request.view_args.get("listener_id")) }}/terminal/{{ worker }}"
+          hx-target="#terminal-container">
+            Terminal
+        </button>
+
+        <button class="secondary"
+          _="install confirmButton
+          on htmx:afterRequest[event.detail.successful==true]
+            trigger click on previous <button/> from me
+          end"
+          hx-confirm="Restart?"
+          hx-trigger="confirmedButton throttle:200ms"
+          hx-get="{{ url_for("listeners.get_listener", listener_id=request.view_args.get("listener_id")) }}/control/{{ worker }}/restart">
+            🔁 Restart
+        </button>
+
+        <button class="secondary"
+          _="install confirmButton"
+          hx-confirm="Stop?"
+          hx-trigger="confirmedButton throttle:200ms"
+          hx-get="{{ url_for("listeners.get_listener", listener_id=request.view_args.get("listener_id")) }}/control/{{ worker }}/stop">
+            🛑 Stop
+        </button>
+
+        <button class="secondary"
+          _="install confirmButton
+          on htmx:afterRequest[event.detail.successful==true]
+            remove closest <article/>
+          end"
+          hx-confirm="Wipe?"
+          hx-get="{{ url_for("listeners.get_listener", listener_id=request.view_args.get("listener_id")) }}/control/{{ worker }}/delete"
+          hx-trigger="confirmedButton throttle:200ms"
+          hx-ext="json-enc">
+            ⚠️ Delete worker
+        </button>
+      </li>
+    </ul>
+  </article>
+  {% endfor %}
+  <article
+    id="listener-certificate-status"
+    hx-trigger="load once"
+    hx-get="{{ url_for("listeners.get_listener", listener_id=request.view_args.get("listener_id")) }}/certificate">
+      <center><p aria-busy="true" class="secondary">Please wait...</p></center>
+  </article>
+</div>
+{% endif %}
+
+<div id="terminal-container"></div>

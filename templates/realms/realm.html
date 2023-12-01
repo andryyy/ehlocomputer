@@ -1,0 +1,107 @@
+{% if not request.headers.get("Hx-Request") %}
+  {% extends "base.html" %}
+{% endif %}
+
+{% block body %}
+
+<h4>Edit realm</h4>
+
+<section>
+  <form data-loading-disable
+      id="realm-form"
+      hx-trigger="submit throttle:200ms"
+      hx-ext="json-enc"
+      hx-patch="{{ url_for("realms.patch_realm", realm_id=request.view_args.get("realm_id")) }}"
+      autocomplete="off"
+      autocorrect="off"
+      autocapitalize="off"
+      hx-params="not address,public_key"
+      spellcheck="false">
+
+    <article class="grid">
+      <fieldset>
+        <label>Descriptive name</label>
+        <input type="text" name="name" value="{{ realm.name }}">
+        <small>A name to be used as description for this realm. The value can be any string.<br></small>
+      </fieldset>
+
+      <fieldset>
+        <label>Origin</label>
+        <input type="text" value="{{ realm.origin }}" name="origin">
+        <small>Changing the origin of a realm will invalidate all previously existing credentials.<br></small>
+      </fieldset>
+
+      <fieldset>
+        <legend>Set this realm as default</legend>
+        <label>
+          <input type="checkbox" value="true" name="default" hx-on:click="event.preventDefault()" {{ "checked" if realm.default == True }}>
+          Default
+        </label>
+        <small>A default realm will be used when no identification of the requested realm is possible.</small>
+      </fieldset>
+    </article>
+
+    <h4>Realm synchronization</h4>
+
+    <article id="neighbours" _="
+        on htmx:configRequest from closest <form/>
+          set $neighbours to []
+          repeat for neighbour in (.neighbour in me)
+            append (neighbour as Values) to $neighbours
+          end
+          set event.detail.parameters.neighbours to $neighbours
+        end
+      ">
+        <p>
+          <a role="button" class="outline" href="#" hx-get="{{ url_for("realms.add_neighbour", realm_id=request.view_args.get("realm_id")) }}"
+            hx-swap="beforeend" hx-target="#neighbours">Add a neighbour</a>
+        </p>
+
+        {% for neighbour in realm.neighbours %}
+        <div class="neighbour">
+          <div class="grid">
+            <fieldset>
+              <label>Neighbour IP address</label>
+              <input name="address" type="text" value="{{ neighbour.address }}" required>
+            </fieldset>
+            <fieldset>
+              <label>Neighbour hostname</label>
+              <input name="hostname" type="text" value="{{ neighbour.hostname }}" required>
+              <small>The neighbour's certificate must match this name</small>
+            </fieldset>
+            <fieldset>
+              <label>Neighbour's key</label>
+              <textarea readonly rows="10">
+                  {{- neighbour.public_key -}}
+              </textarea>
+            </fieldset>
+          </div>
+          <div class="flex-space-between">
+            <div class="flex-left"></div>
+            <a role="button" class="secondary outline" href="#" hx-on:click="event.preventDefault()"
+              _="install confirmButton on confirmedButton remove closest .neighbour end">⚠️ Remove
+            </a>
+          </div>
+          <hr>
+        </div>
+        {% endfor %}
+    </article>
+
+    <div class="flex-space-between">
+      <button data-loading-disable type="submit" class="flex-left" _="install buttonCheckHtmxResponse">
+        Save realm
+      </button>
+      <button class="delete secondary" hx-on:click="event.preventDefault()"
+        _="install confirmButton"
+        hx-delete="{{ url_for("realms.delete_realm", realm_id=request.view_args.get("realm_id")) }}"
+        hx-target="#body-main"
+        hx-confirm="Delete?"
+        hx-trigger="confirmedButton throttle:200ms"
+        hx-ext="json-enc">⚠️ Delete realm</button>
+    </div>
+  </form>
+</section>
+
+
+{% endblock body %}
+

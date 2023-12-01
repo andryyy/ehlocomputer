@@ -1,0 +1,53 @@
+{% if not request.headers.get("Hx-Request") %}
+  {% extends "base.html" %}
+{% endif %}
+
+{% block body %}
+
+<h4>Listeners</h4>
+
+<section>
+  <form data-loading-disable
+    hx-trigger="submit throttle:200ms"
+    hx-ext="json-enc"
+    hx-post="/listeners"
+    hx-target="#listeners-table"
+    hx-swap="afterbegin">
+      <label for="name">Name
+      <input type="text" name="name" id="name"
+        autocomplete="off"
+        autocorrect="off"
+        autocapitalize="off"
+        spellcheck="false">
+      </label>
+      <button type="submit" _="install buttonCheckHtmxResponse">Create</button>
+  </form>
+</section>
+
+<hr>
+
+<h6>Select a listener</h6>
+<article>
+  <figure>
+    <table>
+      <tbody id="listeners-table">
+        {% for listener in data %}
+        <tr>
+          <td>
+            <a
+              hx-target="#body-main"
+              hx-push-url="true"
+              hx-get="/listeners/{{ listener.id }}"
+              href="#">
+                {{ listener.name -}}
+            </a>
+            [{{ listener.configuration.hostname if listener.configuration else "unconfigured" }}]
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </figure>
+</article>
+{% endblock body %}
+

@@ -1,0 +1,10 @@
+<form hx-ext="json-enc" hx-post="/auth/generate-registration-options" class="login-register" id="register-form">
+  <input type="hidden" id="login" name="login" value="{{ session['login'] }}">
+  <button type="submit"
+    data-loading-disable
+    id="register"
+    hx-target="this"
+    hx-swap="innerHTML">
+      Add authenticator
+  </button>
+</form>

@@ -1,0 +1,20 @@
+<tr hx-disinherit="*"
+    data-object='{"objectType":"settings","objectId":"{{ object.id }}","objectName":"{{ object.name }}"}'>
+  <td class="flex-space-between">
+    {# There is a bug in htmx that does not disable inheritance for hx-vals #}
+    <div class="flex-left" >
+      <input type="checkbox" name="id" value="{{ object.id }}" autocomplete="off">
+      <span>{{- object.name -}}</span>
+      <a href="#" class="primary"
+        hx-get="/objects/settings/{{ object.id }}"
+        hx-trigger="click consume"
+        hx-push-url="true"
+        hx-target="#body-main">[edit]</a>
+    </div>
+    {% if object.settings_rule and SETTINGS_DATA.get(object.settings_rule) %}
+    <ins>{{ SETTINGS_DATA.get(object.settings_rule).get("category") }}</ins>
+    {% else %}
+    <del>unconfigured</del>
+    {% endif %}
+  </td>
+</tr>

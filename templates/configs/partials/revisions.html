@@ -1,0 +1,23 @@
+<li>
+  <a _="on click put 'Current' into previous <summary/> then remove @open from #config-revisions"
+    class="secondary"
+    hx-select="#configuration-json"
+    hx-swap="innerHTML"
+    hx-get="{{ url_for("configs.get_config", config_id=request.view_args.get("config_id")) }}"
+    href="#">Current ({{ config.updated }})
+  </a>
+</li>
+{% for historic_config in config.historic %}
+  <li>
+    <a _="on click put my innerHTML into previous <summary/> then remove @open from #config-revisions"
+      class="secondary"
+      hx-get="{{ url_for("configs.get_config", config_id=request.view_args.get("config_id")) }}/revision/{{ historic_config.revision }}"
+      href="#">{{ historic_config.revision }}
+    </a>
+  </li>
+{% endfor %}
+
+{# Piggyback config update #}
+<span hidden hx-swap-oob="innerHTML" id="configuration-json">
+  {{ config.configuration.translated|tojson() }}
+</span>

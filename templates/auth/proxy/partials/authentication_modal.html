@@ -1,0 +1,34 @@
+<center>
+  <dialog open
+    hx-get="/auth/proxy/await/{{ data.proxy_auth_id }}"
+    hx-trigger="every 1s"
+    id="proxy-auth-await"
+    aria-modal="true">
+      <article>
+        <center>
+          {{ data.qr|safe }}
+        </center>
+        <p><strong>How to proceed</strong>: Scan this QR code with a WebAuthn enabled device to login.</p>
+        <p>You may also use this link:<br>
+          <a href="{{ request.origin }}/auth/proxy/confirm/{{ data.proxy_auth_id }}"
+            _="on click writeText(@href) into the navigator's clipboard halt the event end">
+            {{ request.origin }}/auth/proxy/confirm/{{ data.proxy_auth_id }}
+          </a>
+          <p><small>Click link to copy to clipboard</small></p>
+        </p>
+        <footer>
+          <button _="
+          on load
+            add @open to #proxy-auth-await
+            set i to {{ PROXY_AUTH_TIMEOUT }}
+            repeat until i is 0
+              put `Cancel process (${i}s)` into me
+              decrement i by 1
+              wait 1s
+            end
+          end"
+          hx-get="/" hx-target="#body-main" hx-push-url="true" hx-confirm="Cancel process?"></button>
+        </footer>
+      </article>
+  </dialog>
+</center>

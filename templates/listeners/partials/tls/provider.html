@@ -1,0 +1,38 @@
+{% if not request.headers.get("Hx-Request") %}
+  {% extends "base.html" %}
+{% endif %}
+
+{% block body %}
+
+<article class="tls-container">
+  <div class="float tls-header">
+    <b class="float-start">TLS configuration</b>
+  </div>
+
+  <hr>
+
+  <hgroup>
+    <h6>🔐 Lego ACME client</h6>
+    <p>The ACME functionality is provided by the lego ACME client.</p>
+  </hgroup>
+
+  <p><b>Caution</b>: Existing TLS containers will be removed!</p>
+
+  <details class="dropdown acme">
+    <summary class="dns-client-name">Select a provider</summary>
+    <ul _="on click from <a/> in me halt the event end">
+      {% for cli_provider in lego_dns_providers %}
+      <li>
+        <a href="#" hx-push-url="true" hx-target="#body-main" hx-get="{{ url_for("listeners.get_listener", listener_id=request.view_args.get("listener_id")) }}/tls/{{- cli_provider -}}"
+          class="secondary">{{- cli_provider -}}</a>
+      </li>
+      {% endfor %}
+    </ul>
+  </details>
+
+  <hr>
+
+  <a href="#" class="secondary" hx-push-url="true" hx-get="{{ url_for("listeners.get_listener", listener_id=request.view_args.get("listener_id")) }}" hx-target="#body-main">Exit TLS configuration</a>
+</article>
+
+{% endblock body %}

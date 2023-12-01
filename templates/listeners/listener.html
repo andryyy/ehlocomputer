@@ -1,0 +1,73 @@
+{% if not request.headers.get("Hx-Request") %}
+  {% extends "base.html" %}
+{% endif %}
+
+{% block body %}
+
+<div id="container-stats"
+  hx-get="{{ url_for("listeners.get_listener_status", listener_id=request.view_args.get("listener_id")) }}"
+  hx-trigger="load once">
+</div>
+
+<form data-loading-disable
+  id="listener-form"
+  hx-trigger="submit throttle:200ms"
+  hx-ext="json-enc"
+  hx-patch="/listeners/{{ listener.id }}"
+  hx-target="#listener-revisions-list"
+  autocomplete="off"
+  autocorrect="off"
+  autocapitalize="off"
+  spellcheck="false">
+      <label>Name
+        <input type="text" name="name" value="{{ listener.name }}">
+      </label>
+
+      <label>Select a revision</label>
+      <details class="dropdown" id="listener-revisions">
+        <summary>Current</summary>
+        <ul id="listener-revisions-list" hx-target="#listener-config">
+          <li>
+            <a _="on click put 'Current' into previous <summary/> then remove @open from #listener-revisions"
+              class="secondary"
+              hx-select="#listener-config"
+              hx-swap="outerHTML"
+              hx-get="{{ url_for("listeners.get_listener", listener_id=request.view_args.get("listener_id")) }}"
+              href="#">Current ({{ listener.updated }})
+            </a>
+          </li>
+          {% for historic_listener in listener.historic if historic_listener.revision %}
+            <li>
+              <a _="on click put my innerHTML into previous <summary/> then remove @open from #listener-revisions"
+                class="secondary"
+                hx-get="{{ url_for("listeners.get_listener", listener_id=request.view_args.get("listener_id")) }}/revision/{{ historic_listener.revision }}"
+                href="#">{{ historic_listener.revision }}
+              </a>
+            </li>
+          {% endfor %}
+        </ul>
+      </details>
+
+      <div id="listener-config" class="grid">
+        {% include "listeners/includes/listener_config.html" %}
+      </div>
+
+      <div class="flex-space-between">
+        <button class="flex-left"
+          data-loading-disable
+          form="listener-form"
+          type="submit" _="install buttonCheckHtmxResponse">
+          Save listener
+        </button>
+        <button class="delete secondary" hx-on:click="event.preventDefault()"
+          _="install confirmButton"
+          hx-confirm="Delete?"
+          hx-delete="{{ url_for("listeners.get_listener", listener_id=request.view_args.get("listener_id")) }}"
+          hx-target="#body-main"
+          hx-trigger="confirmedButton throttle:200ms"
+          hx-ext="json-enc">⚠️ Delete listener</button>
+      </div>
+</form>
+
+
+{% endblock body %}

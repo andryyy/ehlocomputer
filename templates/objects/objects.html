@@ -1,0 +1,15 @@
+{% if not request.headers.get("Hx-Request") %}
+{% extends "base.html" %}
+{% endif %}
+
+{% block body %}
+
+<h4>Objects</h4>
+
+<div hx-target="#body-main" hx-push-url="true">
+  <button hx-get="/objects/domains">Domains</button>
+  <button hx-get="/objects/recipients">Recipients</button>
+  <button hx-get="/objects/settings">Settings</button>
+</div>
+
+{% endblock body %}

@@ -1,0 +1,82 @@
+{#
+  "hidden" is used to include both login and register forms in main.html while only showing either/or
+#}
+<div id="login-form" class="login-register" {{ '.hidden' if hidden }}>
+
+  <form hx-ext="json-enc"
+    data-loading-disable
+    hx-trigger="submit throttle:1s"
+    hx-post="/auth/generate-authentication-options">
+      <label for="login">Who is going to login?</label>
+      <input type="text" id="login" name="login"
+        autocomplete="webauthn"
+        autocorrect="off"
+        autocapitalize="off"
+        spellcheck="false"
+        required>
+      <input disabled hidden type="text" id="token" name="token"
+        autocorrect="off"
+        autocapitalize="off"
+        spellcheck="false" required>
+      <button type="submit"
+        id="authenticate"
+        hx-target="this"
+        hx-swap="innerHTML">
+          Login
+      </button>
+      <button type="submit"
+        id="proxy-authentication"
+        hx-post="/auth/proxy/start"
+        hx-ext="json-enc"
+        hx-target="#body-main"
+        hx-swap="innerHTML">
+          📷 Scan QR
+      </button>
+      <p>
+        <a href="#" class="secondary no-text-decoration"
+          _="on click
+            halt the event
+            take @hidden from <form/> in #login-form for closest <form/>
+          end">Use <mark>token supported</mark> authentication
+        </a>
+      </p>
+  </form>
+
+  <form hx-ext="json-enc"
+    data-loading-disable
+    hx-trigger="submit throttle:1s"
+    hx-post="/auth/token" hidden>
+      <label for="login">Who is going to login?</label>
+      <input type="text" id="login" name="login"
+        autocomplete="webauthn"
+        autocorrect="off"
+        autocapitalize="off"
+        spellcheck="false"
+        required>
+      <label for="token">Token</label>
+      <input type="text" id="token" name="token"
+        autocomplete="off"
+        autocorrect="off"
+        autocapitalize="off"
+        spellcheck="false"
+        required>
+      <button type="submit"
+        hx-target="this"
+        hx-swap="innerHTML">
+          Start authentication
+      </button>
+      <p>
+        A token can be generated via <i>command line</i>:<br>
+        <code>./shelltoken -g</code>
+      </p>
+      <hr>
+      <p>
+        <a href="#" class="secondary no-text-decoration"
+          _="on click
+            halt the event
+            take @hidden from <form/> in #login-form for closest <form/>
+          end">↩ Back to <mark>passkey</mark> authentication
+        </a>
+      </p>
+  </form>
+</div>

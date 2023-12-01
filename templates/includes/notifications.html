@@ -1,0 +1,74 @@
+{#
+  htmx.trigger("body", "showAlert", {
+    genericError: {
+      title: "My title",
+      message: "A bad error occured",
+      duration: 3, # optional, ms
+    }
+  })
+
+  OR
+
+  trigger showAlert(genericSuccess: {title: 'A title', message: 'A message', duration: 3000}) # duration optional, ms
+#}
+
+<div class="notification-container"
+  _="
+  init
+    set $notificationColorMapping to {
+      'genericError': 'notification-danger',
+      'genericWarning': 'notification-warning',
+      'genericSuccess': 'notification-success'
+    }
+  end
+
+  on showAlert from body
+    set alert to event.detail
+    if alert.validationError
+      set colorClass to 'notification-warning'
+      set title to 'Data validation failed'
+      set message to alert.validationError.message
+        unless not alert.validationError.message
+      if length of alert.validationError.locations > 0
+        repeat for loc in alert.validationError.locations
+          get closest <form/> to event's target
+            if it
+              get <[name=`${loc}`]/> in it
+              add [@aria-invalid=true] to it
+            end
+          end
+      end
+      set duration to 5000
+    else
+      set type to Object.keys(alert).filter( \ s -> s.startsWith('generic')) as String
+      set colorClass to $notificationColorMapping[type]
+      set title to alert[type].title
+      set message to alert[type].message
+      set duration to 3000
+      set duration to alert[type].duration unless not alert[type].duration
+      set message to [message] unless message is a Array
+    end
+    render #notification-template with (title: title, messages: message, colorClass: colorClass, duration: duration)
+    put it at end of me
+  end
+"></div>
+
+<template id="notification-template">
+  <div class="notification ${colorClass}" _="
+    init
+      @if duration
+        @set d to duration
+        wait ${duration}ms
+        transition my opacity to 0 over 200ms
+        remove me
+      @end
+      on click remove me
+    end
+  ">
+    <strong>${title}</strong><br>
+    @repeat for message in messages
+      ${message}<br>
+    @end
+  </div>
+</template>
+

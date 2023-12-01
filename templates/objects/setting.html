@@ -1,0 +1,62 @@
+{% if not request.headers.get("Hx-Request") %}
+  {% extends "base.html" %}
+{% endif %}
+
+{% block body %}
+
+<article>
+
+  <form data-loading-disable
+    id="settings-form"
+    hx-ext="loading-states, json-enc"
+    hx-trigger="submit throttle:200ms"
+    hx-ext="json-enc"
+    hx-include=":not(disabled)"
+    hx-patch="/objects/settings/{{ data.object.id }}"
+    autocomplete="off"
+    autocorrect="off"
+    autocapitalize="off"
+    spellcheck="false">
+
+    <label>Name
+      <input data-base type="text" name="name" value="{{ data.object.name }}">
+    </label>
+    <fieldset>
+      <label>Function</label>
+      <select _="
+        on change
+          fetch `${first @data-path of <option:checked/> in me}` put result into #setting-parameters
+        end">
+          {% if not data.object.settings_rule %}
+            <option disabled selected>Please select a rule</option>
+          {% endif %}
+          {% for category in SETTINGS_CATEGORIES %}
+          <optgroup label="{{ category }}">
+            {{ category }}
+            {% for setting_id, setting_data in SETTINGS_DATA.items() if setting_data.category == category %}
+              <option {{ "selected" if data.object.settings_rule == setting_id }}
+                class="secondary"
+                data-path="/objects/settings/{{ data.object.id }}/{{ setting_id }}">
+                  {{ setting_data.name }}
+              </option>
+            {% endfor %}
+          </optgroup>
+          {% endfor %}
+      </select>
+    </fieldset>
+
+    <hr>
+
+    <div id="setting-parameters">
+      {% if data.object.settings_rule %}
+        {% with settings_rule = data.object.settings_rule %}
+          {% include "objects/partials/setting.html" %}
+        {% endwith %}
+      {% endif %}
+    </div>
+
+  </form>
+
+</article>
+
+{% endblock body %}

@@ -1,0 +1,155 @@
+def postJson(url, dataObject)
+  fetch `${url}` with method:'POST', body:dataObject as JSON, headers:{content-type:'application/json'}
+  return result
+end
+
+def setCheckboxes(el, option)
+  repeat for e in (<input[type='checkbox']/> in el)
+    if option == 'all'
+      set e's @checked to 'true'
+      set e.checked to true
+    else if option == 'none'
+      remove @checked from e
+      set e.checked to false
+    else if option == 'toggle'
+      toggle [@checked='true'] on e
+      if e's @checked set e.checked to true else set e.checked to false end
+    end
+  end
+end
+
+behavior fixMultiSelect
+  on click or change
+    repeat for o in <option/>
+      if o.selected add @selected= to o
+        otherwise remove @selected from o
+      end
+    end
+  end
+end
+
+behavior buttonCheckHtmxResponse
+  on htmx:afterRequest from closest <form/> to me
+    if (closest <form/> to me) != (event.target) exit end
+    set :_v to my textContent unless :_v
+    if event.detail.successful then
+      put `👍` into me
+    else
+      add .shake to me
+      put `🤖 An error occured` into me
+    end
+    wait 1s
+    remove .shake from me
+    put :_v into me
+    set :_v to null
+  end
+end
+
+behavior toggleObjectSelection
+  on click
+    halt the event
+    call setCheckboxes(previous <tbody/>, 'toggle')
+  end
+end
+
+behavior confirmButton
+  on click[event.detail==1] from me queue none
+    halt the event
+    set :inner to my.innerHTML unless :inner
+    set x to 3
+    repeat until x == 0
+      put `Confirm ${x}x` into me
+      wait for a click or 1500ms
+      if the result's type is 'click'
+        decrement x
+      else
+        set my.innerHTML to :inner
+        exit
+      end
+    end
+    put `👍` into me
+    trigger confirmedButton
+    wait 500ms then set my.innerHTML to :inner
+  end
+end
+
+behavior inlineHtmxRename
+  init
+    set :_textContent to my.textContent
+  end
+
+  on click halt the event end
+
+  on htmx:afterRequest
+    if event.detail.successful == true
+      set :_textContent to my.textContent
+    end
+    set my.textContent to :_textContent
+  end
+
+  on htmx:confirm(issueRequest)
+    halt the event
+    call confirm(`${:_textContent} to ${my.textContent}?`)
+    if not result set my.textContent to :_textContent else issueRequest() end
+  end
+
+  on blur
+    if my.textContent == '' set my.textContent to :_textContent then exit end
+    if my.textContent == :_textContent exit end
+    set @hx-vals to `{"${my @data-name}": "${my.textContent}"}`
+    trigger editContent on me
+  end
+
+  on keypress[keyCode == 13]
+    me.blur()
+    halt the event
+  end
+end
+
+behavior bodydefault
+  on htmx:responseError
+    set status to event.detail.xhr.status
+    if status >= 500
+      trigger showAlert(genericError: {title: 'Server error', message: 'The server could not handle the given request'})
+    else if status == 404
+      trigger showAlert(genericError: {title: 'Not found', message: 'Route not found'})
+    end
+  end
+  on htmx:beforeRequest
+    remove @aria-invalid from <[aria-invalid]/>
+  end
+end
+
+behavior gatherLegoConfig
+  on htmx:configRequest from me
+    set data to (me as Values)
+    set data['provider_config'] to {}
+
+    for i in <input[name='provider_config']/>
+      set data['provider_config'][(@data-env-key of i)] to (value of i) unless (value of i) == ''
+    end
+
+    for b in (<[data-strict-bool]/> in me)
+      if data[(@name of b)] == 'true' set data[(@name of b)] to true else set data[(@name of b)] to false end
+    end
+
+    set event.detail.parameters to data
+  end
+end
+
+behavior strictVals
+  on htmx:configRequest from me
+    if event.target.id != my.id exit end
+    set data to (me as Values)
+
+    for i in (<[data-strict-int]/> in me)
+      set data[(@name of i)] to data[(@name of i)] as Int
+    end
+
+    for b in (<[data-strict-bool]/> in me)
+      if data[(@name of b)] == 'true' set data[(@name of b)] to true else set data[(@name of b)] to false end
+    end
+
+    set event.detail.parameters to data
+  end
+end

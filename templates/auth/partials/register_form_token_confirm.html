@@ -1,0 +1,25 @@
+{#
+  "hidden" is used to include both login and register forms in main.html while only showing either/or
+#}
+<form hx-ext="json-enc"
+  data-loading-disable
+  hx-trigger="submit throttle:1s"
+  hx-post="/auth/generate-registration-options"
+  class="login-register" id="register-form" {{ 'hidden' if hidden }}>
+    <input type="hidden" name="login" value="{{ data.login }}">
+    <input type="hidden" name="token" value="{{ data.token }}">
+    <p>A token intention was sent. Please review it carefully and enter the confirmation code if you agree.</p>
+    <label for="confirmation_code">Token confirmation code</label>
+    <input type="number" id="confirmation_code" name="confirmation_code"
+      autocomplete="off"
+      autocorrect="off"
+      autocapitalize="off"
+      spellcheck="false"
+      required>
+    <button type="submit"
+      id="register"
+      hx-target="this"
+      hx-swap="innerHTML">
+        Validate
+    </button>
+</form>

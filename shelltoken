@@ -1,0 +1,76 @@
+#!/usr/bin/env python3
+
+import argparse
+import random
+import redis
+import sys
+import time
+import signal
+from config import logger  # log in bg
+from secrets import token_urlsafe
+
+r = redis.Redis(decode_responses=True)
+token = None
+code = None
+
+
+def signal_handler(sig, frame):
+    if token:
+        print("Cleaning up")
+        r.delete(token)
+    sys.exit(0)
+
+
+signal.signal(signal.SIGINT, signal_handler)
+parser = argparse.ArgumentParser(
+    description="EHLO CTRL", formatter_class=argparse.ArgumentDefaultsHelpFormatter
+)
+parser.add_argument(
+    "-g",
+    "--generate-token",
+    action="store_true",
+    default=False,
+    help="Generate a token when prompted by the application",
+)
+parser.add_argument(
+    "-c",
+    "--confirm-auth-token",
+    dest="confirm_token",
+    type=str,
+    help="Confirm an authentication token",
+)
+args = parser.parse_args()
+
+config = vars(args)
+
+if len(sys.argv) == 1:
+    parser.print_help(sys.stderr)
+    sys.exit(1)
+
+match config:
+    case {"generate_token": True, "confirm_token": None}:
+        token, code = token_urlsafe(), "%06d" % random.randint(0, 999999)
+        r.hset(token, "status", "awaiting_intention")
+        r.expire(token, 120)
+
+        print(f"Your token was generated: {token}")
+        print("Awaiting reponse...")
+
+        while r.exists(token) and r.hget(token, "status") != "awaiting_confirmation":
+            time.sleep(0.2)
+
+        if r.hget(token, "status") != "awaiting_confirmation":
+            print("Token expired")
+            sys.exit(1)
+
+        print("Please confirm the application's intention:")
+        print("\n" + r.hget(token, "intention"), end="\n\n")
+
+        intention_confirm = input("Proceed? [Y|n] ") or "y"
+        if intention_confirm.lower().startswith("y"):
+            r.hset(token, "status", "confirmed")
+            r.hset(token, "confirmation_code", code)
+            print(f"Your Confirmation code is {code}")
+        else:
+            print("Not showing confirmation code and deleting token.")
+            r.delete(token)

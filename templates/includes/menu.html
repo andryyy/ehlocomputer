@@ -1,0 +1,61 @@
+<nav hx-target="#body-main" hx-push-url="true" class="flex-space-between">
+  <ul class="flex-left">
+    <li class="pointer ehlo" hx-get="/" hx-target="#body-main">
+      <b>EHLO</b>
+    </li>
+  </ul>
+  <ul _="on click from <a/> in me halt the event end" class="flex-wrap-row-reverse">
+  {% if session["login"] %}
+    <li>
+      <details class="dropdown" _="on click from <a/> in me remove @open from me end">
+        <summary>
+          ⚙️ Settings
+        </summary>
+        <ul>
+          <li><a href="#" hx-get="/profile">Profile</a></li>
+          <li><a href="#" hx-get="/realms">Realms</a></li>
+          <li><a href="#" hx-get="/users">Users</a></li>
+          <li><hr></li>
+          <li><a href="#" hx-post="/logout" hx-ext="json-enc" hx-swap="innerHTML">Logout</a></li>
+        </ul>
+      </details>
+    </li>
+    <li>
+      <details class="dropdown" _="on click from <a/> in me remove @open from me end">
+        <summary>
+          Servers
+        </summary>
+        <ul>
+          <li><a href="#" hx-get="/listeners">Listeners</a></li>
+          <li><a href="#" hx-get="/configs">Configurations</a></li>
+        </ul>
+      </details>
+    </li>
+    <li>
+      <details class="dropdown" _="on click from <a/> in me remove @open from me end">
+        <summary>
+          Objects
+        </summary>
+        <ul>
+          <li><a href="#" hx-get="/objects/domains">Domains</a></li>
+          <li><a href="#" hx-get="/objects/recipients">Recipients</a></li>
+          <li><a href="#" hx-get="/objects/settings">Settings</a></li>
+        </ul>
+      </details>
+    </li>
+  {% else %}
+    <li>
+      <a role="button" _="
+        on click
+          get value of <[name=login]/> in #register-form
+          set value of <[name=login]/> in #login-form to it as String
+          toggle @hidden on .login-register
+        end"
+        href="#">
+          <span class="login-register">Register</span>
+          <span class="login-register" hidden>Login</span>
+      </a>
+    </li>
+  {% endif %}
+  </ul>
+</nav>

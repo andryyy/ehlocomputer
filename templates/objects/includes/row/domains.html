@@ -1,0 +1,15 @@
+<tr hx-disinherit="*"
+    data-object='{"objectType":"domains","objectId":"{{ object.id }}","objectName":"{{ object.name }}"}'>
+  <td> {# There is a bug in htmx that does not disable inheritance for hx-vals #}
+    <input type="checkbox" name="id" value="{{ object.id }}" autocomplete="off">
+    <span _="install inlineHtmxRename()"
+      data-name="name"
+      spellcheck="false"
+      hx-ext="json-enc"
+      contenteditable="true"
+      hx-patch="/objects/domains/{{ object.id }}"
+      hx-trigger="editContent">
+        {{- object.name -}}
+    </span>
+  </td>
+</tr>

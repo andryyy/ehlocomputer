@@ -1,0 +1,44 @@
+<tr id="{{ data.object_type }}-table-navigation-row">
+  {# Update all input fields with name "chunk" #}
+  <td class="table-navigation" data-loading-disable>
+    <form role="group" _="
+        on keydown[key is 'Enter'] or change from <input[type='number']/> in me
+          trigger submitPaging
+          halt the event
+        end
+        on click from <.paging:not(.disabled)/>
+          set the value of <[name='chunk']/> in me to @data-value of target
+          trigger submitPaging
+          halt the event
+        end
+      "
+      hx-post="/objects/{{ data.object_type }}/search"
+      hx-ext="json-enc"
+      {# Carry the search string #}
+      hx-vals='js:{"q":htmx.find("#{{ data.object_type }}-table-search").value}'
+      hx-target="#{{ data.object_type }}-table-body"
+      hx-trigger="submitPaging"
+      hx-include=".table-navigation input[type='number']">
+      <div>
+        <input placeholder="Items per page" type="number" value="{{ data.page_size }}" autocomplete="off" name="page_size">
+        <label>Items per page</label>
+      </div>
+      <div style="margin-left: calc(var(--pico-border-width) * -2);">
+        <input placeholder="Page" type="number" value="{{ data.chunk }}" autocomplete="off" name="chunk">
+        <label>Current page</label>
+      </div>
+      <input type="submit" hidden>
+    </form>
+    <div class="flex-space-between">
+      <div class="flex-left">
+        <code class="paging {{ "disabled" if data.chunk == 1 }}" data-value="1">❰❰</code>
+        <code class="paging {{ "disabled" if data.chunk == 1 }}" data-value="{{ data.chunk - 1 }}">❬</code>
+        <code class="paging {{ "disabled" if data.chunk == data.chunks - 1 }}" data-value="{{ data.chunk + 1 }}">❭</code>
+        <code class="paging {{ "disabled" if data.chunk == data.chunks - 1 }}" data-value="{{ data.chunks - 1 }}">❱❱</code>
+      </div>
+      <div>
+        #<b><span id="{{- data.object_type -}}-objects-count">{{- data.elements -}}</span></b> elements.
+      </div>
+    </div>
+  </td>
+</tr>

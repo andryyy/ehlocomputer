@@ -1,0 +1,18 @@
+<li>
+  <a _="on click put 'Current' into previous <summary/> then remove @open from #listener-revisions"
+    class="secondary"
+    hx-select="#listener-config"
+    hx-swap="outerHTML"
+    hx-get="{{ url_for("listeners.get_listener", listener_id=request.view_args.get("listener_id")) }}"
+    href="#">Current
+  </a>
+</li>
+{% for historic_config in listener.historic %}
+  <li>
+    <a _="on click put my innerHTML into previous <summary/> then remove @open from #listener-revisions"
+      class="secondary"
+      hx-get="{{ url_for("listeners.get_listener", listener_id=request.view_args.get("listener_id")) }}/revision/{{ historic_config.revision }}"
+      href="#">{{ historic_config.revision }}
+    </a>
+  </li>
+{% endfor %}

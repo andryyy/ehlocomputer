@@ -1,0 +1,5 @@
+*
+!certs/
+!nginx_alpine_entrypoint.sh
+!nginx.conf
+!.gitignore

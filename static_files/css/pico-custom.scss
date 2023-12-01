@@ -1,0 +1,310 @@
+@use "pico" with (
+  $enable-semantic-container: true,
+  $enable-responsive-spacings: false,
+  $enable-responsive-typography: false,
+  $breakpoints: (
+    sm:
+      (
+        breakpoint: 576px,
+        viewport: 510px,
+      ),
+    md:
+      (
+        breakpoint: 768px,
+        viewport: 700px,
+      ),
+    lg:
+      (
+        breakpoint: 1024px,
+        viewport: 950px,
+      ),
+    xl:
+      (
+        breakpoint: 1280px,
+        viewport: 1200px,
+      ),
+    xxl:
+      (
+        breakpoint: 1536px,
+        viewport: 80%,
+      )
+  ),
+);
+@use "colors" as *;
+@use "sass:map";
+@use "settings" as *;
+
+
+small {
+  font-size: 1em;
+  color: var(--pico-muted-color);
+}
+
+/* Lime color for light color scheme (Default) */
+/* Can be forced with data-theme="light" */
+[data-theme=light],
+:root:not([data-theme=dark]) {
+  --pico-text-selection-color: rgba(119, 156, 0, 0.25);
+  --pico-primary: #577400;
+  --pico-primary-background: #a5d601;
+  --pico-primary-underline: rgba(87, 116, 0, 0.5);
+  --pico-primary-hover: #435a00;
+  --pico-primary-hover-background: #99c801;
+  --pico-primary-focus: rgba(119, 156, 0, 0.25);
+  --pico-primary-inverse: #000;
+  --pico-switch-color: var(--pico-secondary-hover);
+}
+
+/* Lime color for dark color scheme (Auto) */
+/* Automatically enabled if user has Dark mode enabled */
+@media only screen and (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    --pico-text-selection-color: rgba(130, 171, 0, 0.1875);
+    --pico-primary: #82ab00;
+    --pico-primary-background: #a5d601;
+    --pico-primary-underline: rgba(130, 171, 0, 0.5);
+    --pico-primary-hover: #99c801;
+    --pico-primary-hover-background: #b2e51a;
+    --pico-primary-focus: rgba(130, 171, 0, 0.25);
+    --pico-primary-inverse: #000;
+    --pico-switch-color: var(--pico-background-color);
+  }
+}
+
+/* Lime color for dark color scheme (Forced) */
+/* Enabled if forced with data-theme="dark" */
+[data-theme=dark] {
+  --pico-text-selection-color: rgba(130, 171, 0, 0.1875);
+  --pico-primary: #82ab00;
+  --pico-primary-background: #a5d601;
+  --pico-primary-underline: rgba(130, 171, 0, 0.5);
+  --pico-primary-hover: #99c801;
+  --pico-primary-hover-background: #b2e51a;
+  --pico-primary-focus: rgba(130, 171, 0, 0.25);
+  --pico-primary-inverse: #000;
+  --pico-switch-color: var(--pico-background-color);
+}
+
+:root {
+  --pico-font-family-sans-serif: "Go", system-ui, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, var(--pico-font-family-emoji);
+  --pico-spacing: 1rem;
+  --pico-form-element-spacing-vertical: .5rem;
+  --pico-form-element-spacing-horizontal: .5rem;
+  --pico-form-element-invalid-border-color: #e64553;
+  --pico-form-element-invalid-active-border-color: #e54447;
+  --pico-card-: 0 0 0 rgba(0, 0, 0, 0);
+  --pico-border-radius: 0;
+  --pico-font-size: 11pt;
+  --pico-line-height: 1.4;
+}
+
+
+pre {
+  padding: calc(var(--pico-spacing));
+}
+
+code {
+  word-break: break-all;
+  border-radius: .25rem;
+  padding: calc(var(--pico-spacing)/2);
+  margin-block-start: .25rem;
+}
+
+.shake {
+  animation: horizontal-shaking .25s linear 1;
+}
+
+@keyframes horizontal-shaking {
+  0% { transform: translateX(0) }
+  25% { transform: translateX(5px) }
+  50% { transform: translateX(-5px) }
+  75% { transform: translateX(5px) }
+  100% { transform: translateX(0) }
+}
+
+.logo svg {
+  width: 3.25rem;
+  height: auto;
+}
+
+.qr-code path {
+  fill: var(--pico-color);
+}
+
+.loading-indicator {
+  position: fixed;
+  bottom: 1rem;
+}
+
+table tr {
+  white-space: nowrap;
+}
+
+.no-text-decoration {
+  text-decoration: none !important;
+}
+
+.terminal-stream {
+  padding: calc(var(--pico-spacing)/2);
+  overflow-y: scroll;
+  height: 400px;
+  width: auto;
+  resize: both;
+}
+
+[data-loading] {
+  display: none;
+}
+
+.pointer {
+  cursor:pointer;
+}
+
+[contenteditable]:focus {
+  padding: calc(var(--pico-spacing)/2);
+  background: var(--pico-contrast);
+  color: var(--pico-contrast-inverse);
+}
+
+/*
+# Table navigation
+*/
+.table-navigation {
+  user-select: none;
+}
+.table-navigation span.disabled {
+  color:$zinc-700;
+  pointer-events: none;
+}
+.table-navigation > span,
+.table-navigation > div {
+  padding:.5rem;
+}
+.table-navigation label {
+  color: var(--pico-muted-color);
+}
+.table-navigation .paging:not(.disabled) {
+  padding: var(--pico-form-element-spacing-vertical) var(--pico-form-element-spacing-horizontal);
+}
+.table-navigation .paging.disabled {
+  opacity:.5;
+  cursor:not-allowed;
+}
+
+/*
+# Notification containers
+*/
+.notification-container {
+  width: 100%;
+  position: fixed;
+  right:0;
+  bottom:0;
+  z-index: 999;
+}
+.notification {
+  //margin-bottom: var(--pico-spacing);
+  margin-bottom: 0;
+  padding: var(--pico-form-element-spacing-vertical) var(--pico-form-element-spacing-horizontal);
+  //border-radius: var(--pico-border-radius);
+  border-radius: 0;
+  color: var(--pico-color);
+  background-color: var(--pico-background-color);
+  border: 1px solid var(--pico-color);
+  background-image: var(--pico-icon);
+  background-position: center left var(--pico-form-element-spacing-vertical);
+  background-size: calc(12pt * 1.5);
+  padding-left: calc(var(--pico-form-element-spacing-vertical) * 2 + calc(12pt * 1.5));
+}
+.notification-danger {
+  --pico-background-color: #ffebee;
+  --pico-icon: var(--pico-icon-invalid);
+  --pico-color: #b71c1c;
+}
+.notification-warning {
+  --pico-background-color: #fff8e1 !important;
+  --pico-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='rgba(179, 78, 0, 0.999)' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='10'%3E%3C/circle%3E%3Cline x1='12' y1='8' x2='12' y2='12'%3E%3C/line%3E%3Cline x1='12' y1='16' x2='12.01' y2='16'%3E%3C/line%3E%3C/svg%3E");
+  --pico-color: #994300;
+}
+.notification-success {
+  --pico-background-color: #e8f5e9;
+  --pico-icon: var(--pico-icon-valid);
+  --pico-color: #1b5e20;
+}
+
+#config-tree ol {
+  list-style: none;
+}
+#config-tree ol>li {
+  counter-increment: item;
+  padding: .5rem 0;
+}
+#config-tree ol>li:before {
+  margin-right: 10px;
+  content: "# " counter(item);
+  background: $slate-50;
+  color: $slate-750;
+  padding: 0 .825rem;
+}
+#config-tree table tr {
+  white-space: normal;
+}
+
+#container-stats ul,
+#container-stats li {
+  list-style-type: none;
+}
+
+.padded-buttons :is(button, [type="submit"], [type="button"], [role="button"]) {
+  margin-block-start: .25rem;
+}
+
+.p-relative {
+  position: relative;
+}
+.p-absolute-right {
+  position: absolute;
+  right: 0;
+}
+
+.flex-center-w-gap {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: var(--pico-spacing);
+  flex-wrap: wrap;
+}
+.flex-space-between {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.flex-left {
+  margin:auto 0;
+}
+.flex-wrap-row-reverse {
+  flex-wrap: wrap;
+  flex-direction: row-reverse;
+}
+
+
+
+thead th, thead td, tfoot th, tfoot td {
+  --pico-font-weight: 400;
+}
+
+button, a { touch-action: manipulation; }
+
+.up, .down {
+  font-size:.875rem;
+  padding: .25rem;
+  margin: .25rem 0;
+}
+
+nav .dropdown {
+  width: max-content;
+}
+
+.ehlo {
+  font-size:20pt;
+  font-family:monospace;
+}

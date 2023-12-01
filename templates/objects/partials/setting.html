@@ -1,0 +1,414 @@
+{% set setting = SETTINGS_DATA[settings_rule or request.view_args.get("setting_id")|int] %}
+
+<div class="grid">
+
+  <div>
+    <hgroup class="setting-meta">
+      <h6>{{ setting.name }}</h6>
+      <p>
+        {{ setting.description|safe }}<br>
+      </p>
+    </hgroup>
+
+    <section>
+    {% if setting.expected_value %}
+      <i>Expected values to be returned:</i>
+      {% for value in setting.expected_value %}
+        <code>{{ value }}</code>&nbsp;
+      {% endfor %}
+    {% endif %}
+    </section>
+  </div>
+  <fieldset id="test-inheritance" hx-disable>
+    <label>Test inheritance</label>
+    <select  _="
+      init set :oldValues to (#settings-form as Values) end
+
+      on testInheritance(reset) from me
+        halt the event
+        set data to (@data-setting of first <option:checked/> in me) as Object
+
+        if reset
+          set value of <[name^='ldap_'], [name^='http_'], [name^='static_']/> to ''
+          set *outline of <[name^='ldap_'], [name^='http_'], [name^='static_']/> to 'none'
+          set data to :oldValues
+        end
+
+        for k in Object.keys(data)
+
+          continue unless (
+            k.startsWith('ldap_') or
+            k.startsWith('http_') or
+            k.startsWith('static_')
+          )
+
+          set _el to first <[name=`${k}`]/>
+
+          if (not _el) or
+             (value of _el != '') or
+             (data[k] == '')
+              continue
+          end
+
+          set value of _el to data[k]
+          set _el's *outline to '1px solid var(--pico-form-element-valid-border-color)' unless reset
+
+        end
+      end">
+      {% for compareable in data.compareables if compareable.name != data.object.name %}
+      <option
+        data-setting='{{ compareable|tojson }}'>
+          {{ compareable.name }}
+      </option>
+      {% endfor %}
+    </select>
+
+    <div role="group">
+      <a role="button" _="
+        on click
+          halt the event
+          trigger testInheritance on previous <select/>
+        end">Fill w/ inherited data</a>
+      <a role="button" class="secondary" _="
+        on click
+          halt the event
+          trigger testInheritance(reset:true) on previous <select/>
+        end">Revert</a>
+    </div>
+  </fieldset>
+</div>
+
+<hr>
+
+<input data-base type="hidden" name="settings_rule" value="{{ setting.id }}">
+
+<fieldset id="setting-source" _="on click from <[name='source']/> in me add @hidden to .source then remove @hidden from .{value of target} end">
+  <legend>Source</legend>
+  {% if "static" in setting.source %}
+    <input data-base type="radio" id="source-static" name="source" value="static" {{ "checked" if data.object.source == "static" or setting.source|length == 1 }}>
+    <label for="source-static">Static</label>
+  {% endif %}
+  {% if "http" in setting.source %}
+    <input data-base type="radio" id="source-http" name="source" value="http" {{ "checked" if data.object.source == "http" or setting.source|length == 1 }}>
+    <label for="source-http">HTTP</label>
+  {% endif %}
+  {% if "ldap" in setting.source %}
+    <input data-base type="radio" id="source-ldap" name="source" value="ldap" {{ "checked" if data.object.source == "ldap" or setting.source|length == 1 }}>
+    <label for="source-ldap">LDAP</label>
+  {% endif %}
+</fieldset>
+
+{# ldap block #}
+{% if "ldap" in setting.source %}
+<div class="source ldap" {{ "hidden" if not data.object.source == "ldap" and setting.source|length != 1 }}>
+
+  {# ldap_uri #}
+  <fieldset class="field ldap_uri" {{ "hidden" if "ldap_uri" in setting.excluded }}>
+    <label>Connection URI</label>
+
+    <input
+      data-ldap
+      type="text"
+      name="ldap_uri"
+      value="{{ data.object.ldap_uri }}" />
+
+    <small>
+      LDAP URI to connect to: <code>dc=ldap,dc=example,dc=org</code>.
+    </small>
+
+  </fieldset>
+
+  {# ldap_base_dn #}
+  <fieldset class="field ldap_base_dn" {{ "hidden" if "ldap_base_dn" in setting.excluded }}>
+    <label>Base DN</label>
+
+    <input
+      data-ldap
+      type="text"
+      name="ldap_base_dn"
+      value="{{ data.object.ldap_base_dn }}" />
+
+    <small>
+      A base DN in the format of <code>ou=people,dc=ldap,dc=example,dc=org</code>.
+    </small>
+  </fieldset>
+
+  {# ldap_bind_dn #}
+  <fieldset class="field ldap_bind_dn" {{ "hidden" if "ldap_bind_dn" in setting.excluded }}>
+    <label>Bind DN</label>
+
+    <input
+      data-ldap
+      type="text"
+      name="ldap_bind_dn"
+      value="{{ data.object.ldap_bind_dn }}" />
+
+    <small>
+      A DN to bind with. Useable placeholder variables are <code>%rcpt%</code> and <code>%domain%</code>.<br>
+      Example: <code>uid=%rcpt%,ou=%domain%,ou=people,dc=ldap,dc=example,dc=org</code>.
+    </small>
+  </fieldset>
+
+  {# ldap_bind_passwd #}
+  <fieldset class="field ldap_bind_passwd" {{ "hidden" if "ldap_bind_passwd" in setting.excluded }}>
+    <label>Bind password
+      {% if data.object.ldap_bind_passwd %}
+        <a href="#" class="primary" _="on click halt the event toggle @disabled on <input[name='ldap_bind_passwd']/> end">[Toggle new password]</a>
+      {% endif %}
+    </label>
+    <input
+      data-ldap
+      type="password"
+      name="ldap_bind_passwd"
+      {{ "disabled" if data.object.ldap_bind_passwd }} />
+    <small>
+      Can be left empty for an anonymous binding.
+    </small>
+  </fieldset>
+
+  {# ldap_search_scope #}
+  <fieldset class="field ldap_search_scope" {{ "hidden" if "ldap_search_scope" in setting.excluded }}>
+    <label>Seach scope</label>
+
+    <select
+      data-ldap
+      name="ldap_search_scope">
+      <option {{ "selected" if data.object.ldap_search_scope == "SCOPE_BASE" }}" value="SCOPE_BASE">SCOPE_BASE</option>
+      <option {{ "selected" if data.object.ldap_search_scope == "SCOPE_ONELEVEL" }}" value="SCOPE_ONELEVEL">SCOPE_ONELEVEL</option>
+      <option {{ "selected" if data.object.ldap_search_scope == "SCOPE_SUBTREE" }}" value="SCOPE_SUBTREE">SCOPE_SUBTREE</option>
+    </select>
+
+    <small>
+      A DN to bind with. Useable placeholder variables are <code>%rcpt%</code> and <code>%domain%</code>.<br>
+      Example: <code>uid=%rcpt%,ou=%domain%,ou=people,dc=ldap,dc=example,dc=org</code>.
+    </small>
+  </fieldset>
+
+  {# ldap_filter #}
+  <fieldset class="field ldap_filter" {{ "hidden" if "ldap_filter" in setting.excluded }}>
+    <label>Filter</label>
+
+    <input
+      data-ldap
+      type="text"
+      name="ldap_filter"
+      value="{{ data.object.ldap_filter }}" />
+
+    <small>
+      A LDAP filter to apply. Useable placeholder variables are <code>%rcpt%</code> and <code>%domain%</code>.<br>
+      Example: <code>(&(uid=%rcpt%)(objectClass=person))</code>.
+    </small>
+  </fieldset>
+
+  {# ldap_attribute #}
+  <fieldset class="field ldap_attribute" {{ "hidden" if "ldap_attribute" in setting.excluded }}>
+    <label>Attribute</label>
+
+    <input
+      data-ldap
+      type="text"
+      name="ldap_attribute"
+      value="{{ data.object.ldap_attribute }}" />
+
+    <small>
+      The attribute to be used as value.<br>
+      Example: <code>mail</code>.
+    </small>
+  </fieldset>
+</div>
+{% endif %}
+
+
+{# http block #}
+{% if "http" in setting.source %}
+<div class="source http" {{ "hidden" if not data.object.source == "http" and setting.source|length != 1 }}>
+
+  {# http_url #}
+  <fieldset class="field http_url" {{ "hidden" if "http_url" in setting.excluded }}>
+    <label>HTTP URL</label>
+
+    <input
+      data-http
+      type="text"
+      name="http_url"
+      value="{{ data.object.http_url }}" />
+
+    <small>
+      Full URL as in <code>https://api.endpoint.example.org</code> or <code>https://api.endpoint.example.org</code>.<br>
+      Useable placeholder variables are <code>%rcpt%</code> and <code>%domain%</code>.<br>
+    </small>
+  </fieldset>
+
+  {# http_status_code #}
+  <fieldset class="field http_status_code" {{ "hidden" if "http_status_code" in setting.excluded }}>
+    <label>Response status code</label>
+
+    <input
+      data-http
+      type="number"
+      name="http_status_code"
+      value="{{ data.object.http_status_code }}" />
+
+    <small>
+      Expected status code. Example: <code>200</code>.<br>
+      If empty, responses from 200-299 will be interpreted as valid.
+    </small>
+  </fieldset>
+
+  {# http_response_filter #}
+  <fieldset class="field http_response" {{ "hidden" if "http_response" in setting.excluded }}>
+    <label>Read response</label>
+    <article>
+      <label>Header</label>
+
+      <input
+        data-http
+        type="text"
+        name="http_response[header]"
+        value="{{ data.object.http_response.header if data.object.http_response }}" />
+
+      <small>
+        A JSON formatted string containing one or more headers.<br>
+        Useable placeholder variables are <code>%rcpt%</code> and <code>%domain%</code>.<br>
+        Example: <code>{"X-Token": "my-secret-token"}</code> or <code>{"X-Token": "%rcpt%", "X-Another-Header": "on"}</code>.
+      </small>
+
+      <hr>
+
+      <label>Body</label>
+
+      <input
+        data-http
+        type="text"
+        name="http_response[body]"
+        value="{{ data.object.http_response.body if data.object.http_response }}" />
+
+      <small>
+        A regex to filter the HTTP response.
+        Useable placeholder variables are <code>%rcpt%</code> and <code>%domain%</code>.<br>
+        Example: <code>Status:(OK|GOOD);Response:%rcpt%;</code> or <code>{"X-Token": "%rcpt%", "X-Another-Header": "on"}</code>.
+      </small>
+
+      <hr>
+
+      <label>Response from</label>
+      <select name="http_response[read_from]">
+        <option value="body" {{ "selected" if data.object.http_response.read_from == "body" if data.object.http_response }}>Body</option>
+        <option value="header" {{ "selected" if data.object.http_response.read_from == "header" if data.object.http_response }}>Header</option>
+        <option value="body_header" {{ "selected" if data.object.http_response.read_from == "body_header" if data.object.http_response }}>Body, fallback to header</option>
+        <option value="header_body" {{ "selected" if data.object.http_response.read_from == "header_body" if data.object.http_response }}>Header, fallback to body</option>
+      </select>
+
+    </article>
+
+  </fieldset>
+
+  {# http_request_header #}
+  <fieldset class="field http_request_header" {{ "hidden" if "http_request_header" in setting.excluded }}>
+    <label>Request header</label>
+
+    <input
+      data-http
+      type="text"
+      name="http_request_header"
+      value="{{ data.object.http_request_header }}" />
+
+    <small>
+      A JSON formatted string containing one or more headers.<br>
+      Useable placeholder variables are <code>%rcpt%</code> and <code>%domain%</code>.<br>
+      Example: <code>{"X-Token": "my-secret-token"}</code> or <code>{"X-Token": "%rcpt%", "X-Another-Header": "on"}</code>.
+    </small>
+  </fieldset>
+
+
+  {# http_request_body #}
+  <fieldset class="field http_request_body" {{ "hidden" if "http_request_body" in setting.excluded }}>
+    <label>Request body</label>
+
+    <input
+      data-http
+      type="text"
+      name="http_request_body"
+      value="{{ data.object.http_request_body }}" />
+
+    <small>
+      Data to send as payload in the request body.
+      Useable placeholder variables are <code>%rcpt%</code> and <code>%domain%</code>.<br>
+      Example: <code>{"rcpt: "%rcpt%"}</code> or <code>RCPT:%rcpt%;SCOPE:X;</code>.
+    </small>
+  </fieldset>
+</div>
+{% endif %}
+
+
+{# static block #}
+{% if "static" in setting.source %}
+<div class="source static" {{ "hidden" if not data.object.source == "static" and setting.source|length != 1 }}>
+
+  {# static_number #}
+  <fieldset class="field static_number" {{ "hidden" if "static_number" in setting.excluded }}>
+    <label>Number</label>
+
+    <input
+      data-static
+      type="number"
+      name="static_number"
+      value="{{ data.object.static_number }}" />
+
+    <small>Static value</small>
+  </fieldset>
+
+  {# static_text #}
+  <fieldset class="field static_text" {{ "hidden" if "static_text" in setting.excluded }}>
+    <label>Text</label>
+
+    <textarea
+      data-static
+      rows="10"
+      type="text"
+      name="static_text">{{- data.object.static_text -}}
+    </textarea>
+
+    <small>
+      Can be a certificate, public key or any other string.<br>
+      See the setting's description for details.
+    </small>
+  </fieldset>
+
+  {# static_boolean #}
+  <fieldset class="field static_boolean" {{ "hidden" if "static_boolean" in setting.excluded }}>
+    <legend>Boolean</legend>
+
+    <input
+      data-static
+      type="radio"
+      id="static-true"
+      name="static_boolean"
+      value="true"
+      {{ "checked" if data.object.static_boolean == True or data.object.static_boolean|lower == "true" }} />
+    <label for="static-true">True</label>
+
+    <input
+      data-static
+      type="radio"
+      id="static-false"
+      name="static_boolean"
+      value="false"
+      {{ "checked" if data.object.static_boolean == False or data.object.static_boolean|lower == "false" }} />
+    <label for="static-false">False</label>
+
+    <input
+      data-static
+      type="radio"
+      id="static-none"
+      name="static_boolean"
+      value=""
+      {{ "checked" if not data.object.static_boolean or data.object.static_boolean == "" }} />
+    <label for="static-none"><i>Disable bool</i></label>
+
+  </fieldset>
+
+</div>
+{% endif %}
+
+<button id="submit-settings" data-loading-disable type="submit" _="install buttonCheckHtmxResponse">Save</button>

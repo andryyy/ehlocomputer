@@ -1,0 +1,85 @@
+{% if not request.headers.get("Hx-Request") %}
+{% extends "base.html" %}
+{% endif %}
+
+{#
+  Fields with fallback values from session["profile"]:
+    - If no profile exists, session["profile"] is derived from app defaults
+#}
+
+{% block body %}
+<form data-loading-disable hx-trigger="submit throttle:1s" hx-ext="json-enc" hx-patch="/profile/{{ session.id }}/edit" id="profile-form">
+  <label for="email">Email address</label>
+  <input type="email"
+    name="email"
+    id="email"
+    autocomplete="off"
+    autocorrect="off"
+    autocapitalize="off"
+    spellcheck="false"
+    value="{{ user_data.user.profile.email if user_data.user.profile }}">
+  <small>Your email address is optional</small>
+  <button
+    type="submit" _="install buttonCheckHtmxResponse">
+      Save changes
+  </button>
+</form>
+
+<article>
+  <h6>Authenticators</h6>
+  <p>The authenticator that started the session is indicated as active.</p>
+  <figure>
+    <table>
+      <thead>
+        <tr>
+          <th scope="col">Name</th>
+          <th scope="col">Last login</th>
+          <th scope="col"></th>
+          <th scope="col"></th>
+        </tr>
+      </thead>
+      <tbody id="token-table-body">
+      {% for cred in user_data.credentials %}
+        <tr>
+          <td>
+            <span _="install inlineHtmxRename()"
+              contenteditable
+              data-name="friendly_name"
+              spellcheck="false"
+              hx-ext="json-enc"
+              hx-patch="/profile/credential/{{ cred.id|hex }}"
+              hx-trigger="editContent">
+                {{- cred.friendly_name or 'John Doe' -}}
+            </span>
+          </td>
+          <td>
+          {% if cred.last_login %}
+            <span class="" value="{{ cred.last_login }}" _="init call iso8601ToLocal(@value) then put result into me"></span>
+          {% endif %}
+          </td>
+          <td>
+            <a href="#" hx-confirm="Delete token?"
+              _="install confirmButton
+              on htmx:afterRequest[event.detail.successful==true]
+                remove closest <tr/>
+              end"
+              hx-trigger="confirmedButton throttle:200ms"
+              hx-ext="json-enc"
+              hx-delete="/profile/credential/{{ cred.id|hex }}">
+                Delete token
+            </a>
+          </td>
+          <td>
+          {% if session["cred_id"] == cred.id|hex %}
+            <mark>active</mark>
+          {% endif %}
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </figure>
+  {% include "profile/includes/add_token_form.html" %}
+</article>
+
+{% endblock body %}

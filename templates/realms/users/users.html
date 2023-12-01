@@ -1,0 +1,60 @@
+{% if not request.headers.get("Hx-Request") %}
+  {% extends "base.html" %}
+{% endif %}
+
+{% block body %}
+
+<h4>Realms</h4>
+
+<article>
+  <b>Realms</b> are the heart of the application. Make sure to edit them carefully.<br>
+  A realm consists primarily of an individual domain and an isolated database.<br>
+  Objects, users, and other entities are not accessable across realms.
+</article>
+
+
+<section>
+  <form data-loading-disable
+    hx-trigger="submit throttle:200ms"
+    hx-ext="json-enc"
+    hx-post="/realms"
+    hx-target="#realms-table"
+    hx-swap="afterbegin">
+      <label for="name">Name
+      <input type="text" name="name" id="name"
+        autocomplete="off"
+        autocorrect="off"
+        autocapitalize="off"
+        spellcheck="false">
+      </label>
+      <button type="submit" _="install buttonCheckHtmxResponse">Create</button>
+  </form>
+</section>
+
+<hr>
+
+<h6>Select a realm</h6>
+<article>
+  <figure>
+    <table>
+      <tbody id="realms-table">
+        {% for r in data.realms %}
+        <tr>
+          <td>
+            <a
+              hx-target="#body-main"
+              hx-push-url="true"
+              hx-get="/realms/{{ r.id }}"
+              href="#">
+                {{ r.name -}}
+            </a>
+            {{ "- [default]" if r.default == True }}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </figure>
+</article>
+{% endblock body %}
+

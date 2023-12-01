@@ -1,0 +1,97 @@
+<template id="domain-template">
+  <tr class="domain" data-object="${domain as JSON}">
+    <td>
+      <div class="p-relative">
+        <div class="p-absolute-right">
+          <a role="button" class="secondary" href="#" _="on click halt the event
+            call confirm ('Remove?') if result remove closest .domain
+          end">
+            <span class="domain-name">${domain.objectName}</span> ❌
+          </a>
+        </div>
+      </div>
+      <div class="grid">
+        <div>
+          <fieldset>
+            <a role="button" href="#" class="outline secondary" _="on click take .active-selection for next .recipients"
+              hx-get="/configs/partials/select-objects/recipients">
+                Add recipients
+            </a>
+          </fieldset>
+          <ol class="recipients-${domain.objectId} recipients"></ol>
+        </div>
+        <div>
+          <fieldset>
+            <a role="button" href="#" class="outline secondary" _="on click take .active-selection for next .domain-settings"
+              hx-get="/configs/partials/select-objects/settings">
+                Add domain settings
+            </a>
+          </fieldset>
+          <article>
+            <p>Domain-wide settings for <b>${domain.objectName}</b></p>
+            <ol class="domain-settings-${domain.objectId} domain-settings"></ol>
+          </article>
+        </div>
+      </div>
+    </td>
+  </tr>
+</template>
+
+
+<template id="recipient-template">
+  <article class="recipient" data-object="${recipient as JSON}">
+    <input type="hidden" name="raw_config[${domain.objectId}][object_config][${parentObject.objectId}][recipients]" value="${recipient.objectId}">
+
+    <div class="flex-space-between">
+      <div class="flex-left">
+        📮 <span class="recipient-name">${recipient.objectName}</span>
+      </div>
+      <div>
+        <a _="on click take .active-selection for next .recipient-settings"
+          hx-get="/configs/partials/select-objects/settings"
+          href="#">Add setting</a>
+        <a href="#" class="secondary"
+          _="on click halt the event
+            call confirm ('Remove?') if result remove closest .recipient
+          end">remove</a>
+      </div>
+    </div>
+    <hr>
+    <ol class="recipient-settings-${recipient.objectId} recipient-settings"></ol>
+  </article>
+</template>
+
+
+<template id="setting-template">
+  <li class="setting" data-object="${setting as JSON}" _="
+    on click from .up in me
+      halt the event
+      get my.previousElementSibling
+        if it put me before it
+    end
+    on click from .down in me
+      halt the event
+      get my.nextElementSibling
+        if it put me after it
+    end
+    ">
+
+    <input
+      type="hidden"
+      name="raw_config[${domain.objectId}][object_config][${parentObject.objectId}][settings]"
+      value="${setting.objectId}" />
+
+    <span class="setting-name">${setting.objectName}</span>
+    <br>
+    <div class="flex-space-between">
+      <div class="flex-left">
+        <a role="button" href="#" class="pointer up no-text-decoration" hx-disable>🡹</a>
+        <a role="button" href="#" class="pointer down no-text-decoration" hx-disable>🡻</a>
+      </div>
+      <a href="#" class="secondary"
+        _="on click halt the event
+          call confirm ('Remove?') if result remove closest .setting
+        end">remove</a>
+    </div>
+  </li>
+</template>

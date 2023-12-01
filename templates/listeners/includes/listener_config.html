@@ -1,0 +1,38 @@
+<div>
+  <article>
+    <label>Hostname</label>
+    <input type="text" name="configuration[hostname]" value="{{ listener.configuration.hostname }}">
+    <small>
+      Assigning a new hostname will destroy the current workers, <b>including any TLS workers</b>.<br>
+      Lego DNS client configurations will be purged, <b>account keys will remain unchanged</b>.
+    </small>
+
+    <label>Assign a configuration</label>
+    <select name="configuration[config_assignment]">
+      <option value="none" {{ "selected" if listener.configuration.config_assignment == "none" }}>
+        No config assigned
+      </option>
+      <option value="auto-assign" {{ "selected" if listener.configuration.config_assignment == "auto-assign" }}>
+        Use dynamic assignment
+      </option>
+      {% for available_config in listener.available_configs %}
+        <option
+          value="{{ available_config[0] }}"
+          {{ "selected" if listener.configuration.config_assignment == available_config[0] }}
+        >{{ available_config[1] }}</option>
+      {% endfor %}
+    </select>
+    <small>
+      A <b>dynamic assignment</b> will lookup configuration names matching the hostname.<br>
+      <b>Important:</b> A configuration matching the exact hostname <i>must</i> exist as a fallback.<br><br>
+      This allows connectors to, for example, <code>canary.mail.example.org</code> have another configuration than <code>mail.example.org</code>, <code>prod.mail.example.org</code> etc.
+    </small>
+
+  </article>
+  {% include "listeners/partials/config-tls-methods.html" %}
+</div>
+
+<div>
+  {% include "listeners/partials/config-protocols.html" %}
+</div>
+

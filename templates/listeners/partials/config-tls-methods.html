@@ -1,0 +1,56 @@
+<article>
+  <hgroup>
+    <h6>🔐 TLS configuration</h6>
+    <p>
+      By default an <b>unsafe</b> snake-oil certificate is generated to start the lifecycle
+      of a listener.<br>
+    </p>
+  </hgroup>
+
+  <fieldset id="tls-methods" _="on click from <input/> in me
+    set checked of <input/> in me to false
+    add @hidden to .tls-method
+    remove @hidden from #{target's @data-method}
+    set target's checked to true
+  end">
+    <label>
+      <input name="configuration[tls_method]" value="lego_acme" type="radio"
+        {{ "checked" if listener.configuration.tls_method == "lego_acme" }}
+        data-method="tls-lego-acme-dns" />
+      Lego ACME client (DNS)
+    </label>
+    <label>
+      <input name="configuration[tls_method]" value="path" type="radio"
+        {{ "checked" if listener.configuration.tls_method == "path" }}
+        data-method="tls-manual-path"/>
+      Select a certificate and key file path
+    </label>
+    <label>
+      <input name="configuration[tls_method]" value="unsafe" type="radio"
+        {{ "checked" if listener.configuration.tls_method == "unsafe" or not listener.configuration.tls_method }}
+        data-method="tls-unsafe-self-signed"/>
+      ⚠️ Use <b>unsafe</b> self-generated snake-oil certificate
+    </label>
+  </fieldset>
+
+  <div class="tls-method" id="tls-lego-acme-dns" {{ "hidden" if listener.configuration.tls_method != "lego_acme" }}>
+    <section>
+      <a role="button" class="secondary"
+        hx-get="{{ url_for("listeners.get_listener", listener_id=request.view_args.get("listener_id")) }}/tls"
+        hx-push-url="true"
+        hx-target="#body-main">Run ACME wizard
+      </a>
+     </section>
+  </div>
+
+  <div class="tls-method" id="tls-manual-path" {{ "hidden" if listener.configuration.tls_method != "path" }}>
+    <p>The content of the files pointed to will be copied into the worker when it is created or modified.</p>
+    <label>Certificate chain path:</label>
+    <input type="text" name="configuration[tls_cert_path]" value="{{ listener.configuration.tls_cert_path }}">
+    <label>Private key path:</label>
+    <input type="text" name="configuration[tls_key_path]" value="{{ listener.configuration.tls_key_path }}">
+  </div>
+
+  <div class="tls-method" id="tls-unsafe-self-signed" {{ "hidden" if listener.configuration.tls_method != "unsafe" }}></div>
+
+</article>

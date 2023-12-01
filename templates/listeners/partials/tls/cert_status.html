@@ -1,0 +1,48 @@
+<h6>Certificate information
+  <a href="#"
+    hx-target="#listener-certificate-status"
+    hx-on::before-request="document.getElementById('listener-certificate-status').innerHTML = `
+      <center><p aria-busy='true' class='secondary'>Updating...</p></center>
+    `"
+    hx-get="{{ url_for("listeners.get_listener", listener_id=request.view_args.get("listener_id")) }}/certificate?nocache">
+      refresh
+  </a>
+</h6>
+
+<div>
+  <b>Lifetime</b>:
+  {{ cert_status.not_valid_after_days }} days valid
+  {{ "✅" if cert_status.not_valid_after_days > 1 else "❌" }}
+</div>
+<hr>
+<div>
+  <b>Revocation</b>:
+  {% if not cert_status.revocation.OCSP %}
+    <div>No OCSP endpoint</div>
+  {% endif %}
+  {% for ocsp_subject, ocsp_result in cert_status.revocation.OCSP.items() %}
+    <div>OCSP status <b>{{ ocsp_subject }}</b>
+    {{ "✅" if ocsp_result.status == "valid" else "❌" }}
+    </div>
+  {% endfor %}
+
+  {% if not cert_status.revocation.CRL %}
+    <div>No CRL endpoint</div>
+  {% endif %}
+  {% for crl_subject, crl_result in cert_status.revocation.CRL.items() %}
+    <div>CRL status for <b>{{ crl_subject }}</b>
+    {{ "✅" if crl_result.status == "valid" else "❌" }}
+    </div>
+  {% endfor %}
+</div>
+<hr>
+<div>
+  <b>Names</b>: {{ cert_status.subject_alternative_names|join(', ') }}
+</div>
+<hr>
+<div>
+  <b>Provided Chain</b>:
+  {% for cert in cert_status.cert_chain|reverse %}
+    <code>{{ cert }}</code>
+  {% endfor %}
+</div>
