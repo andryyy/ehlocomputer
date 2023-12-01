@@ -3,13 +3,17 @@ from typing import Annotated
 from webauthn.helpers.structs import AuthenticatorTransport
 
 
-class PreRegistration(BaseModel):
+class PreTokenRegistration(BaseModel):
     login: Annotated[str, Field(min_length=1)]
     token: str
 
 
-class Registration(PreRegistration):
+class TokenRegistration(PreTokenRegistration):
     confirmation_code: Annotated[int, Field(length=6)]
+
+
+class Registration(BaseModel):
+    login: Annotated[str, Field(min_length=1)]
 
 
 class PreTokenAuthentication(BaseModel):

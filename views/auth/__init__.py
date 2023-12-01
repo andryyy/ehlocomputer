@@ -118,7 +118,7 @@ async def token_authentication():
         r.hset(
             PreTokenAuthenticationModel.token,
             "intention",
-            f"Authenticate user {PreTokenAuthenticationModel.login}",
+            f"Authenticate user: {PreTokenAuthenticationModel.login}",
         )
         r.hset(PreTokenAuthenticationModel.token, "status", "awaiting_confirmation")
 
@@ -251,8 +251,10 @@ async def auth_generate_auth_opts():
 async def auth_pre_registration():
     req_body_dict = await request.json
     try:
-        PreRegistrationModel = auth_model.PreRegistration.parse_obj(req_body_dict)
-        if r.hget(PreRegistrationModel.token, "status") != "awaiting_intention":
+        PreTokenRegistrationModel = auth_model.PreTokenRegistration.parse_obj(
+            req_body_dict
+        )
+        if r.hget(PreTokenRegistrationModel.token, "status") != "awaiting_intention":
             return helpers.validation_error(
                 [
                     {
@@ -263,11 +265,11 @@ async def auth_pre_registration():
             )
 
         r.hset(
-            PreRegistrationModel.token,
+            PreTokenRegistrationModel.token,
             "intention",
-            f"Client {request.headers}: Register user {PreRegistrationModel.login}",
+            f"Register user: {PreTokenRegistrationModel.login}",
         )
-        r.hset(PreRegistrationModel.token, "status", "awaiting_confirmation")
+        r.hset(PreTokenRegistrationModel.token, "status", "awaiting_confirmation")
 
     except ValidationError as e:
         return helpers.validation_error(e.errors())
@@ -275,8 +277,8 @@ async def auth_pre_registration():
     template = await render_template(
         "auth/partials/register_form_token_confirm.html",
         data={
-            "login": PreRegistrationModel.login,
-            "token": PreRegistrationModel.token,
+            "login": PreTokenRegistrationModel.login,
+            "token": PreTokenRegistrationModel.token,
         },
     )
     return template
@@ -287,22 +289,6 @@ async def auth_generate_reg_opts():
     req_body_dict = await request.json
     try:
         RegistrationModel = auth_model.Registration.parse_obj(req_body_dict)
-        token_status = r.hget(RegistrationModel.token, "status")
-        token_confirmation_code = r.hget(RegistrationModel.token, "confirmation_code")
-
-        r.delete(RegistrationModel.token)
-
-        if token_status != "confirmed" or token_confirmation_code != str(
-            RegistrationModel.confirmation_code
-        ):
-            return helpers.validation_error(
-                [
-                    {
-                        "loc": ["confirmation_code"],
-                        "msg": "Confirmation code is invalid",
-                    }
-                ]
-            )
     except ValidationError as e:
         return helpers.validation_error(e.errors())
 
@@ -312,13 +298,37 @@ async def auth_generate_reg_opts():
     )
 
     if session.get("login") == RegistrationModel.login:
-        # We want to add a token for an existing user
         exclude_credentials = auth_helpers.get_user_credentials_by_login(
             login=RegistrationModel.login,
             realm_path=request.realm_data.get("path"),
         )
         user_id = user["id"]
     elif not user:
+        try:
+            TokenRegistrationModel = auth_model.TokenRegistration.parse_obj(
+                req_body_dict
+            )
+        except ValidationError as e:
+            return helpers.validation_error(e.errors())
+
+        token_status = r.hget(TokenRegistrationModel.token, "status")
+        token_confirmation_code = r.hget(
+            TokenRegistrationModel.token, "confirmation_code"
+        )
+
+        r.delete(TokenRegistrationModel.token)
+
+        if token_status != "confirmed" or token_confirmation_code != str(
+            TokenRegistrationModel.confirmation_code
+        ):
+            return helpers.validation_error(
+                [
+                    {
+                        "loc": ["confirmation_code"],
+                        "msg": "Confirmation code is invalid",
+                    }
+                ]
+            )
         # We want to create a new user
         exclude_credentials = []
         user_id = str(uuid4())
@@ -414,7 +424,10 @@ async def auth_register_verify():
     try:
         if session.get("id") == user_id:
             user["credentials"].append(AddCredentialModel.id)
-            users.update({"credentials": user["credentials"]}, Query().id == user_id)
+            with TinyDB(**defaults.TINYDB, path=request.realm_data.get("path")) as db:
+                db.table("users").update(
+                    {"credentials": user["credentials"]}, Query().id == user_id
+                )
         elif not user:
             with TinyDB(**defaults.TINYDB, path=request.realm_data.get("path")) as db:
                 AddUserModel = users_model.AddUser(
