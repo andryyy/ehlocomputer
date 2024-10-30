@@ -1,0 +1,42 @@
+{% if not request.headers.get("Hx-Request") %}
+  {% extends "base.html" %}
+{% endif %}
+
+{% block breadcrumb %}
+<nav aria-label="breadcrumb" id="nav-breadcrumb" hx-swap-oob="true">
+  <ul>
+    <li>Profile</li>
+    <li><a href="#" hx-target="#body-main" hx-get="{{ request.path }}">{{ session["login"] }}</a></li>
+  </ul>
+</nav>
+{% endblock breadcrumb %}
+
+{% block body %}
+
+<article id="profile-data">
+  <h6>Profile data</h6>
+  <form hx-trigger="submit throttle:1s" hx-patch="/profile/edit" id="profile-form">
+
+    {% with
+      schema=_user_profile_schema,
+      current_data=data.user.profile
+    %}
+      {% include "includes/form_builder.html" %}
+    {% endwith %}
+
+    <div class="flex-space-between">
+
+    <button data-loading-disable
+      type="submit" _="install buttonCheckHtmxResponse">
+        Save changes
+    </button>
+
+  </div>
+
+  </form>
+
+</article>
+
+{% include "profile/includes/credentials.html" %}
+
+{% endblock body %}

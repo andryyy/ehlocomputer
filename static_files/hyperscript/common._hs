@@ -1,0 +1,113 @@
+def postJson(url, dataObject)
+  fetch `${url}` with method:'POST', body:dataObject as JSON, headers:{content-type:'application/json'}
+  return result
+end
+
+def setCheckboxes(el, option)
+  repeat for e in (<input[type='checkbox'].multiselect/> in el)
+    if option == 'all'
+      set e's @checked to 'true'
+      set e.checked to true
+    else if option == 'none'
+      remove @checked from e
+      set e.checked to false
+    else if option == 'invert'
+      if e.checked
+        toggle [@checked='false'] on e
+        set e.checked to false
+      else
+        toggle [@checked='true'] on e
+        set e.checked to true
+      end
+    else if option == 'toggle'
+      toggle [@checked='true'] on e
+      if e's @checked set e.checked to true else set e.checked to false end
+    end
+  end
+end
+
+behavior buttonCheckHtmxResponse
+  on htmx:afterRequest from closest <form/> to me
+    if (closest <form/> to me) != (event.target) exit end
+    set :_v to my textContent unless :_v
+    if event.detail.successful then
+      put `👍` into me
+    else
+      add .shake to me
+      put `🤖 An error occured` into me
+    end
+    wait 1s
+    remove .shake from me
+    put :_v into me
+    set :_v to null
+  end
+end
+
+behavior confirmButton
+  init set :inner to my.innerHTML end
+  on every click
+    halt the event
+  end
+  on click[event.detail==1] from me queue none
+    set x to 3
+    repeat until x == 0
+      put `Confirm ${x}x` into me
+      wait for a click or 1500ms
+      if the result's type is 'click'
+        decrement x
+      else
+        put :inner into me
+        exit
+      end
+    end
+    put :inner into me
+    trigger confirmedButton
+  end
+end
+
+behavior inlineHtmxRename
+  init
+    set :_textContent to my.textContent
+  end
+
+  on click halt the event end
+
+  on htmx:afterRequest
+    if event.detail.successful == true
+      set :_textContent to my.textContent
+    end
+    set my.textContent to :_textContent
+  end
+
+  on htmx:confirm(issueRequest)
+    halt the event
+    call confirm(`${:_textContent} to ${my.textContent}?`)
+    if not result set my.textContent to :_textContent else issueRequest() end
+  end
+
+  on blur
+    if my.textContent == '' set my.textContent to :_textContent then exit end
+    if my.textContent == :_textContent exit end
+    set @hx-vals to `{"${my @data-patch-parameter}": "${my.textContent}"}`
+    trigger editContent on me
+  end
+
+  on keypress[keyCode == 13]
+    me.blur()
+    halt the event
+  end
+end
+
+behavior bodydefault
+  on htmx:responseError
+    set status to event.detail.xhr.status
+    if status >= 500
+      trigger notifcation(error: {title: 'Server error', message: 'The server could not handle the given request'})
+    else if status == 404
+      trigger notifcation(error: {title: 'Not found', message: 'Route not found'})
+    end
+  end
+  on htmx:beforeRequest
+    remove @aria-invalid from <[aria-invalid]/>
+  end
+end

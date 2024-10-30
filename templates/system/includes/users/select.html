@@ -1,0 +1,14 @@
+<div class="flex-space-between table-select">
+  <button class="secondary" _="on click call setCheckboxes(#system-users-table-body, 'toggle') end">All</button>
+  <button data-loading-disable
+    class="delete button-red"
+    _="install confirmButton
+      on htmx:afterRequest[event.detail.successful==true]
+        trigger submit on #system-users-table-search
+      end
+    "
+    hx-post="/system/users/delete"
+    hx-target="#body-main"
+    hx-trigger="confirmedButton throttle:200ms"
+    hx-include="[name='id']">Delete</button>
+</div>

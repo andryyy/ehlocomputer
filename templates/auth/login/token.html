@@ -1,0 +1,29 @@
+<form
+  data-loading-disable
+  hx-trigger="submit throttle:1s"
+  hx-post="/auth/login/token/verify">
+    <input type="hidden" name="token" value="{{ token }}">
+    <article>
+      <header>
+        <mark>{{ token }}</mark>
+      </header>
+      <p>A token intention was saved. Please ask an administrator to verify your token.</p>
+      <footer>
+        <fieldset>
+          <label for="confirmation_code">Token confirmation code</label>
+          <input type="text" id="confirmation_code" name="confirmation_code"
+            pattern="[0-9]*"
+            autocomplete="off"
+            autocorrect="off"
+            autocapitalize="off"
+            spellcheck="false"
+            required>
+          <button type="submit"
+            hx-target="this"
+            hx-swap="innerHTML">
+              Validate
+          </button>
+        </fieldset>
+      </footer>
+    </article>
+</form>

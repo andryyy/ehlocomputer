@@ -1,0 +1,35 @@
+{% set header = True if not header == False %}
+{% set footer = True if not footer == False %}
+{% set delete_button = True if not delete_button == False %}
+{% set toggle_all_button = True if not toggle_all_button == False %}
+
+<form id="refresh-cluster-logs-form" hx-trigger="{% if request.headers.get("Hx-Request") %}load once, {% endif %}submit, htmx:wsOpen from:body" hx-get="/system/logs/refresh-cluster-logs"></form>
+
+<form id="system-logs-table-search"
+  hx-trigger="clusterLogsReady, keyup changed from:input[name=q] delay:100ms, submit throttle:100ms"
+  hx-post="/system/logs/search"
+  hx-target="#system-logs-table-body">
+  <fieldset role="group">
+    <input type="text" name="q"
+      hx-on:keydown="event.keyCode==13?event.preventDefault():null"
+      placeholder="Type to search"
+      autocomplete="off"
+      autocorrect="off"
+      autocapitalize="off"
+      spellcheck="false" />
+      <input form="refresh-cluster-logs-form" data-loading-disable type="submit" value="↺" />
+    </fieldset>
+    <small>
+      <a href="#"
+         class="secondary"
+         hx-on:click="event.preventDefault();this.closest('form').reset();htmx.trigger(this.closest('form'), 'submit')">
+           Reset search
+      </a>
+    </small>
+</form>
+
+<div class="overflow-auto">
+  <table id="system-logs-table">
+    <tbody id="system-logs-table-body"></tbody>
+  </table>
+</div>

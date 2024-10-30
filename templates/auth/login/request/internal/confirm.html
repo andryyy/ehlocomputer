@@ -1,0 +1,19 @@
+<dialog open id="auth-login-request" hx-ext="ignore:loading-states">
+  <article>
+    <header>Incoming login request</header>
+    <p>
+      Someone wants to login with your username. You can confirm or ignore the login request.
+      Please review the details below.
+    </p>
+    <footer>
+      <form>
+        <button
+          hx-on::after-request="event.detail.successful==true?this.closest('dialog').remove():null"
+          hx-post="/auth/login/request/confirm/internal/{{ request.view_args.get("request_token") }}">
+            Confirm
+        </button>
+        <button class="secondary" hx-on:click="this.closest('dialog').remove()">Ignore request</button>
+      </form>
+    </footer>
+  </article>
+</dialog>

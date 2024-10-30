@@ -1,0 +1,12 @@
+{% if request.warnings %}
+<div class="sticky-warning-top notification-warning">
+  <p>
+    <b>The following warnings occured during the request:</b>
+  </p>
+  <ol>
+  {% for warning in request.warnings %}
+    <li>{{ warning }}</li>
+  {% endfor %}
+  </ol>
+</div>
+{% endif %}

@@ -1,0 +1,21 @@
+{% if not request.headers.get("Hx-Request") %}
+  {% extends "base.html" %}
+{% endif %}
+
+{% block breadcrumb %}
+<nav aria-label="breadcrumb" id="nav-breadcrumb" hx-swap-oob="true">
+  <ul>
+    <li>Welcome 👋</li>
+    <li>Login / Register</li>
+  </ul>
+</nav>
+{% endblock breadcrumb %}
+
+{% block body %}
+<section class="flex-center">
+  {% include "auth/includes/login/login.html" %}
+  {% with hidden=True %}
+    {% include "auth/includes/register/register.html" %}
+  {% endwith %}
+</section>
+{% endblock body %}

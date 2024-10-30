@@ -1,0 +1,38 @@
+{% if not request.headers.get("Hx-Request") %}
+{% extends "base.html" %}
+{% endif %}
+
+{% block menu %}
+{% endblock menu %}
+
+{% block body %}
+<center _="
+  on load
+    set #login's value to '{{ login|e }}'
+    trigger click on #authenticate
+  end
+  on proxyAuthSuccess from body
+    put '<center>Thank you 👍</center>' into #proxy-auth-message
+  end">
+    <article>
+      <h5>WebAuthn Proxy Authentication</h5>
+      <p>Authenticating as <mark>{{ login|e }}</mark></p>
+      <form>
+        <input type="hidden" id="login" name="login">
+        <hr>
+        <div id="proxy-auth-message">
+          <p>If you are already logged in, your session will be upheld and not replaced
+          by the current authentication process.</p>
+          <a id="authenticate" hidden
+            hx-post="/auth/login/webauthn/options"
+            hx-target="this"
+            hx-swap="innerHTML">
+          </a>
+        </div>
+      </form>
+    </article>
+</center>
+
+{% endblock body %}
+
+

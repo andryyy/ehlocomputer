@@ -1,0 +1,22 @@
+{% if not request.headers.get("Hx-Request") %}
+  {% extends "base.html" %}
+{% endif %}
+
+{% block breadcrumb %}
+<nav aria-label="breadcrumb" id="nav-breadcrumb" hx-swap-oob="true">
+  <ul>
+    <li>System</li>
+    <li><a href="#" hx-target="#body-main" hx-get="{{ request.path }}">Logs</a></li>
+  </ul>
+</nav>
+{% endblock breadcrumb %}
+
+{% block body %}
+
+<h4>System logs</h4>
+
+<article id="system-logs-full-table">
+  {% include "system/includes/logs/table.html" %}
+</article>
+
+{% endblock body %}

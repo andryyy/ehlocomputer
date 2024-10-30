@@ -1,0 +1,72 @@
+@font-face {
+    font-family: go;
+    src: local("Go Regular"), url(Go-Regular.woff2) format("woff2");
+    font-style: normal;
+    font-weight: 400;
+}
+@font-face {
+    font-family: go;
+    src: local("Go Italic"), url(Go-Italic.woff2) format("woff2");
+    font-style: italic;
+    font-weight: 400;
+}
+@font-face {
+    font-family: go medium;
+    src: local("Go Medium"), url(Go-Medium.woff2) format("woff2");
+    font-style: normal;
+    font-weight: 500;
+}
+@font-face {
+    font-family: go medium;
+    src: local("Go Medium Italic"), url(Go-Medium-Italic.woff2) format("woff2");
+    font-style: italic;
+    font-weight: 500;
+}
+@font-face {
+    font-family: go;
+    src: local("Go Bold"), url(Go-Bold.woff2) format("woff2");
+    font-style: normal;
+    font-weight: 600;
+}
+@font-face {
+    font-family: go;
+    src: local("Go Bold Italic"), url(Go-Bold-Italic.woff2) format("woff2");
+    font-style: italic;
+    font-weight: 600;
+}
+@font-face {
+    font-family: go smallcaps;
+    src: local("Go Smallcaps"), url(Go-Smallcaps.woff2) format("woff2");
+    font-style: normal;
+    font-weight: 400;
+}
+@font-face {
+    font-family: go smallcaps;
+    src: local("Go Smallcaps Italic"), url(Go-Smallcaps-Italic.woff2) format("woff2");
+    font-style: italic;
+    font-weight: 400;
+}
+@font-face {
+    font-family: go mono;
+    src: local("Go Mono"), url(Go-Mono.woff2) format("woff2");
+    font-style: normal;
+    font-weight: 400;
+}
+@font-face {
+    font-family: go mono;
+    src: local("Go Mono Italic"), url(Go-Mono-Italic.woff2) format("woff2");
+    font-style: italic;
+    font-weight: 400;
+}
+@font-face {
+    font-family: go mono;
+    src: local("Go Mono Bold"), url(Go-Mono-Bold.woff2) format("woff2");
+    font-style: normal;
+    font-weight: 600;
+}
+@font-face {
+    font-family: go mono;
+    src: local("Go Mono Bold Italic"), url(Go-Mono-Bold-Italic.woff2) format("woff2");
+    font-style: italic;
+    font-weight: 600;
+}

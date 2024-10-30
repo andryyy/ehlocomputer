@@ -1,0 +1,33 @@
+{% set header = True if not header == False %}
+{% set footer = True if not footer == False %}
+{% set delete_button = True if not delete_button == False %}
+{% set toggle_all_button = True if not toggle_all_button == False %}
+
+<form id="{{ request.view_args.get("object_type") }}-table-search"
+  hx-trigger="load once, keyup changed from:input[name=q] delay:100ms, submit throttle:100ms"
+  hx-post="/objects/{{ request.view_args.get("object_type") }}/search"
+  hx-target="#{{ request.view_args.get("object_type") }}-table-body">
+  <input type="text" name="q"
+    hx-on:keydown="event.keyCode==13?event.preventDefault():null"
+    placeholder="Type to search"
+    autocomplete="off"
+    autocorrect="off"
+    autocapitalize="off"
+    spellcheck="false">
+    <small>
+      <a href="#"
+         class="secondary"
+         hx-on:click="event.preventDefault();this.closest('form').reset();htmx.trigger(this.closest('form'), 'submit')">
+           Reset search
+      </a>
+    </small>
+</form>
+
+<div class="overflow-auto">
+  <table id="{{ request.view_args.get("object_type") }}-table">
+    <tbody id="{{ request.view_args.get("object_type") }}-table-body"></tbody>
+  </table>
+</div>
+
+{% include "objects/includes/select.html" %}
+

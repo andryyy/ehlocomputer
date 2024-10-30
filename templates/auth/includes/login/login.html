@@ -1,0 +1,77 @@
+{#
+  "hidden" is used to include both login and register forms in main.html while only showing either/or
+#}
+
+<div id="login-form" class="login-register" {{ '.hidden' if hidden }}>
+  <form
+    data-loading-disable
+    hx-trigger="submit throttle:1s"
+    hx-post="/auth/login/webauthn/options">
+      <fieldset>
+        <label for="webauthn-login">Who is going to login?</label>
+        <input type="text" id="webauthn-login" name="login"
+          autocomplete="webauthn"
+          autocorrect="off"
+          autocapitalize="off"
+          spellcheck="false"
+          required>
+      </fieldset>
+      <fieldset>
+        <button type="submit"
+          class="button-blue"
+          id="authenticate"
+          hx-target="this"
+          hx-swap="innerHTML">
+            Passkey login
+        </button>
+        <button type="submit"
+          id="token-authentication"
+          hx-post="/auth/login/request/start"
+          hx-target="#body-main"
+          hx-swap="innerHTML">
+            Request login
+        </button>
+      </fieldset>
+      <p>
+        <a href="#" class="secondary no-text-decoration"
+          _="on click
+            halt the event
+            set value of #token-login to value of #webauthn-login
+            take @hidden from <form/> in #login-form for closest <form/>
+          end">Use <mark>token supported</mark> authentication
+        </a>
+      </p>
+  </form>
+
+  <form
+    data-loading-disable
+    hx-trigger="submit throttle:1s"
+    hx-target="#login-form"
+    hx-post="/auth/login/token" hidden>
+      <fieldset>
+        <label for="token-login">Who is going to login?</label>
+        <input type="text" id="token-login" name="login"
+          autocorrect="off"
+          autocapitalize="off"
+          spellcheck="false"
+          required>
+      </fieldset>
+      <button type="submit">
+          Start authentication
+      </button>
+      <p>
+        A token will be generated and needs to be validated via <i>command line</i>:<br>
+        <code class="pointer" hx-on:click="!window.s?s=this.textContent:null;navigator.clipboard.writeText(s);this.textContent='Copied';setTimeout(()=>{this.textContent=s}, 1000)">./ctrl -t</code>
+      </p>
+      <hr>
+      <p>
+        <a href="#" class="secondary no-text-decoration"
+          _="on click
+            halt the event
+            set value of #webauthn-login to value of #token-login
+            take @hidden from <form/> in #login-form for closest <form/>
+          end">↩ Back to <mark>passkey</mark> authentication
+        </a>
+      </p>
+  </form>
+</div>

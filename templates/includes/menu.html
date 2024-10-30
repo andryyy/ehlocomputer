@@ -1,0 +1,121 @@
+<nav hx-target="#body-main">
+  <ul>
+    <li>
+      <a href="#" hx-get="/" hx-target="#body-main">
+        {% include "ehlo.svg" %}
+      </a>
+      <span aria-busy="true" data-loading></span>
+    </li>
+  </ul>
+  <ul>
+    <li>
+      <span id="nav-theme-toggle"
+        _="on updateTheme
+            if not localStorage.theme
+              if window.matchMedia('(prefers-color-scheme: light)').matches
+                set (@data-theme of <html/>) to 'light'
+              else
+                set (@data-theme of <html/>) to 'dark'
+              end
+            else
+              set (@data-theme of <html/>) to localStorage.theme
+            end
+            set my @class to (@data-theme of <html/>)
+            set localStorage.theme to (@data-theme of <html/>)
+          end
+
+          init trigger updateTheme end
+
+          on click
+            if I match .light
+              set (@data-theme of <html/>) to 'dark'
+            else
+              set (@data-theme of <html/>) to 'light'
+            end
+            set localStorage.theme to (@data-theme of <html/>)
+            toggle between .light and .dark
+          end
+
+        ">&#128161;</span>
+    </li>
+    {% if not session["login"] %}
+    <li>
+      <a class="contrast" role="button" _="
+        on click
+          halt the event
+          get value of <[name=login]/> in #register-form
+          set value of <[name=login]/> in #login-form to it as String
+          toggle @hidden on .login-register
+        end"
+        href="#">
+          <span class="login-register">Register</span>
+          <span class="login-register" hidden>Login</span>
+      </a>
+    </li>
+    {% else %}
+    <li>
+      <details class="dropdown" hx-on:click="event.target.nodeName==='A'?this.open=false:null">
+        <summary>Objects</summary>
+        <ul>
+          <li>
+            <a href="#" class="secondary" hx-get="/objects/desks">Desks</a>
+          </li>
+          <li>
+            <a href="#" class="secondary" hx-get="/objects/rooms">Rooms</a>
+          </li>
+          <li>
+            <a href="#" class="secondary" hx-get="/objects/things">Things</a>
+          </li>
+        </ul>
+      </details>
+    </li>
+    <li>
+      <details class="dropdown" hx-on:click="event.target.nodeName==='A'?this.open=false:null">
+        <summary>System</summary>
+        <ul>
+          <li>
+            <a href="#" hx-get="/system/users">Users</a>
+          </li>
+          <li>
+            <a href="#" hx-get="/system/logs">Logs</a>
+          </li>
+          <li>
+            <a href="#" hx-get="/system/settings">Settings</a>
+          </li>
+          <li>
+            <a href="#" hx-get="/system/recover">Recovery</a>
+          </li>
+          <li>
+            <hr>
+          </li>
+          <li>
+            <a href="#" hx-post="/logout" hx-swap="innerHTML">Logout</a>
+          </li>
+        </ul>
+      </details>
+    </li>
+    {% endif %}
+  </ul>
+</nav>
+
+{% if session["login"] %}
+<hr>
+
+
+<div class="flex-space-between" hx-target="#body-main">
+  <div class="no-text-wrap">
+  Hi <b><a href="#" hx-get="/profile">{{ session["login"] }} 👋</a></b>
+  </div>
+  <div>
+  {% if session["acl"] %}
+    Roles: {% for role in session["acl"] %}<mark>{{ role }}</mark>&nbsp;{% endfor %}
+  {% endif %}
+  {% if session.app_status == "degraded" %}
+  <span class="color-red"><b>Degraded</b></span>
+  {% elif session.app_status == "ready_to_recover" %}
+  <a href="#" class="color-fuchsia" hx-get="/system/recover">Recover</a>
+  {% endif %}
+  </div>
+</div>
+
+{% endif %}

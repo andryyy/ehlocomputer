@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en" on>
+  <head>
+    <meta charset="utf-8">
+    <meta name="htmx-config" content='{"htmx.config.allowScriptTags":"false"}'>
+    <meta name="viewport" content="width=device-width, user-scalable=no" />
+    <title>Gyst</title>
+    <meta name="apple-mobile-web-app-capable" content="yes"/>
+    <link rel="manifest" href="/static/manifest.json" />
+    <link href="/static/css/pico-custom.css" rel="stylesheet">
+    <link href="/static/fonts/go.css" rel="stylesheet">
+    <script>
+      const theme = localStorage.getItem('theme') || 'light';
+      document.documentElement.dataset.theme = theme;
+    </script>
+    <script type="text/hyperscript" src="/static/hyperscript/common._hs"></script>
+    <script src="/static/js/htmx.org/htmx.org.js"></script>
+    <script src="/static/js/htmx.org/htmx.org.loading-states.js" defer></script>
+    <script src="/static/js/htmx.org/htmx.org.json-enc.js" defer></script>
+    <script src="/static/js/htmx.org/htmx.org.ws.js" defer></script>
+    <script src="/static/js/_hyperscript/_hyperscript.js"></script>
+    <script src="/static/js/_hyperscript/_hyperscript.template.js" defer></script>
+    <script src="/static/js/simplewebauthn-browser/simplewebauthn-browser.js"></script>
+    <script defer src="/static/js/custom/custom.js" defer></script>
+  </head>
+
+  <body _="install bodydefault" hx-ext="loading-states">
+    <header hx-push-url="true">
+    {% block menu %}
+      {% include "includes/menu.html" %}
+    {% endblock %}
+
+    {% block breadcrumb %}
+      <nav aria-label="breadcrumb" id="nav-breadcrumb" hx-swap-oob="true"></nav>
+    {% endblock %}
+    </header>
+
+    <main id="body-main">
+    {% block body %}
+    {% endblock %}
+    </main>
+
+    <footer>
+    {% block footer %}
+      {% if session["login"] %}
+      <div hx-ext="ws" ws-connect="/ws">
+        <input ws-send
+          type="hidden"
+          hx-vals='js:{"path": event.detail.requestConfig.path}'
+          hx-trigger="htmx:beforeRequest from:body" />
+        <div id="ws-recv"></div>
+      </div>
+      {% endif %}
+      {% include "includes/notifications.html" %}
+    {% endblock %}
+    </footer>
+  </body>
+
+</html>

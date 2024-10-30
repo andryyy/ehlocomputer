@@ -1,0 +1,290 @@
+@use "pico" with (
+  $enable-semantic-container: true,
+  $enable-responsive-spacings: true,
+  $enable-responsive-typography: false,
+  $theme-color: "grey",
+  $breakpoints: (
+    sm: (breakpoint: 576px, viewport: 95%),
+    md: (breakpoint: 768px, viewport: 95%),
+    lg: (breakpoint: 1024px, viewport: 90%),
+    xl: (breakpoint: 1280px, viewport: 90%),
+    xxl: (breakpoint: 1536px, viewport: 85%)
+  ),
+);
+@use "colors" as *;
+@use "sass:map";
+@use "settings" as *;
+
+
+
+small {
+  font-size: 0.875rem;
+  color: var(--pico-muted-color);
+}
+
+:root {
+  --pico-font-family-sans-serif: "Go", system-ui, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, var(--pico-font-family-emoji);
+  --pico-form-element-spacing-vertical: .5rem;
+  --pico-form-element-spacing-horizontal: .5rem;
+  --pico-border-radius: 0;
+  --pico-font-size: 12pt;
+  --pico-line-height: 1.4;
+}
+
+mark {
+  margin-block: calc(var(--pico-spacing)/4);
+  display: inline-block;
+}
+
+pre {
+  padding: calc(var(--pico-spacing)/2);
+}
+
+shake {
+  animation: horizontal-shaking .25s linear 1;
+}
+@keyframes horizontal-shaking {
+  0% { transform: translateX(0) }
+  25% { transform: translateX(5px) }
+  50% { transform: translateX(-5px) }
+  75% { transform: translateX(5px) }
+  100% { transform: translateX(0) }
+}
+
+#nav-theme-toggle {
+  cursor:pointer !important;
+}
+
+#nav-theme-toggle.dark {
+  filter: grayscale(100%);
+}
+
+table tr fieldset {
+  margin-bottom: 0;
+}
+table tr {
+  white-space: nowrap;
+}
+table td.created-modified {
+  background-image: var(--pico-icon-date);
+  background-position: center right var(--pico-form-element-spacing-vertical);
+  background-size: 1rem;
+  padding-inline-end: 2rem;
+  text-align: right;
+}
+table td button,
+table td a[role="button"] {
+  padding: calc(var(--pico-form-element-spacing-vertical) / 3)calc(var(--pico-form-element-spacing-horizontal) / 3);
+}
+
+.no-text-decoration {
+  text-decoration: none !important;
+}
+
+[data-loading] {
+  display: none;
+}
+
+.help {
+  cursor:help;
+}
+
+.pointer {
+  cursor:pointer;
+}
+
+[contenteditable] {
+  display: inline-block;
+  border-bottom: 1px dotted #{$slate-300};
+  text-decoration: none;
+}
+[contenteditable]:focus {
+  padding: calc(var(--pico-spacing)/2);
+  background: var(--pico-contrast);
+  color: var(--pico-contrast-inverse);
+}
+
+[role="group"] {
+  --pico-group-box-shadow: none !important;
+}
+
+/*
+* Table navigation
+*/
+.table-navigation {
+  user-select: none;
+}
+.table-navigation .paging:not(.disabled) {
+  padding: var(--pico-form-element-spacing-vertical) var(--pico-form-element-spacing-horizontal);
+  color: var(--pico-color);
+}
+.table-navigation button.sorting {
+  font-size: 0.875rem;
+  border: 0;
+}
+.table-navigation .paging.disabled {
+  opacity: .5;
+  cursor: not-allowed;
+}
+
+/*
+# Notifications
+*/
+#system-notifications {
+  width: fit-content;
+  position: fixed;
+  max-height: 30%;
+  overflow-y: scroll;
+  right: .25rem;
+  top: .25rem;
+}
+.system-notification {
+  background-color: #{$purple-550};
+  color: #{$slate-50};
+  top: var(--pico-spacing);
+  padding: var(--pico-form-element-spacing-vertical) .5rem;
+  margin-bottom: .25rem;
+  font-size: 0.875rem;
+  cursor: pointer;
+}
+#notification-container {
+  position: fixed;
+  left: .25rem;
+  bottom: .25rem;
+  z-index: 999;
+  width: fit-content;
+}
+.notification:not(:last-child) {
+  margin-bottom: .25rem;
+}
+.notification {
+  cursor: pointer;
+  padding: var(--pico-form-element-spacing-vertical) 2rem;
+  color: var(--pico-color);
+  background-color: var(--pico-background-color);
+  background-image: var(--pico-icon);
+  background-position: center left var(--pico-form-element-spacing-vertical);
+  background-size: calc(var(--pico-font-size) * 1.5);
+  background-blend-mode: color-burn;
+  padding-left: calc(var(--pico-form-element-spacing-vertical) * 2 + calc(var(--pico-font-size) * 1.5));
+}
+.notification-error {
+  --pico-background-color: #{$red-600};
+  --pico-icon: var(--pico-icon-invalid);
+  --pico-color: #{$red-50};
+}
+.notification-warning {
+  --pico-background-color: #{$yellow-50};
+  --pico-icon: var(--pico-icon-invalid);
+  --pico-color: #{$yellow-900};
+}
+.notification-success {
+  --pico-background-color: #{$green-550};
+  --pico-icon: var(--pico-icon-valid);
+  --pico-color: #{$slate-50};
+}
+.notification-user {
+  --pico-background-color: #{$slate-900};
+  --pico-icon: var(--pico-icon-chevron);
+  --pico-color: #{$slate-50};
+}
+.notification-system {
+  --pico-background-color: #{$fuchsia-800};
+  --pico-icon: var(--pico-icon-chevron);
+  --pico-color: #{$fuchsia-100};
+}
+
+.flex-center {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: var(--pico-spacing);
+  flex-wrap: wrap;
+}
+.flex-space-between {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--pico-spacing);
+}
+
+thead th, thead td, tfoot th, tfoot td {
+  --pico-font-weight: 400;
+}
+
+button, a { touch-action: manipulation; }
+
+button[type="submit"] {
+  width: auto;
+}
+
+dialog article {
+  max-width: 65%;
+}
+
+.no-text-wrap {
+  text-wrap: nowrap;
+  white-space: nowrap;
+}
+.text-wrap {
+  text-wrap: balance;
+  white-space: break-spaces;
+}
+
+.split-grid.grid > article {
+  grid-column: span 1;
+}
+.split-grid.grid > article:last-child {
+  grid-column: span 3;
+}
+
+.table-select {
+  background-color: rgb(128 128 128 / 10%);
+  backdrop-filter: blur(1px);
+  position: sticky;
+  bottom: var(--pico-form-element-spacing-vertical);
+  padding: var(--pico-form-element-spacing-vertical) var(--pico-form-element-spacing-horizontal);
+  margin: var(--pico-form-element-spacing-vertical) var(--pico-form-element-spacing-horizontal);
+}
+
+@each $color-key, $color-var in $colors {
+  $_color: map.get($color-var, 550);
+
+  #{'.color-' + $color-key} {
+    color: $_color !important;
+    text-decoration-color: $_color !important;
+  }
+
+  :is(button, [type="submit"], [type="button"], [role="button"])#{'.button-' + $color-key}, [type="reset"]#{'.button-' + $color-key} {
+    color: #{$slate-50};
+    border-color: $_color;
+    background-color: $_color;
+  }
+}
+
+nav details.dropdown {
+  width: max-content;
+}
+
+@media only screen and (max-width: 600px) {
+  #notification-container {
+    left: 0;
+    bottom: 0;
+    width: 100%;
+  }
+  dialog article {
+    max-width: 95%;
+  }
+}
+@media (max-width: 1024px) {
+  .split-grid.grid {
+    grid-column-gap: 0;
+    grid-row-gap: 0;
+  }
+  .split-grid.grid > article:first-child {
+    margin-bottom: 0.25rem;
+    padding: calc(var(--pico-spacing)/2);
+    background-color: transparent;
+    box-shadow: none;
+  }
+}

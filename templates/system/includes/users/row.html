@@ -1,0 +1,23 @@
+<tr
+  hx-on:click="event.target.nodeName!=='INPUT'?(this.nextElementSibling.toggleAttribute('hidden'),this.nextElementSibling.hidden?null:this.scrollIntoView({behavior: 'smooth'})):null"
+  hx-disinherit="*"
+  hx-get="/system/users/{{ user.id }}"
+  hx-trigger="htmx:afterRequest[event.detail.successful==true] from:next .user-details"
+  hx-target="next .user-details>td"
+  hx-select=".user-details>td"
+  hx-swap="outerHTML"
+  class="pointer">
+  <td>
+    <input type="checkbox" class="multiselect" name="id" value="{{ user.id }}">
+    <span id="login-{{ user.id }}">{{ user.login }}</span> {% if session["id"] == user.id %}<mark>You</mark>{% endif %}
+  </td>
+  <td class="created-modified">
+    <small _="init js return new Date('{{- user.created -}}').toLocaleString() end then put result into me">{{- user.created -}}</small>
+    {% if user.created != user.updated %}
+      <br>&#9999;&#65039; <small _="init js return new Date('{{- user.updated -}}').toLocaleString() end then put result into me">{{- user.updated -}}</small>
+    {% endif %}
+  </td>
+</tr>
+<tr class="user-details" hidden>
+  <td colspan="2">{% include "system/user.html" %}</td>
+</tr>

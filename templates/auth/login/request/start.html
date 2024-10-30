@@ -1,0 +1,31 @@
+<article
+  hx-get="/auth/login/request/check/{{ data.request_token }}"
+  hx-trigger="every 1s"
+  hx-ext="ignore:loading-states">
+    <header>Authentication request</header>
+    <h6>How to proceed</h6>
+    <ol>
+      {% if data.request_issued_to_user %}
+      <li>A request was sent to logged in users matching that name.</li>
+      {% endif %}
+      <li>You may also use this link (click to copy):
+        <p>
+          <b class="pointer" hx-on:click="!window.s?s=this.textContent:null;navigator.clipboard.writeText(s);this.textContent='Copied 👍';setTimeout(()=>{this.textContent=s}, 1000)">
+            {{- request.origin }}/auth/login/request/confirm/{{ data.request_token -}}
+          </b>
+        </p>
+      </li>
+    </ol>
+    <footer>
+      <button _="
+      on load
+        set i to {{ AUTH_REQUEST_TIMEOUT }}
+        repeat until i is 0
+          put `Cancel process (${i}s)` into me
+          decrement i by 1
+          wait 1s
+        end
+      end"
+      hx-get="/" hx-target="#body-main" hx-push-url="true" hx-confirm="Cancel process?"></button>
+    </footer>
+</article>

@@ -1,0 +1,45 @@
+{% if not request.headers.get("Hx-Request") %}
+  {% extends "base.html" %}
+{% endif %}
+
+{% block breadcrumb %}
+<nav aria-label="breadcrumb" id="nav-breadcrumb" hx-swap-oob="true">
+  <ul>
+    <li>System</li>
+    <li><a href="#" hx-target="#body-main" hx-get="{{ request.path }}">Settings</a></li>
+  </ul>
+</nav>
+{% endblock breadcrumb %}
+
+{% block body %}
+
+<h4>Settings</h4>
+
+<div class="grid split-grid">
+  <article>
+    <hgroup>
+      <h6>System settings</h6>
+      <p>Settings marked with a "🚫" symbol are read only. All other options will be
+        propagated across the cluster.<br>
+        Requires all nodes to be online.
+      </p>
+    </hgroup>
+  </article>
+
+  <article>
+    <form id="system-settings-form" hx-trigger="submit throttle:200ms"
+          hx-patch="/system/settings">
+      {% with
+        schema=schemas["_settings_schema"],
+        current_data=settings.settings,
+        root_key="settings"
+      %}
+        {% include "includes/form_builder.html" %}
+      {% endwith %}
+      <button data-loading-disable type="submit">Update</button>
+    </form>
+  </article>
+</div>
+
+
+{% endblock body %}

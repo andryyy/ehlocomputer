@@ -1,0 +1,91 @@
+<form
+  hx-trigger="submit throttle:200ms"
+  hx-patch="/system/users/{{ user.id }}">
+
+  <article>
+    <fieldset>
+      <label>Login</label>
+      <input name="login"
+        type="text"
+        value="{{ user.login }}"
+        required
+        hx-on:change="document.getElementById('login-{{ user.id }}').textContent=this.value">
+    </fieldset>
+  </article>
+
+  <div class="grid">
+    <article>
+      <fieldset>
+        <legend>ACL</legend>
+        {% for acl in USER_ACLS %}
+        <input
+          role="switch"
+          id="acl-{{- acl -}}-{{ user.id }}"
+          {% if session["id"] == user.id %}
+          hx-on:click="!this.checked?(confirm('You are logged in as this user. Removing access may result in a broken session.')?null:event.preventDefault()):null"
+          {% endif %}
+          name="acl"
+          value="{{ acl }}"
+          type="checkbox" {{ "checked" if acl in user.acl }}>
+        <label for="acl-{{- acl -}}-{{ user.id }}">{{ acl|capitalize }}</label>
+        {% endfor %}
+      </fieldset>
+    </article>
+
+    <article>
+      <legend>Credentials</legend>
+      {% if not user.credentials %}
+      <i>No credentials available</i>
+      {% endif %}
+
+      {% for hex_id, credential_data in user.credentials.items() %}
+      <section>
+        <fieldset>
+          <input
+            type="checkbox"
+            name="credentials"
+            value="{{ hex_id }}"
+            hx-on:change="!this.checked?this.nextElementSibling.innerHTML='<span class=\'color-red\'>Will be deleted!</span>':this.nextElementSibling.innerHTML=''"
+            checked >
+          <span></span>
+          <span _="install inlineHtmxRename()"
+          contenteditable
+          data-patch-parameter="friendly_name"
+          spellcheck="false"
+          hx-patch="/system/users/{{ user.id }}/credential/{{ hex_id }}"
+          hx-trigger="editContent">
+            {{- credential_data.friendly_name or 'John Doe' -}}
+          </span>
+          <a href="#" hx-disinherit="*" class="{{ "color-red" if not credential_data.active else "color-green"}}"
+            hx-patch="/system/users/{{ user.id }}/credential/{{ hex_id }}"
+            hx-vals='js:{"active": {{ "true" if not credential_data.active else "false"}}}'
+            hx-params="active">
+            {{ "[disabled]" if not credential_data.active else "[enabled]"}}
+          </a>
+          <br>
+          <small>Last Login:
+            {% if credential_data.last_login %}
+            <span class="" value="{{ credential_data.last_login }}" _="init set dt to my @value js(dt) return new Date(dt).toLocaleString() end then put result into me"></span>
+            {% else %}-
+            {% endif %}
+          </small>
+        </fieldset>
+      </section>
+      {% endfor %}
+    </article>
+  </div>
+
+  <article>
+
+    {% with
+      schema=_user_profile_schema,
+      current_data=user.profile,
+      root_key="profile"
+    %}
+      {% include "includes/form_builder.html" %}
+    {% endwith %}
+
+  </article>
+
+  <button data-loading-disable type="submit">Update</button>
+</form>
