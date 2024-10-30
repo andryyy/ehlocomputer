@@ -26,7 +26,7 @@ def object_task(func):
         object_init = {
             "id": self.id,
             "object_type": self.object_type,
-            "_enfore_uuid": self.result if "create" in func_name else None,
+            "_enfore_uuid": result if "create" in func_name else None,
         }
 
         try:

@@ -126,13 +126,13 @@ class Users:
         async def __call__(self, data: dict):
             print(self._enfore_uuid)
             print(data)
-            return "dsadsa"
+            return "test"
 
         @users__create_task
         async def credential(self, data: dict):
             print(self._enfore_uuid)
             print(data)
-            return "dsadsa"
+            return "test"
 
     class user:
         def __init__(self, *args, **kwargs):
