@@ -1,6 +1,7 @@
 system/certs/*
 database/*
 logs/*
+misc/*
 
 .sync
 rsync.sh
