@@ -31,5 +31,4 @@ SECRET_KEY = os.getenv("SESSION_SECRET", "im-insecure")  # can be overridden by 
 TLS_CERTFILE = "system/certs/fullchain.pem"
 TLS_KEYFILE = "system/certs/privkey.pem"
 TLS_CA = "/etc/ssl/certs/ca-certificates.crt"
-IN_MEMORY_DB = dict()
 CLUSTER_CLI_BINDINGS = ["127.0.0.1", "::1"]

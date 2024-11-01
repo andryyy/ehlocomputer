@@ -1,17 +1,17 @@
 import asyncio
 import json
 import models.objects as objects_model
-from models.tasks import TaskModel
 import re
 
 from config import *
-from pydantic import AfterValidator, Field, constr, validate_call, ValidationError
+from models.tasks import TaskModel
+from pydantic import AfterValidator, Field, ValidationError, constr, validate_call
 from typing import Annotated, Literal
 from utils.helpers import ensure_list
 from uuid import UUID
 
-defaults.IN_MEMORY_DB["objects_tasks"] = []
-defaults.IN_MEMORY_DB["failed_objects_tasks"] = []
+IN_MEMORY_DB["objects_tasks"] = []
+IN_MEMORY_DB["failed_objects_tasks"] = []
 
 
 def object_task(func):
@@ -26,7 +26,7 @@ def object_task(func):
         object_init = {
             "id": self.id,
             "object_type": self.object_type,
-            "_enfore_uuid": result if "create" in func_name else None,
+            "_enforce_uuid": result if "create" in func_name else None,
         }
 
         try:
@@ -37,8 +37,8 @@ def object_task(func):
         except (ValidationError, ValueError) as e:
             print("Task validation error:", e)
 
-        if task_request not in defaults.IN_MEMORY_DB["objects_tasks"]:
-            defaults.IN_MEMORY_DB["objects_tasks"].append(task_request)
+        if task_request not in IN_MEMORY_DB["objects_tasks"]:
+            IN_MEMORY_DB["objects_tasks"].append(task_request)
 
         return result
 
@@ -52,7 +52,7 @@ class Objects:
     class object:
         def __init__(self, *args, **kwargs):
             objects_attr = objects_model._Objects_attr.parse_obj(kwargs)
-            self._enfore_uuid = kwargs.get("_enfore_uuid")
+            self._enforce_uuid = kwargs.get("_enforce_uuid")
             self.cluster = kwargs.get("cluster")
             self.id = objects_attr.id
             self.object_type = objects_attr.object_type
@@ -71,10 +71,10 @@ class Objects:
             if self.cluster:
                 try:
                     failed_tasks = await self.cluster.add_tasks(
-                        defaults.IN_MEMORY_DB["objects_tasks"]
+                        IN_MEMORY_DB["objects_tasks"]
                     )
-                    defaults.IN_MEMORY_DB["objects_tasks"] = []
-                    defaults.IN_MEMORY_DB["failed_objects_tasks"] += list(failed_tasks)
+                    IN_MEMORY_DB["objects_tasks"] = []
+                    IN_MEMORY_DB["failed_objects_tasks"] += list(failed_tasks)
                     if failed_tasks:
                         raise Exception(
                             "Some tasks could not be processed and remain in the queue"
@@ -82,7 +82,7 @@ class Objects:
                 finally:
                     await self.cluster.release()
             else:
-                defaults.IN_MEMORY_DB["objects_tasks"] = []
+                IN_MEMORY_DB["objects_tasks"] = []
 
         def get(self):
             return self._object_data
@@ -134,8 +134,8 @@ class Objects:
         async def create(self, data: dict):
             validated_data = objects_model.ObjectAdd.parse_obj(data).dict()
 
-            if self._enfore_uuid:
-                validated_data["id"] = self._enfore_uuid
+            if self._enforce_uuid:
+                validated_data["id"] = self._enforce_uuid
 
             async with TinyDB(**TINYDB_PARAMS) as db:
                 name_conflict = db.table(self.object_type).search(

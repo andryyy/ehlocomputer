@@ -19,6 +19,11 @@ htmx.on("body", "startReg", async function(evt){
   }
 })
 
+htmx.on("body", "regCompleted", async function(evt){
+    htmx.trigger(".login-register:not([hidden])", "click")
+  	htmx.find("#webauthn-login").value = evt.detail.value
+})
+
 htmx.on("body", "startAuth", async function(evt){
   const { startAuthentication } = SimpleWebAuthnBrowser
   var login_button = htmx.find("#authenticate")

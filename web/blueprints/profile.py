@@ -34,8 +34,6 @@ async def user_profile_get():
     try:
         async with Users.user(id=session["id"], cluster=cluster) as u:
             user = u.get()
-        async with Users.create(cluster=cluster) as c:
-            await c.credential(data={"login": "asdsasdada"})
     except ValidationError:
         session_clear()
         return redirect(url_for("root.root"))

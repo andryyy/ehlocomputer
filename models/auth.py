@@ -53,9 +53,8 @@ class CredentialPatch(BaseModel):
 class AddCredential(BaseModel):
     id: Annotated[bytes, AfterValidator(lambda x: x.hex())] | str
     public_key: Annotated[bytes, AfterValidator(lambda x: x.hex())] | str
-    friendly_name: str | None
-    last_login: str | None = None
     sign_count: int
+    friendly_name: str = "New passkey"
     transports: list[AuthenticatorTransport] | None = []
     active: bool = True
 

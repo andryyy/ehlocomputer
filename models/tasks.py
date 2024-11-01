@@ -4,7 +4,7 @@ from typing import List, Dict, Any, Literal
 
 class TaskModel(BaseModel):
     command: Literal["TASK"] = Field(description="Must be 'TASK'")
-    action: str = Field(description="Action following TASK")
+    init_data: str = Field(description="init_data following TASK")
     payload: List[Dict[str, Any]] = Field(
         description="List containing exactly two dictionaries"
     )
@@ -22,9 +22,11 @@ class TaskModel(BaseModel):
         # Split the command string and parse JSON-like part
         task_parts = raw_data.split(" ", 2)
         if len(task_parts) != 3:
-            raise ValueError("Input does not follow the 'TASK <action> [json]' format.")
+            raise ValueError(
+                "Input does not follow the 'TASK <init_data> [json]' format."
+            )
 
-        command, action, json_payload = task_parts
+        command, init_data, json_payload = task_parts
         if command != "TASK":
             raise ValueError("Input must start with 'TASK'.")
 
@@ -34,4 +36,4 @@ class TaskModel(BaseModel):
         payload = loads(json_payload)
 
         # Validate the complete structure with Pydantic
-        return cls(command=command, action=action, payload=payload)
+        return cls(command=command, init_data=init_data, payload=payload)

@@ -7,7 +7,6 @@ from base64 import b64decode, b64encode
 from config import *
 from config.cluster import cluster
 from models import auth as auth_model
-from models.users import UserAdd
 from pydantic import ValidationError, TypeAdapter
 from uuid import uuid4
 from quart import Blueprint, render_template, request, session, current_app as app
@@ -48,11 +47,11 @@ async def login_request_confirm(request_token: str):
     except:
         return "", 200, {"HX-Redirect": "/"}
 
-    token_status = defaults.IN_MEMORY_DB.get(request_token, {}).get("status")
+    token_status = IN_MEMORY_DB.get(request_token, {}).get("status")
 
     if token_status == "awaiting":
         session["request_token"] = request_token
-        requested_login = defaults.IN_MEMORY_DB[request_token]["requested_login"]
+        requested_login = IN_MEMORY_DB[request_token]["requested_login"]
 
         return await render_template(
             "auth/login/request/confirm.html",
@@ -78,10 +77,10 @@ async def login_request_confirm_modal(request_token: str):
 
     if request.method == "POST":
         if (
-            request_token in defaults.IN_MEMORY_DB
-            and defaults.IN_MEMORY_DB[request_token]["status"] == "awaiting"
+            request_token in IN_MEMORY_DB
+            and IN_MEMORY_DB[request_token]["status"] == "awaiting"
         ):
-            defaults.IN_MEMORY_DB[request_token].update(
+            IN_MEMORY_DB[request_token].update(
                 {
                     "status": "confirmed",
                     "credential_id": "",
@@ -89,7 +88,7 @@ async def login_request_confirm_modal(request_token: str):
             )
             app.add_background_task(
                 expire_key,
-                defaults.IN_MEMORY_DB,
+                IN_MEMORY_DB,
                 request_token,
                 10,
             )
@@ -128,14 +127,14 @@ async def login_request_start():
 
     request_token = token_urlsafe()
 
-    defaults.IN_MEMORY_DB[request_token] = {
+    IN_MEMORY_DB[request_token] = {
         "intention": f"Authenticate user: {request_data.login}",
         "status": "awaiting",
         "requested_login": request_data.login,
     }
     app.add_background_task(
         expire_key,
-        defaults.IN_MEMORY_DB,
+        IN_MEMORY_DB,
         request_token,
         defaults.AUTH_REQUEST_TIMEOUT,
     )
@@ -167,7 +166,7 @@ async def login_request_check(request_token: str):
         return "", 200, {"HX-Redirect": "/"}
 
     token_status, requested_login, credential_id = map(
-        defaults.IN_MEMORY_DB.get(request_token, {}).get,
+        IN_MEMORY_DB.get(request_token, {}).get,
         ["status", "requested_login", "credential_id"],
     )
 
@@ -206,14 +205,14 @@ async def login_token():
     try:
         request_data = auth_model.AuthToken.parse_obj(request.form_parsed)
         token = request_data.token
-        defaults.IN_MEMORY_DB[token] = {
+        IN_MEMORY_DB[token] = {
             "intention": f"Authenticate user: {request_data.login}",
             "status": "awaiting",
             "login": request_data.login,
         }
         app.add_background_task(
             expire_key,
-            defaults.IN_MEMORY_DB,
+            IN_MEMORY_DB,
             token,
             120,
         )
@@ -233,10 +232,10 @@ async def login_token_verify():
         request_data = auth_model.TokenConfirmation.parse_obj(request.form_parsed)
 
         token_status, token_login, token_confirmation_code = map(
-            defaults.IN_MEMORY_DB.get(request_data.token, {}).get,
+            IN_MEMORY_DB.get(request_data.token, {}).get,
             ["status", "login", "code"],
         )
-        defaults.IN_MEMORY_DB.pop(request_data.token, None)
+        IN_MEMORY_DB.pop(request_data.token, None)
 
         if (
             token_status != "confirmed"
@@ -302,13 +301,13 @@ async def login_webauthn_options():
 
     session["webauthn_challenge_id"] = token_urlsafe()
 
-    defaults.IN_MEMORY_DB[session["webauthn_challenge_id"]] = {
+    IN_MEMORY_DB[session["webauthn_challenge_id"]] = {
         "challenge": b64encode(options.challenge),
         "login": user.login,
     }
     app.add_background_task(
         expire_key,
-        defaults.IN_MEMORY_DB,
+        IN_MEMORY_DB,
         session["webauthn_challenge_id"],
         defaults.WEBAUTHN_CHALLENGE_TIMEOUT,
     )
@@ -322,14 +321,14 @@ async def register_token():
         request_data = auth_model.AuthToken.parse_obj(request.form_parsed)
         token = request_data.token
 
-        defaults.IN_MEMORY_DB[token] = {
+        IN_MEMORY_DB[token] = {
             "intention": f"Register user: {request_data.login}",
             "status": "awaiting",
             "login": request_data.login,
         }
         app.add_background_task(
             expire_key,
-            defaults.IN_MEMORY_DB,
+            IN_MEMORY_DB,
             token,
             120,
         )
@@ -353,10 +352,10 @@ async def register_webauthn_options():
             return validation_error(e.errors())
 
         token_status, token_login, token_confirmation_code = map(
-            defaults.IN_MEMORY_DB.get(request_data.token, {}).get,
+            IN_MEMORY_DB.get(request_data.token, {}).get,
             ["status", "login", "code"],
         )
-        defaults.IN_MEMORY_DB.pop(request_data.token, None)
+        IN_MEMORY_DB.pop(request_data.token, None)
 
         if (
             token_status != "confirmed"
@@ -412,7 +411,7 @@ async def register_webauthn_options():
 
     session["webauthn_challenge_id"] = token_urlsafe()
 
-    defaults.IN_MEMORY_DB[session["webauthn_challenge_id"]] = {
+    IN_MEMORY_DB[session["webauthn_challenge_id"]] = {
         "challenge": b64encode(options.challenge),
         "login": login,
         "user_id": user_id,
@@ -420,7 +419,7 @@ async def register_webauthn_options():
     }
     app.add_background_task(
         expire_key,
-        defaults.IN_MEMORY_DB,
+        IN_MEMORY_DB,
         session["webauthn_challenge_id"],
         defaults.WEBAUTHN_CHALLENGE_TIMEOUT,
     )
@@ -436,10 +435,10 @@ async def register_webauthn():
     session["webauthn_challenge_id"] = None
 
     challenge, login, user_id, appending_passkey = map(
-        defaults.IN_MEMORY_DB.get(webauthn_challenge_id, {}).get,
+        IN_MEMORY_DB.get(webauthn_challenge_id, {}).get,
         ["challenge", "login", "user_id", "appending_passkey"],
     )
-    defaults.IN_MEMORY_DB.pop(webauthn_challenge_id, None)
+    IN_MEMORY_DB.pop(webauthn_challenge_id, None)
 
     if not challenge:
         return trigger_notification(
@@ -466,7 +465,7 @@ async def register_webauthn():
             response_body="",
             response_code=409,
             title="Registration failed",
-            message="An error occured verifying the registration",
+            message="An error occured while verifying the credential",
             additional_triggers={"authRegFailed": "register"},
         )
 
@@ -480,35 +479,24 @@ async def register_webauthn():
 
     try:
         if not appending_passkey:
-            async with Users.create(id=user_id, cluster=cluster) as u:
-                await u.create(data={"login": login})
-        else:
-            async with Users.user(id=uid, cluster=cluster) as u:
-                await u.credential
+            async with Users.create(
+                _enforce_uuid=user_id, cluster=cluster
+            ) as create_user:
+                await create_user(data={"login": login})
 
-            async with Users.create(cluster=cluster) as user:
-                uid = await user(
-                    data={
-                        "id": verification.credential_id,
-                        "public_key": verification.credential_public_key,
-                        "sign_count": verification.sign_count,
-                        "friendly_name": "Key Anú Reeves",
-                        "transports": json_body.get("transports", []),
-                    }
-                )
-            async with Users.user(cluster=cluster) as u:
-                created_u = await u.create(
-                    data={
-                        "login": login,
-                        "credentials": [verification.credential_id.hex()],
-                    }
-                )
-
-        async with TinyDB(**TINYDB_PARAMS) as db:
-            db.table("credentials").upsert(
-                credential_data.dict(), Query().id == credential_data.id
+        async with Users.create(cluster=cluster) as create:
+            await create.credential(
+                data={
+                    "id": verification.credential_id,
+                    "public_key": verification.credential_public_key,
+                    "sign_count": verification.sign_count,
+                    "transports": json_body.get("transports", []),
+                },
+                assign_user_id=user_id,
             )
+
     except Exception as e:
+        raise
         return trigger_notification(
             level="error",
             response_body="",
@@ -538,6 +526,7 @@ async def register_webauthn():
         response_code=204,
         title="Welcome on board 👋",
         message="Your account was created, you can now log in",
+        additional_triggers={"regCompleted": login},
     )
 
 
@@ -548,10 +537,10 @@ async def auth_login_verify():
     try:
         webauthn_challenge_id = session.get("webauthn_challenge_id")
         challenge, login = map(
-            defaults.IN_MEMORY_DB.get(webauthn_challenge_id, {}).get,
+            IN_MEMORY_DB.get(webauthn_challenge_id, {}).get,
             ["challenge", "login"],
         )
-        defaults.IN_MEMORY_DB.pop(webauthn_challenge_id, None)
+        IN_MEMORY_DB.pop(webauthn_challenge_id, None)
         session["webauthn_challenge_id"] = None
 
         if not all([webauthn_challenge_id, challenge, login]):
@@ -629,7 +618,7 @@ async def auth_login_verify():
         Not setting session login and id for device that is confirming the proxy authentication
         Gracing 10s for the awaiting party to catch up an almost expired key
         """
-        defaults.IN_MEMORY_DB[request_token].update(
+        IN_MEMORY_DB[request_token].update(
             {
                 "status": "confirmed",
                 "credential_id": credential.raw_id.hex(),
@@ -637,7 +626,7 @@ async def auth_login_verify():
         )
         app.add_background_task(
             expire_key,
-            defaults.IN_MEMORY_DB,
+            IN_MEMORY_DB,
             request_token,
             10,
         )

@@ -4,7 +4,9 @@ import random
 import re
 import ssl
 
-from config import TINYDB_PARAMS, TinyDB, defaults, logger
+from config.database import IN_MEMORY_DB
+from config import defaults
+from config import logger
 from contextlib import suppress
 from enum import Enum
 from tools.users import Users
@@ -171,8 +173,9 @@ class Cluster:
             failed_tasks = set()
             for task in tasks:
                 ticket, receivers = await self.send_command(task, "*")
-                ret, responses = await self._await_receivers(ticket, receivers)
-                if not ret:
+                try:
+                    await self._await_receivers(ticket, receivers, raise_on_error=True)
+                except:
                     failed_tasks.add(task)
             return failed_tasks
 
@@ -193,24 +196,25 @@ class Cluster:
             except asyncio.exceptions.IncompleteReadError:
                 async with self.receiving:
                     ticket, receivers = await self.send_command("STATUS", "*")
-                    await self._await_receivers(
-                        ticket, receivers, requires_quorum=False
-                    )
+                    await self._await_receivers(ticket, receivers, raise_on_error=False)
                     break
 
             try:
                 if cmd.startswith("TASK"):
                     _, _, payload = cmd.partition(" ")
                     task_type, _, combined_data = payload.partition(" ")
+                    await self.send_command("ACK", [peer_info["bind"]], ticket=ticket)
                     try:
                         identifier, task_data = json.loads(combined_data)
                         if task_type.startswith("users_"):
                             async with Users.create(**identifier) as c:
                                 if task_type == "users_create":
                                     await c(**task_data)
-                            await self.send_command(
-                                "ACK", [peer_info["bind"]], ticket=ticket
-                            )
+                                if task_type == "users_create_credential":
+                                    await c.credential(**task_data)
+                                await self.send_command(
+                                    "ACK", [peer_info["bind"]], ticket=ticket
+                                )
                         elif task_type.startswith("user_"):
                             async with Users.user(**identifier) as u:
                                 if task_type == "user_delete":
@@ -253,7 +257,7 @@ class Cluster:
 
                 elif cmd == "LOCK":
                     try:
-                        await asyncio.wait_for(self.lock.acquire(), 0.75)
+                        await asyncio.wait_for(self.lock.acquire(), 0.45)
                     except TimeoutError:
                         await self.send_command(
                             "ACK BUSY", [peer_info["bind"]], ticket=ticket
@@ -328,10 +332,9 @@ class Cluster:
                         "UNLOCK", [self.master_node]
                     )
                     ret, responses = await self._await_receivers(
-                        ticket, receivers, requires_quorum=False
+                        ticket, receivers, raise_on_error=True
                     )
-                    assert ret
-                except AssertionError:
+                except Exception:
                     errors.append("master_not_reachable")
 
         with suppress(RuntimeError):
@@ -340,7 +343,7 @@ class Cluster:
         if "master_not_reachable" in errors:
             async with self.receiving:
                 ticket, receivers = await self.send_command("STATUS", "*")
-                await self._await_receivers(ticket, receivers, requires_quorum=False)
+                await self._await_receivers(ticket, receivers, raise_on_error=False)
             raise DistLockCancelled("Master re-election")
 
     async def acquire_lock(self) -> str:
@@ -357,15 +360,14 @@ class Cluster:
                         "LOCK", [self.master_node]
                     )
                     result, responses = await self._await_receivers(
-                        ticket, receivers, requires_quorum=False
+                        ticket, receivers, raise_on_error=True
                     )
-                    assert result
                     if "BUSY" in responses:
                         errors.append("master_busy")
-                except AssertionError:
-                    errors.append("master_not_reachable")
                 except asyncio.CancelledError:
                     errors.append("lock_cancelled")
+                except Exception:
+                    errors.append("master_not_reachable")
 
         if "master_busy" in errors:
             self.lock.release()
@@ -378,7 +380,7 @@ class Cluster:
             self.lock.release()
             async with self.receiving:
                 ticket, receivers = await self.send_command("STATUS", "*")
-                await self._await_receivers(ticket, receivers, requires_quorum=False)
+                await self._await_receivers(ticket, receivers, raise_on_error=False)
             raise DistLockCancelled("Master re-election")
 
     async def run(self) -> None:
@@ -394,34 +396,13 @@ class Cluster:
 
         async with self.receiving:
             ticket, receivers = await self.send_command("STATUS", "*")
-            await self._await_receivers(ticket, receivers)
+            await self._await_receivers(ticket, receivers, raise_on_error=False)
 
         async with server:
             await server.serve_forever()
 
-    async def _await_receivers(self, ticket, receivers, requires_quorum=True):
-        error = False
-
-        if requires_quorum:
-            established = [k for k, v in self.connections.items() if v["streams"]]
-            not_in_receivers = [peer for peer in established if peer not in receivers]
-
-            online_peers = len(established) + 1
-            all_peers = len(defaults.CLUSTER_PEERS_THEM) + 1
-            receiver_peers = len(receivers)
-
-            if not receivers:
-                error = f"<{ticket}> 0 receivers ({online_peers}/{all_peers} online)"
-            elif not_in_receivers:
-                error = f"<{ticket}> {not_in_receivers} are online but not in receivers"
-            elif not (online_peers >= (51 / 100) * all_peers):
-                error = f"<{ticket}> Quorum of 51 % was not reached"
-
-            if error:
-                logger.error(error)
-                responses = self.tickets[ticket]
-                del self.tickets[ticket]
-                return False, [response for _, response in responses]
+    async def _await_receivers(self, ticket, receivers, raise_on_error: bool):
+        _err_msg = None
 
         try:
             while not all(
@@ -429,15 +410,31 @@ class Cluster:
             ):
                 await asyncio.wait_for(self.receiving.wait(), 2.25)
         except TimeoutError:
-            error = f"<{ticket}> Unconfirmed ticket"
+            missing_receivers = [
+                r
+                for r in receivers
+                if r not in [peer for peer, _ in self.tickets[ticket]]
+            ]
+            _err_msg = f"missing receviers: {", ".join(missing_receivers)}"
         finally:
-            responses = self.tickets[ticket]
+            responses = [response for _, response in self.tickets[ticket]]
+
+            if len(responses) != len(receivers):
+                _err_msg = "unplausible amount of responses for ticket"
+
+            if "CRIT" in responses:
+                _err_msg = "one or more peers reported CRIT"
+
             del self.tickets[ticket]
-            if error:
-                logger.error(error)
+
+            if _err_msg:
+                if raise_on_error:
+                    raise IncompleteClusterResponses(f"<{ticket}> {_err_msg}")
+                logger.error(_err_msg)
             else:
                 logger.success(f"<{ticket}> ticket confirmed")
-            return not error, [response for _, response in responses]
+
+            return not _err_msg, responses
 
     async def _cli_processor(self, streams: StreamPair):
         try:
@@ -463,7 +460,7 @@ class Cluster:
                 if cmd == b"\x98":
                     awaiting = dict()
                     idx = 1
-                    for k, v in defaults.IN_MEMORY_DB.items():
+                    for k, v in IN_MEMORY_DB.items():
                         if isinstance(v, dict) and v.get("status") == "awaiting":
                             awaiting[idx] = (k, v["intention"])
                             idx += 1
@@ -473,7 +470,7 @@ class Cluster:
                     data = await reader.readexactly(14)
                     confirmed = data.strip().decode("ascii")
                     code = "%06d" % random.randint(0, 999999)
-                    defaults.IN_MEMORY_DB.get(confirmed, {}).update(
+                    IN_MEMORY_DB.get(confirmed, {}).update(
                         {"status": "confirmed", "code": code}
                     )
                     writer.write(f"{code}\n".encode("ascii"))

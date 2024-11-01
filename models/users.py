@@ -13,7 +13,7 @@ from pydantic_core import PydanticCustomError
 from utils.datetimes import utc_now_as_str
 from utils.helpers import ensure_list, to_unique_sorted_str_list
 from typing import Annotated, Literal
-from uuid import UUID
+from uuid import UUID, uuid4
 
 
 class _Users_attr(BaseModel):
@@ -74,7 +74,7 @@ class UserAdd(BaseModel):
     login: str = Field(min_length=1)
     credentials: list[str] = []
     acl: list[Literal[*USER_ACLS]] = ["user"]
-    profile: dict = {}
+    profile: UserProfile = UserProfile.parse_obj({})
 
     @computed_field
     @property
@@ -93,12 +93,13 @@ class UserAdd(BaseModel):
 
 
 class UserPatch(BaseModel):
+    login: str = Field(min_length=1)
     acl: Annotated[
         Literal[*USER_ACLS] | list[Literal[*USER_ACLS]],
         AfterValidator(lambda v: ensure_list(v)),
     ] = []
     credentials: Annotated[
-        str | list,
+        str | list[str],
         AfterValidator(lambda v: ensure_list(v)),
     ] = []
 

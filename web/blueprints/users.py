@@ -30,6 +30,9 @@ async def get_user(user_id: str):
             user = u.get()
     except ValidationError as e:
         return validation_error(e.errors())
+    except ValueError as e:
+        name, message = e.args
+        return validation_error([{"loc": [name], "msg": message}])
 
     return await render_or_json(
         "system/includes/users/row.html", request.headers, user=user.dict()
@@ -95,9 +98,11 @@ async def delete_user(user_id: str | None = None):
         for user_id in user_ids:
             async with Users.user(id=user_id, cluster=cluster) as u:
                 await u.delete()
-
     except ValidationError as e:
         return validation_error(e.errors())
+    except ValueError as e:
+        name, message = e.args
+        return validation_error([{"loc": [name], "msg": message}])
 
     return trigger_notification(
         level="success",
@@ -117,18 +122,11 @@ async def patch_user_credential(user_id: str, hex_id: str):
                 hex_id=hex_id,
                 data=request.form_parsed,
             )
-
-        if not doc_id:
-            return trigger_notification(
-                level="error",
-                response_body="",
-                response_code=409,
-                title="Credential error",
-                message="No such credential",
-            )
-
     except ValidationError as e:
         return validation_error(e.errors())
+    except ValueError as e:
+        name, message = e.args
+        return validation_error([{"loc": [name], "msg": message}])
 
     return trigger_notification(
         level="success",
@@ -153,6 +151,9 @@ async def patch_user(user_id: str | None = None):
 
     except ValidationError as e:
         return validation_error(e.errors())
+    except ValueError as e:
+        name, message = e.args
+        return validation_error([{"loc": [name], "msg": message}])
 
     app.config["SESSION_VALIDATED"].discard(user_id)
 
