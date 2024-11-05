@@ -473,19 +473,22 @@ async def register_webauthn():
 
     try:
         if not appending_passkey:
-            await Users.create(_enforce_uuid=user_id).user(data={"login": login})
+            async with cluster:
+                await Users.create(_enforce_uuid=user_id).user(data={"login": login})
 
-        await Users.create.credential(
-            data={
-                "id": verification.credential_id,
-                "public_key": verification.credential_public_key,
-                "sign_count": verification.sign_count,
-                "transports": json_body.get("transports", []),
-            },
-            assign_user_id=user_id,
-        )
+        async with cluster:
+            await Users.create.credential(
+                data={
+                    "id": verification.credential_id,
+                    "public_key": verification.credential_public_key,
+                    "sign_count": verification.sign_count,
+                    "transports": json_body.get("transports", []),
+                },
+                assign_user_id=user_id,
+            )
 
     except Exception as e:
+        raise
         return trigger_notification(
             level="error",
             response_body="",
@@ -580,10 +583,11 @@ async def auth_login_verify():
         if matched_user_credential.sign_count != 0:
             data["sign_count"] = verification.new_sign_count
 
-        await Users.user(login=login).patch_credential(
-            hex_id=credential.raw_id.hex(),
-            data=data,
-        )
+        async with cluster:
+            await Users.user(login=login).patch_credential(
+                hex_id=credential.raw_id.hex(),
+                data=data,
+            )
 
     except Exception as e:
         raise

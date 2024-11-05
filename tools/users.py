@@ -45,7 +45,7 @@ class Users:
             return validated_data["id"]
 
         @cluster_task("users_create_credential", enforce_uuid=True)
-        async def credential(self, data: dict, assign_user_id: str | None = None):
+        async def credential(data: dict, assign_user_id: str | None = None):
             validated_data = auth_model.AddCredential.parse_obj(data).dict()
 
             async with TinyDB(**TINYDB_PARAMS) as db:

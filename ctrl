@@ -26,6 +26,14 @@ parser = argparse.ArgumentParser(
     description="EHLO CTRL", formatter_class=argparse.ArgumentDefaultsHelpFormatter
 )
 parser.add_argument(
+    "-H",
+    "--host",
+    dest="hostname",
+    type=str,
+    default="localhost",
+    help="Override localhost",
+)
+parser.add_argument(
     "-t",
     "--confirm_token",
     action="store_true",
@@ -59,7 +67,9 @@ async def main():
             "promote_user": promote_user,
         } if isinstance(promote_user, str):
             selection = 0
-            r, w = await asyncio.open_connection("localhost", 2102, ssl=context)
+            r, w = await asyncio.open_connection(
+                ctrl_parameters["hostname"], 2102, ssl=context
+            )
             w.write(b"\x97")
             w.write(f"{promote_user}\n".encode("utf-8"))
             await w.drain()
@@ -76,7 +86,9 @@ async def main():
         }:
             try:
                 selection = 0
-                r, w = await asyncio.open_connection("localhost", 2102, ssl=context)
+                r, w = await asyncio.open_connection(
+                    ctrl_parameters["hostname"], 2102, ssl=context
+                )
 
                 w.write(b"\x98")
                 await w.drain()

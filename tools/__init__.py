@@ -22,6 +22,7 @@ CLUSTER_TASKS = [
     "users_create_credential",
     "users_user_patch",
     "users_user_patch_profile",
+    "users_user_patch_credential",
     "users_user_delete",
     "users_user_delete_credential",
     "objects_object_create",
@@ -33,10 +34,12 @@ CLUSTER_TASKS = [
 def cluster_task(task_name, enforce_uuid: bool = False):
     def form_task(func):
         @wraps(func)
-        async def wrapper(self, *args, **kwargs):
-            result = await func(self, *args, **kwargs)
+        async def wrapper(*args, **kwargs):
+            result = await func(*args, **kwargs)
             if not IN_CLUSTER_CONTEXT.get():
                 return result
+
+            self = args[0] if args else None
 
             try:
                 if enforce_uuid:
