@@ -2,7 +2,7 @@ import asyncio
 import fileinput
 import json
 
-from config import *
+from config import defaults
 from config.cluster import cluster
 from datetime import datetime
 from models.tables import TableSearchHelper

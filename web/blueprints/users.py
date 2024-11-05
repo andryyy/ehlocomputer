@@ -1,6 +1,5 @@
 import re
 
-from config import *
 from config.cluster import cluster
 from models.tables import TableSearchHelper
 from models.forms.users import UserProfile
@@ -26,8 +25,7 @@ def load_schemas():
 @wrappers.acl("system")
 async def get_user(user_id: str):
     try:
-        async with Users.user(id=user_id, cluster=cluster) as u:
-            user = u.get()
+        user = await Users.user(id=user_id).get()
     except ValidationError as e:
         return validation_error(e.errors())
     except ValueError as e:
@@ -95,9 +93,10 @@ async def delete_user(user_id: str | None = None):
 
     try:
         user_ids = ensure_list(user_id)
-        for user_id in user_ids:
-            async with Users.user(id=user_id, cluster=cluster) as u:
-                await u.delete()
+        async with cluster:
+            for user_id in user_ids:
+                await Users.user(id=user_id).delete()
+
     except ValidationError as e:
         return validation_error(e.errors())
     except ValueError as e:
@@ -117,8 +116,8 @@ async def delete_user(user_id: str | None = None):
 @wrappers.acl("system")
 async def patch_user_credential(user_id: str, hex_id: str):
     try:
-        async with Users.user(id=user_id, cluster=cluster) as u:
-            doc_id = await u.patch.credential(
+        async with cluster:
+            await Users.user(id=user_id).patch_credential(
                 hex_id=hex_id,
                 data=request.form_parsed,
             )
@@ -145,9 +144,11 @@ async def patch_user(user_id: str | None = None):
         if not user_id:
             user_id = request.form_parsed.get("id")
 
-        async with Users.user(id=user_id, cluster=cluster) as u:
-            await u.patch(data=request.form_parsed)
-            await u.patch.profile(data=request.form_parsed.get("profile", {}))
+        async with cluster:
+            await Users.user(id=user_id).patch(data=request.form_parsed)
+            await Users.user(id=user_id).patch_profile(
+                data=request.form_parsed.get("profile", {})
+            )
 
     except ValidationError as e:
         return validation_error(e.errors())

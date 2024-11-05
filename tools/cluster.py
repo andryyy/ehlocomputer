@@ -1,7 +1,8 @@
 import aiohttp
 import os
 
-from config import defaults, logger
+from config import defaults
+from config.logs import logger
 from pydantic import validate_call
 from utils.crypto import fernet_decrypt, fernet_encrypt
 from utils.datetimes import last_modified_http

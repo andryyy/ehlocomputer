@@ -2,7 +2,7 @@ import asyncio
 import signal
 import ssl
 
-from config import *
+from config import defaults
 from config.cluster import cluster
 from hypercorn.asyncio import serve
 from hypercorn.config import Config

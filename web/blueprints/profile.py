@@ -1,4 +1,3 @@
-from config import *
 from config.cluster import cluster
 from models.auth import CredentialRead, CredentialPatch
 from models.users import UserProfile, UserPatch
@@ -32,11 +31,13 @@ def load_schemas():
 @wrappers.acl("any")
 async def user_profile_get():
     try:
-        async with Users.user(id=session["id"], cluster=cluster) as u:
-            user = u.get()
+        user = await Users.user(id=session["id"]).get()
     except ValidationError:
         session_clear()
         return redirect(url_for("root.root"))
+    except ValueError as e:
+        name, message = e.args
+        return validation_error([{"loc": [name], "msg": message}])
 
     return await render_template(
         "profile/profile.html",
@@ -52,13 +53,16 @@ async def user_profile_get():
 @wrappers.acl("any")
 async def user_profile_patch():
     try:
-        async with Users.user(id=session["id"], cluster=cluster) as u:
-            await u.patch.profile(data=request.form_parsed)
-            await u.refresh()
-            user = u.get()
+        async with cluster:
+            await Users.user(id=session["id"]).patch_profile(data=request.form_parsed)
+
+        user = await Users.user(id=session["id"]).get()
 
     except ValidationError as e:
         return validation_error(e.errors())
+    except ValueError as e:
+        name, message = e.args
+        return validation_error([{"loc": [name], "msg": message}])
 
     session.pop("profile", None)
     session["profile"] = user.profile.dict()
@@ -76,10 +80,9 @@ async def user_profile_patch():
 @wrappers.acl("any")
 async def patch_credential(credential_hex_id: str):
     try:
-        async with Users.user(id=session["id"], cluster=cluster) as u:
-            await u.patch.credential(
-                hex_id=credential_hex_id,
-                data=request.form_parsed,
+        async with cluster:
+            await Users.user(id=session["id"]).patch_credential(
+                hex_id=credential_hex_id, data=request.form_parsed
             )
     except ValidationError as e:
         return validation_error(e.errors())
@@ -97,9 +100,7 @@ async def patch_credential(credential_hex_id: str):
 @wrappers.acl("any")
 async def delete_credential(credential_hex_id: str):
     try:
-        user_instance = Users.user(id=session["id"])
-        async with user_instance.Delete as delete:
-            await delete.credential(hex_id=credential_hex_id)
+        await Users.user(id=session["id"]).delete_credential(hex_id=credential_hex_id)
     except ValidationError as e:
         return validation_error(e.errors())
 

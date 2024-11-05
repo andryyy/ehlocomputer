@@ -1,7 +1,7 @@
 import asyncio
 import json
 import os
-from config import *
+from config import defaults
 from quart import (
     Blueprint,
     redirect,

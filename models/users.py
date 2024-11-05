@@ -56,8 +56,11 @@ class _Users_attr(BaseModel):
     @computed_field
     @property
     def matched_attr(self) -> str:
-        return "id" if self.id else "login"
-        return utc_now_as_str()
+        if self.id:
+            return "id"
+        if self.login:
+            return "login"
+        return None
 
 
 class User(BaseModel):

@@ -6,9 +6,10 @@ import ssl
 
 from config.database import IN_MEMORY_DB
 from config import defaults
-from config import logger
+from config.logs import logger
 from contextlib import suppress
 from enum import Enum
+from tools import IN_CLUSTER_CONTEXT, CLUSTER_TASKS
 from tools.users import Users
 from tools.objects import Objects
 from utils.datetimes import ntime_utc_now
@@ -50,22 +51,26 @@ class Cluster:
     def __init__(self, host, port):
         assert isinstance(host, str) or isinstance(host, list)
         assert isinstance(defaults.CLUSTER_CLI_BINDINGS, list)
+
+        self.connections = dict()
         self.host = ensure_list(host) + defaults.CLUSTER_CLI_BINDINGS
-        self.port = port
         self.lock = asyncio.Lock()
+        self.master_node = None
+        self.port = port
+        self.receiving = asyncio.Condition()
         self.role = Role.SLAVE
         self.started = ntime_utc_now()
-        self.connections = dict()
-        self._failed_peers = set()
-        self.receiving = asyncio.Condition()
         self.tickets = dict()
-        self.master_node = None
+
+        self._failed_peers = set()
+
+        IN_MEMORY_DB["tasks"] = []
+        IN_MEMORY_DB["failed_tasks"] = []
 
     def set_master_node(self):
         established = [k for k, v in self.connections.items() if v["meta"]]
         online_peers = len(established) + 1
         all_peers = len(defaults.CLUSTER_PEERS_THEM) + 1
-
         current_master_node = self.master_node
 
         if not (online_peers >= (51 / 100) * all_peers):
@@ -168,7 +173,7 @@ class Cluster:
 
         return ticket, cmd, meta_dict
 
-    async def add_tasks(self, tasks: list):
+    async def _task_processor(self, tasks: list):
         async with self.receiving:
             failed_tasks = set()
             for task in tasks:
@@ -177,7 +182,7 @@ class Cluster:
                     await self._await_receivers(ticket, receivers, raise_on_error=True)
                 except:
                     failed_tasks.add(task)
-            return failed_tasks
+            return list(failed_tasks)
 
     async def connection_handler(
         self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter
@@ -203,50 +208,55 @@ class Cluster:
                 if cmd.startswith("TASK"):
                     _, _, payload = cmd.partition(" ")
                     task_type, _, combined_data = payload.partition(" ")
-                    await self.send_command("ACK", [peer_info["bind"]], ticket=ticket)
-                    try:
-                        identifier, task_data = json.loads(combined_data)
-                        if task_type.startswith("users_"):
-                            async with Users.create(**identifier) as c:
-                                if task_type == "users_create":
-                                    await c(**task_data)
-                                if task_type == "users_create_credential":
-                                    await c.credential(**task_data)
-                                await self.send_command(
-                                    "ACK", [peer_info["bind"]], ticket=ticket
-                                )
-                        elif task_type.startswith("user_"):
-                            async with Users.user(**identifier) as u:
-                                if task_type == "user_delete":
-                                    await u.delete()
-                                elif task_type == "user_delete_credential":
-                                    await u.delete.credential(**task_data)
-                                elif task_type == "user_patch":
-                                    await u.patch(**task_data)
-                                elif task_type == "user_patch_profile":
-                                    await u.patch.profile(**task_data)
-                                elif task_type == "user_patch_credential":
-                                    await u.patch.credential(**task_data)
-                                else:
-                                    raise Exception("Unknown task_type")
-                                await self.send_command(
-                                    "ACK", [peer_info["bind"]], ticket=ticket
-                                )
-                        elif task_type.startswith("object_"):
-                            async with Objects.object(**identifier) as o:
-                                if task_type == "object_create":
-                                    await o.create(**task_data)
-                                elif task_type == "object_delete":
-                                    await o.delete()
-                                elif task_type == "object_patch":
-                                    await o.patch(**task_data)
-                                else:
-                                    raise Exception("Unknown task_type")
-                                await self.send_command(
-                                    "ACK", [peer_info["bind"]], ticket=ticket
-                                )
-                    except Exception as e:
-                        logger.error(f"<task> {task_type} failed: {e}")
+
+                    if task_type not in CLUSTER_TASKS:
+                        await self.send_command(
+                            "ACK CRIT", [peer_info["bind"]], ticket=ticket
+                        )
+                    else:
+                        try:
+                            init_kwargs, task_kwargs = json.loads(combined_data)
+                            if task_type.startswith("users_"):
+                                if task_type == "users_create_user":
+                                    await Users.create(**init_kwargs).user(
+                                        **task_kwargs
+                                    )
+                                elif task_type == "users_create_credential":
+                                    await Users.create(**init_kwargs).credential(
+                                        **task_kwargs
+                                    )
+                                elif task_type == "users_user_delete":
+                                    await Users.user(**init_kwargs).delete()
+                                elif task_type == "users_user_delete_credential":
+                                    await Users.user(**init_kwargs).delete_credential(
+                                        **task_kwargs
+                                    )
+                                elif task_type == "users_user_patch":
+                                    await Users.user(**init_kwargs).patch(**task_kwargs)
+                                elif task_type == "users_user_patch_profile":
+                                    await Users.user(**init_kwargs).patch_profile(
+                                        **task_kwargs
+                                    )
+                                elif task_type == "users_user_patch_credential":
+                                    await Users.user(**init_kwargs).patch_credential(
+                                        **task_kwargs
+                                    )
+                            elif task_type.startswith("objects_"):
+                                if task_type == "objects_object_create":
+                                    await Objects.object(**init_kwargs).create(
+                                        **task_kwargs
+                                    )
+                                elif task_type == "objects_object_patch":
+                                    await Objects.object(**init_kwargs).patch(
+                                        **task_kwargs
+                                    )
+                                elif task_type == "objects_object_delete":
+                                    await Objects.object(**init_kwargs).delete()
+                            await self.send_command(
+                                "ACK", [peer_info["bind"]], ticket=ticket
+                            )
+                        except Exception as e:
+                            logger.error(f"<task> {task_type} failed: {e}")
 
                 elif cmd == "STATUS":
                     await self.send_command("ACK", [peer_info["bind"]], ticket=ticket)
@@ -345,6 +355,27 @@ class Cluster:
                 ticket, receivers = await self.send_command("STATUS", "*")
                 await self._await_receivers(ticket, receivers, raise_on_error=False)
             raise DistLockCancelled("Master re-election")
+
+    async def __aenter__(self):
+        IN_MEMORY_DB["tasks"] = []
+        await self.acquire_lock()
+        self.token = IN_CLUSTER_CONTEXT.set(ntime_utc_now())
+
+    async def __aexit__(self, exc_type, exc_value, exc_tb):
+        try:
+            failed_tasks = await self._task_processor(IN_MEMORY_DB["tasks"])
+            IN_MEMORY_DB["tasks"] = []
+            if failed_tasks:
+                IN_MEMORY_DB["failed_tasks"] += failed_tasks
+                print("retrying some failed tasks:")
+                print(IN_MEMORY_DB["failed_tasks"])
+        except:
+            print("err")
+
+        print({"filename": f"database/main.{IN_CLUSTER_CONTEXT.get()}"})
+
+        IN_CLUSTER_CONTEXT.reset(self.token)
+        await self.release()
 
     async def acquire_lock(self) -> str:
         try:
@@ -445,14 +476,13 @@ class Cluster:
                     data = await reader.readuntil(b"\n")
                     user = data.strip().decode("utf-8")
                     try:
-                        async with Users.user(login=user) as u:
-                            user = u.get()
-                            if "system" not in user.acl:
-                                user.acl.append("system")
-                                await u.patch(data={"acl": user.acl})
-                                writer.write(b"\x01")
-                            else:
-                                writer.write(b"\x02")
+                        user = await Users.user(login=user).get()
+                        if "system" not in user.acl:
+                            user.acl.append("system")
+                            await Users.user(login=user).patch(data={"acl": user.acl})
+                            writer.write(b"\x01")
+                        else:
+                            writer.write(b"\x02")
                     except:
                         writer.write(b"\x03")
                     await writer.drain()

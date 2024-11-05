@@ -1,6 +1,5 @@
 import re
 
-from config import *
 from config.cluster import cluster
 from models.tables import TableSearchHelper
 from models import objects as objects_model
@@ -54,10 +53,7 @@ async def objects_before_request():
 @wrappers.acl("user")
 async def get_object(object_type: str, object_id: str):
     try:
-        async with Objects.object(
-            id=object_id, object_type=object_type, cluster=cluster
-        ) as o:
-            object_data = o.get()
+        object_data = await Objects.object(id=object_id, object_type=object_type).get()
     except ValidationError as e:
         return validation_error(e.errors())
     except ValueError as e:
@@ -128,8 +124,10 @@ async def get_objects(object_type: str):
 @wrappers.acl("user")
 async def create_object(object_type: str):
     try:
-        async with Objects.object(object_type=object_type, cluster=cluster) as o:
-            object_id = await o.create(data=request.form_parsed)
+        async with cluster:
+            object_id = await Objects.object(object_type=object_type).create(
+                data=request.form_parsed
+            )
     except ValidationError as e:
         return validation_error(e.errors())
     except ValueError as e:
@@ -153,10 +151,8 @@ async def delete_object(object_type: str, object_id: str | None = None):
         object_id = request.form_parsed.get("id")
     try:
         object_ids = ensure_list(object_id)
-        async with Objects.object(
-            id=object_ids, object_type=object_type, cluster=cluster
-        ) as o:
-            await o.delete()
+        async with cluster:
+            await Objects.object(id=object_ids, object_type=object_type).delete()
 
     except ValidationError as e:
         return validation_error(e.errors())
@@ -180,10 +176,10 @@ async def patch_object(object_type: str, object_id: str | None = None):
     if request.method == "POST":
         object_id = request.form_parsed.get("id")
     try:
-        async with Objects.object(
-            id=object_id, object_type=object_type, cluster=cluster
-        ) as o:
-            await o.patch(data=request.form_parsed)
+        async with cluster:
+            await Objects.object(id=object_id, object_type=object_type).patch(
+                data=request.form_parsed
+            )
 
     except ValidationError as e:
         return validation_error(e.errors())

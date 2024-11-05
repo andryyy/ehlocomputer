@@ -1,48 +1,16 @@
 import asyncio
-import json
 import models.objects as objects_model
 import re
 
-from config import *
-from models.tasks import TaskModel
-from pydantic import AfterValidator, Field, ValidationError, constr, validate_call
-from typing import Annotated, Literal
+from config import defaults
+from config.database import *
+from config.logs import logger
+from pydantic import Field, constr, validate_call
+from tools import cluster_task, IN_CLUSTER_CONTEXT
+from typing import Literal
 from utils.helpers import ensure_list
+from utils.datetimes import ntime_utc_now
 from uuid import UUID
-
-IN_MEMORY_DB["objects_tasks"] = []
-IN_MEMORY_DB["failed_objects_tasks"] = []
-
-
-def object_task(func):
-    async def wrapper(self, *args, **kwargs):
-        task = self.__class__.__name__.lower()
-        func_name = func.__name__.lower()
-        if func_name != "__call__":
-            task += f"_{func_name}"
-
-        result = await func(self, *args, **kwargs)
-
-        object_init = {
-            "id": self.id,
-            "object_type": self.object_type,
-            "_enforce_uuid": result if "create" in func_name else None,
-        }
-
-        try:
-            task_request = (
-                f"TASK {task} [{json.dumps(object_init)}, {json.dumps(kwargs)}]"
-            )
-            TaskModel.parse_raw_task(task_request)
-        except (ValidationError, ValueError) as e:
-            print("Task validation error:", e)
-
-        if task_request not in IN_MEMORY_DB["objects_tasks"]:
-            IN_MEMORY_DB["objects_tasks"].append(task_request)
-
-        return result
-
-    return wrapper
 
 
 class Objects:
@@ -51,43 +19,17 @@ class Objects:
 
     class object:
         def __init__(self, *args, **kwargs):
+            if IN_CLUSTER_CONTEXT.get():
+                TEMP_DB = {"filename": f"database/main.{IN_CLUSTER_CONTEXT.get()}"}
+                print(TEMP_DB)
+
+            self.init_kwargs = kwargs
             objects_attr = objects_model._Objects_attr.parse_obj(kwargs)
-            self._enforce_uuid = kwargs.get("_enforce_uuid")
-            self.cluster = kwargs.get("cluster")
             self.id = objects_attr.id
             self.object_type = objects_attr.object_type
-            self._object_data = None
+            self._enforce_uuid = kwargs.get("_enforce_uuid")
 
-        async def __aenter__(self):
-            if self.cluster:
-                await self.cluster.acquire_lock()
-            else:
-                logger.info("No cluster instance provided, saving locally only")
-            if self.id:
-                await self.refresh()
-            return self
-
-        async def __aexit__(self, exc_type, exc_value, exc_tb):
-            if self.cluster:
-                try:
-                    failed_tasks = await self.cluster.add_tasks(
-                        IN_MEMORY_DB["objects_tasks"]
-                    )
-                    IN_MEMORY_DB["objects_tasks"] = []
-                    IN_MEMORY_DB["failed_objects_tasks"] += list(failed_tasks)
-                    if failed_tasks:
-                        raise Exception(
-                            "Some tasks could not be processed and remain in the queue"
-                        )
-                finally:
-                    await self.cluster.release()
-            else:
-                IN_MEMORY_DB["objects_tasks"] = []
-
-        def get(self):
-            return self._object_data
-
-        async def refresh(self) -> None:
+        async def get(self) -> None:
             if self.id:
                 async with TinyDB(**TINYDB_PARAMS) as db:
                     object_data = []
@@ -99,18 +41,20 @@ class Objects:
                         )
                     )
                     if isinstance(self.id, str):
-                        self._object_data = object_data.pop()
+                        return object_data.pop()
                     else:
-                        self._object_data = object_data.pop()
+                        return object_data
+            else:
+                raise Exception("No object initialized")
 
-        @object_task
+        @cluster_task("objects_object_delete")
         async def delete(self):
             async with TinyDB(**TINYDB_PARAMS) as db:
                 return db.table(self.object_type).remove(
                     Query().id.one_of(ensure_list(self.id))
                 )
 
-        @object_task
+        @cluster_task("objects_object_patch")
         async def patch(self, data: dict):
             validated_data = objects_model.model_classes["patch"][
                 self.object_type
@@ -129,7 +73,7 @@ class Objects:
                         Query().id == object_id,
                     )
 
-        @object_task
+        @cluster_task("objects_object_create", enforce_uuid=True)
         @validate_call
         async def create(self, data: dict):
             validated_data = objects_model.ObjectAdd.parse_obj(data).dict()

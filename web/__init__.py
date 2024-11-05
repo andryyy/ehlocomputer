@@ -3,7 +3,7 @@ import json
 import os
 import time
 
-from config import *
+from config import defaults
 from contextlib import suppress
 from quart import Quart, request
 from utils.cluster import Cluster

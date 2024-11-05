@@ -1,7 +1,8 @@
 import asyncio
 import json
 
-from config import *
+from config import defaults
+from config.logs import logger
 from config.cluster import cluster
 from contextlib import suppress
 from functools import wraps
@@ -32,8 +33,7 @@ async def verify_session(acl: Literal[*defaults.USER_ACLS, "any"]) -> None:
 
     if session["id"] not in app.config["SESSION_VALIDATED"]:
         try:
-            async with Users.user(id=session["id"], cluster=cluster) as u:
-                user = u.get()
+            user = await Users.user(id=session["id"]).get()
         except:
             session_clear()
             raise AuthException("User unknown")
@@ -57,8 +57,7 @@ async def create_session_by_token(token):
         raise AuthException("Invalid token format")
 
     try:
-        async with Users.user(login=token_user, cluster=cluster) as u:
-            user = u.get()
+        user = await Users.user(login=token_user).get()
     except:
         session_clear()
         raise AuthException("User unknown")

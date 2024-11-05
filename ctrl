@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
-from config import defaults, logger
+from config import defaults
+from config.logs import logger
 import argparse
 import asyncio
 import json

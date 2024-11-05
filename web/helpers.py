@@ -1,6 +1,7 @@
 import json
 
-from config import *
+from config import defaults
+from config.logs import logger
 from copy import deepcopy
 from pydantic import constr, validate_call
 from quart import current_app as app, render_template, session, websocket

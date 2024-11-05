@@ -4,8 +4,9 @@ import qrcode
 import qrcode.image.svg
 
 from base64 import b64decode, b64encode
-from config import *
+from config import defaults
 from config.cluster import cluster
+from config.database import IN_MEMORY_DB
 from models import auth as auth_model
 from pydantic import ValidationError, TypeAdapter
 from uuid import uuid4
@@ -120,8 +121,7 @@ async def login_request_start():
     session_clear()
 
     try:
-        async with Users.user(login=request_data.login, cluster=cluster) as u:
-            user = u.get()
+        user = await Users.user(login=request_data.login).get()
     except ValidationError as e:
         return validation_error([{"loc": ["login"], "msg": f"User is not available"}])
 
@@ -172,8 +172,7 @@ async def login_request_check(request_token: str):
 
     if token_status == "confirmed":
         try:
-            async with Users.user(login=requested_login, cluster=cluster) as u:
-                user = u.get()
+            user = await Users.user(login=requested_login).get()
         except ValidationError as e:
             return validation_error(
                 [{"loc": ["login"], "msg": f"User is not available"}]
@@ -249,8 +248,7 @@ async def login_token_verify():
                     }
                 ]
             )
-        async with Users.user(login=token_login, cluster=cluster) as u:
-            user = u.get()
+        user = await Users.user(login=token_login).get()
 
     except ValidationError as e:
         return validation_error(e.errors())
@@ -275,10 +273,7 @@ async def login_token_verify():
 @blueprint.route("/login/webauthn/options", methods=["POST"])
 async def login_webauthn_options():
     try:
-        async with Users.user(
-            login=request.form_parsed.get("login"), cluster=cluster
-        ) as u:
-            user = u.get()
+        user = await Users.user(login=request.form_parsed.get("login")).get()
         if not user.credentials:
             return validation_error(
                 [{"loc": ["login"], "msg": f"User is not available"}]
@@ -383,8 +378,7 @@ async def register_webauthn_options():
                 title="Registration failed",
                 message="Something went wrong",
             )
-        async with Users.user(id=user_id, cluster=cluster) as u:
-            user = u.get()
+        user = await Users.user(id=session["id"]).get()
 
         exclude_credentials = [
             PublicKeyCredentialDescriptor(id=bytes.fromhex(c))
@@ -479,24 +473,19 @@ async def register_webauthn():
 
     try:
         if not appending_passkey:
-            async with Users.create(
-                _enforce_uuid=user_id, cluster=cluster
-            ) as create_user:
-                await create_user(data={"login": login})
+            await Users.create(_enforce_uuid=user_id).user(data={"login": login})
 
-        async with Users.create(cluster=cluster) as create:
-            await create.credential(
-                data={
-                    "id": verification.credential_id,
-                    "public_key": verification.credential_public_key,
-                    "sign_count": verification.sign_count,
-                    "transports": json_body.get("transports", []),
-                },
-                assign_user_id=user_id,
-            )
+        await Users.create.credential(
+            data={
+                "id": verification.credential_id,
+                "public_key": verification.credential_public_key,
+                "sign_count": verification.sign_count,
+                "transports": json_body.get("transports", []),
+            },
+            assign_user_id=user_id,
+        )
 
     except Exception as e:
-        raise
         return trigger_notification(
             level="error",
             response_body="",
@@ -555,8 +544,7 @@ async def auth_login_verify():
 
         auth_challenge = b64decode(challenge)
 
-        async with Users.user(login=login, cluster=cluster) as u:
-            user = u.get()
+        user = await Users.user(login=login).get()
 
         credential = parse_authentication_credential_json(json_body)
 
@@ -588,20 +576,17 @@ async def auth_login_verify():
             require_user_verification=True,
         )
 
-        async with Users.user(login=login, cluster=cluster) as u:
-            data = {"last_login": utc_now_as_str()}
-            if matched_user_credential.sign_count != 0:
-                data["sign_count"] = verification.new_sign_count
+        data = {"last_login": utc_now_as_str()}
+        if matched_user_credential.sign_count != 0:
+            data["sign_count"] = verification.new_sign_count
 
-            doc_id = await u.patch.credential(
-                hex_id=credential.raw_id.hex(),
-                data=data,
-            )
-
-        if not doc_id:
-            raise Exception("Could not update document")
+        await Users.user(login=login).patch_credential(
+            hex_id=credential.raw_id.hex(),
+            data=data,
+        )
 
     except Exception as e:
+        raise
         return trigger_notification(
             level="error",
             response_body="",
