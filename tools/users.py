@@ -7,7 +7,7 @@ from config import defaults
 from config.database import *
 from config.logs import logger
 from pydantic import Field, constr, validate_call
-from tools import cluster_task
+from tools import cluster_task, evaluate_db_params
 from utils.helpers import ensure_list
 from uuid import UUID
 
@@ -25,6 +25,7 @@ class Users:
 
     class create:
         def __init__(self, *args, **kwargs):
+            self.db_params = evaluate_db_params(kwargs)
             self._enforce_uuid = kwargs.get("_enforce_uuid")
 
         @cluster_task("users_create_user", enforce_uuid=True)
@@ -34,7 +35,7 @@ class Users:
             if self._enforce_uuid:
                 validated_data["id"] = self._enforce_uuid
 
-            async with TinyDB(**TINYDB_PARAMS) as db:
+            async with TinyDB(**self.db_params) as db:
                 name_conflict = db.table("users").search(
                     Query().login == validated_data["login"]
                 )
@@ -48,7 +49,7 @@ class Users:
         async def credential(data: dict, assign_user_id: str | None = None):
             validated_data = auth_model.AddCredential.parse_obj(data).dict()
 
-            async with TinyDB(**TINYDB_PARAMS) as db:
+            async with TinyDB(**self.db_params) as db:
                 if assign_user_id:
                     user = db.table("users").get(Query().id == assign_user_id)
                     if not user:
@@ -70,6 +71,7 @@ class Users:
 
     class user:
         def __init__(self, *args, **kwargs):
+            self.db_params = evaluate_db_params(kwargs)
             self.init_kwargs = kwargs
 
             users_attr = users_model._Users_attr.parse_obj(kwargs)
@@ -84,7 +86,7 @@ class Users:
             )
 
         async def get(self) -> None:
-            async with TinyDB(**TINYDB_PARAMS) as db:
+            async with TinyDB(**self.db_params) as db:
                 user = users_model.User.parse_obj(
                     db.table("users").get(self._query_filter)
                 )
@@ -96,7 +98,7 @@ class Users:
 
         @cluster_task("users_user_delete")
         async def delete(self):
-            async with TinyDB(**TINYDB_PARAMS) as db:
+            async with TinyDB(**self.db_params) as db:
                 user = db.table("users").get(self._query_filter)
                 for credential_hex_id in user["credentials"]:
                     db.table("credentials").remove(Query().id == credential_hex_id)
@@ -108,7 +110,7 @@ class Users:
         async def delete_credential(
             self, hex_id: constr(pattern=r"^[0-9a-fA-F]+$", min_length=2)
         ):
-            async with TinyDB(**TINYDB_PARAMS) as db:
+            async with TinyDB(**self.db_params) as db:
                 user = db.table("users").get(self._query_filter)
                 if hex_id in user["credentials"]:
                     del user["credentials"][hex_id]
@@ -122,7 +124,7 @@ class Users:
         @cluster_task("users_user_patch")
         async def patch(self, data: dict):
             validated_data = users_model.UserPatch.parse_obj(data)
-            async with TinyDB(**TINYDB_PARAMS) as db:
+            async with TinyDB(**self.db_params) as db:
                 name_conflict = db.table("users").search(
                     (Query().login == validated_data.login) & (~(self._query_filter))
                 )
@@ -147,7 +149,7 @@ class Users:
             validated_data = users_model.UserProfile.parse_obj(data).dict(
                 exclude_none=True
             )
-            async with TinyDB(**TINYDB_PARAMS) as db:
+            async with TinyDB(**self.db_params) as db:
                 user = db.table("users").get(self._query_filter)
                 patched = db.table("users").update(
                     {"profile": user["profile"] | validated_data},
@@ -162,7 +164,7 @@ class Users:
             data: dict,
         ):
             validated_data = auth_model.CredentialPatch.parse_obj(data)
-            async with TinyDB(**TINYDB_PARAMS) as db:
+            async with TinyDB(**self.db_params) as db:
                 user = db.table("users").get(self._query_filter)
                 if hex_id not in user["credentials"]:
                     raise ValueError(

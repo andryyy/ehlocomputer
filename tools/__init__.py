@@ -1,13 +1,14 @@
 import contextvars
 import json
+import shutil
 
-from config.database import IN_MEMORY_DB
+from config.database import IN_MEMORY_DB, TINYDB_PARAMS
+from copy import copy
 from functools import wraps
 from models.tasks import TaskModel
 from pydantic import ValidationError
 from typing import Literal
-
-IN_CLUSTER_CONTEXT = contextvars.ContextVar("cluster_context", default=False)
+from utils.helpers import is_path_within_cwd
 
 
 class _BytesJSONEncoder(json.JSONEncoder):
@@ -16,6 +17,8 @@ class _BytesJSONEncoder(json.JSONEncoder):
             return obj.hex()
         return super().default(obj)
 
+
+CLUSTER_CONTEXT = contextvars.ContextVar("cluster_context", default=None)
 
 CLUSTER_TASKS = [
     "users_create_user",
@@ -31,12 +34,33 @@ CLUSTER_TASKS = [
 ]
 
 
+def evaluate_db_params(kwargs):
+    db_params = copy(TINYDB_PARAMS)
+
+    if CLUSTER_CONTEXT.get():
+        transaction_file = f"database/main.{CLUSTER_CONTEXT.get()}"
+    elif kwargs.get("transaction"):
+        transaction_file = "database/main.{transaction}".format(
+            transaction=float(kwargs.get("transaction"))
+        )
+    else:
+        transaction_file = TINYDB_PARAMS["filename"]
+
+    if transaction_file != TINYDB_PARAMS["filename"]:
+        assert is_path_within_cwd(transaction_file)
+        shutil.copy(TINYDB_PARAMS["filename"], transaction_file)
+
+    db_params["filename"] = transaction_file
+
+    return db_params
+
+
 def cluster_task(task_name, enforce_uuid: bool = False):
     def form_task(func):
         @wraps(func)
         async def wrapper(*args, **kwargs):
             result = await func(*args, **kwargs)
-            if not IN_CLUSTER_CONTEXT.get():
+            if not CLUSTER_CONTEXT.get():
                 return result
 
             self = args[0] if args else None

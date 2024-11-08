@@ -45,9 +45,13 @@ async def main():
                     ProxyFixMiddleware(app, mode="legacy", trusted_hops=1),
                     hypercorn_config,
                     shutdown_trigger=hypercorn_shutdown_event.wait,
-                )
+                ),
+                name="qrt",
             ),
-            asyncio.create_task(cluster.run()),
+            asyncio.create_task(
+                cluster.run(shutdown_trigger=hypercorn_shutdown_event),
+                name="cluster",
+            ),
             await hypercorn_shutdown_event.wait()
         except:
             hypercorn_shutdown_event.set()

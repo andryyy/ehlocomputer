@@ -6,10 +6,10 @@ from config import defaults
 from config.database import *
 from config.logs import logger
 from pydantic import Field, constr, validate_call
-from tools import cluster_task, IN_CLUSTER_CONTEXT
+from tools import cluster_task, evaluate_db_params
 from typing import Literal
-from utils.helpers import ensure_list
 from utils.datetimes import ntime_utc_now
+from utils.helpers import ensure_list
 from uuid import UUID
 
 
@@ -19,19 +19,17 @@ class Objects:
 
     class object:
         def __init__(self, *args, **kwargs):
-            if IN_CLUSTER_CONTEXT.get():
-                TEMP_DB = {"filename": f"database/main.{IN_CLUSTER_CONTEXT.get()}"}
-                print(TEMP_DB)
-
+            self.db_params = evaluate_db_params(kwargs)
             self.init_kwargs = kwargs
             objects_attr = objects_model._Objects_attr.parse_obj(kwargs)
             self.id = objects_attr.id
             self.object_type = objects_attr.object_type
+
             self._enforce_uuid = kwargs.get("_enforce_uuid")
 
         async def get(self) -> None:
             if self.id:
-                async with TinyDB(**TINYDB_PARAMS) as db:
+                async with TinyDB(**self.db_params) as db:
                     object_data = []
                     object_data.append(
                         objects_model.model_classes["base"][self.object_type].parse_obj(
@@ -49,7 +47,7 @@ class Objects:
 
         @cluster_task("objects_object_delete")
         async def delete(self):
-            async with TinyDB(**TINYDB_PARAMS) as db:
+            async with TinyDB(**self.db_params) as db:
                 return db.table(self.object_type).remove(
                     Query().id.one_of(ensure_list(self.id))
                 )
@@ -60,7 +58,7 @@ class Objects:
                 self.object_type
             ].parse_obj(data)
 
-            async with TinyDB(**TINYDB_PARAMS) as db:
+            async with TinyDB(**self.db_params) as db:
                 for object_id in ensure_list(self.id):
                     name_conflict = db.table(self.object_type).search(
                         (Query().name == validated_data.name)
@@ -81,7 +79,7 @@ class Objects:
             if self._enforce_uuid:
                 validated_data["id"] = self._enforce_uuid
 
-            async with TinyDB(**TINYDB_PARAMS) as db:
+            async with TinyDB(**self.db_params) as db:
                 name_conflict = db.table(self.object_type).search(
                     Query().name == validated_data["name"]
                 )

@@ -141,9 +141,10 @@ async def refresh_cluster_logs():
         "/system/logs",
     )
 
-    await cluster.acquire_lock()
-    await get_peer_files(cluster, defaults.CLUSTER_PEERS_THEM, "logs/application.log")
-    await cluster.release()
+    async with cluster:
+        await get_peer_files(
+            cluster, defaults.CLUSTER_PEERS_THEM, "logs/application.log"
+        )
 
     await ws_htmx(
         session["login"],

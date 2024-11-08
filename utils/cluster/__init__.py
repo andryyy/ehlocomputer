@@ -1,19 +1,22 @@
 import asyncio
+import fileinput
 import json
 import random
 import re
+import os
+import socket
 import ssl
 
-from config.database import IN_MEMORY_DB
 from config import defaults
+from config.database import IN_MEMORY_DB
 from config.logs import logger
-from contextlib import suppress
+from contextlib import closing, suppress
 from enum import Enum
-from tools import IN_CLUSTER_CONTEXT, CLUSTER_TASKS
-from tools.users import Users
+from tools import CLUSTER_CONTEXT, CLUSTER_TASKS
 from tools.objects import Objects
+from tools.users import Users
 from utils.datetimes import ntime_utc_now
-from utils.helpers import ensure_list
+from utils.helpers import ensure_list, read_n_to_last_line
 from uuid import uuid4
 
 
@@ -38,7 +41,63 @@ def get_ssl_context(type_value: str):
     return context
 
 
+class Transaction:
+    def __init__(self, fn: str = "database/.transactions"):
+        from threading import Lock
+
+        self.fn = fn
+        self.lock = Lock()
+
+    @staticmethod
+    def _process_data(data):
+        if not data:
+            return "0.0", ""
+        transaction, _, payload = data.partition(":")
+        return transaction, payload.strip()
+
+    @property
+    def latest(self):
+        with self.lock:
+            return self._process_data(read_n_to_last_line(self.fn, n=1))
+
+    def search(self, trans_id: float, include_following: bool = False):
+        record = False
+        after = []
+        with self.lock:
+            for line in fileinput.input(self.fn):
+                if not record:
+                    if f"{trans_id}:" in line:
+                        record = True
+                        transaction, _, payload = line.partition(":")
+                        after.append(self._process_data(line))
+                else:
+                    if not include_following:
+                        break
+                    after.append(self._process_data(line))
+        return after
+
+    def write(self, trans_id, data):
+        with self.lock:
+            with open(self.fn, "a+") as f:
+                f.write(f"{trans_id}:{data}\n")
+
+    async def commit(self, trans_id):
+        from config.database import TinyDB, TINYDB_PARAMS
+
+        with self.lock:
+            assert os.path.isfile(f"database/main.{trans_id}")
+            async with TinyDB(**TINYDB_PARAMS) as db:
+                os.rename(f"database/main.{trans_id}", f"database/main")
+
+
+transactions = Transaction()
+
+
 class DistLockCancelled(Exception):
+    pass
+
+
+class IncompleteClusterResponses(Exception):
     pass
 
 
@@ -61,11 +120,9 @@ class Cluster:
         self.role = Role.SLAVE
         self.started = ntime_utc_now()
         self.tickets = dict()
-
         self._failed_peers = set()
 
         IN_MEMORY_DB["tasks"] = []
-        IN_MEMORY_DB["failed_tasks"] = []
 
     def set_master_node(self):
         established = [k for k, v in self.connections.items() if v["meta"]]
@@ -124,6 +181,7 @@ class Cluster:
             "META",
             f"NAME {defaults.NODENAME}",
             f"STARTED {self.started}",
+            f"LTRANS {transactions.latest[0]}",
             f"BIND {defaults.CLUSTER_PEERS_ME}",
             f"HTTP {defaults.HYPERCORN_BIND}",
         ]
@@ -149,6 +207,7 @@ class Cluster:
         patterns = [
             r"NAME (?P<name>\S+)",
             r"STARTED (?P<started>\S+)",
+            r"LTRANS (?P<ltrans>\S+)",
             r"BIND (?P<bind>\S+)",
             r"HTTP (?P<http>\S+)",
         ]
@@ -164,7 +223,8 @@ class Cluster:
         else:
             self.connections[meta_dict["bind"]]["meta"] = meta_dict
 
-        self.set_master_node()
+        if cmd != "JOIN":
+            self.set_master_node()
 
         self.log_rx(
             "{bind}[{node}]".format(bind=meta_dict["bind"], node=meta_dict["name"]),
@@ -176,10 +236,14 @@ class Cluster:
     async def _task_processor(self, tasks: list):
         async with self.receiving:
             failed_tasks = set()
+            enforce_ticket = str(CLUSTER_CONTEXT.get())
             for task in tasks:
-                ticket, receivers = await self.send_command(task, "*")
+                _, receivers = await self.send_command(task, "*", ticket=enforce_ticket)
                 try:
-                    await self._await_receivers(ticket, receivers, raise_on_error=True)
+                    await self._await_receivers(
+                        enforce_ticket, receivers, raise_on_error=True
+                    )
+                    transactions.write(enforce_ticket, task)
                 except:
                     failed_tasks.add(task)
             return list(failed_tasks)
@@ -209,13 +273,23 @@ class Cluster:
                     _, _, payload = cmd.partition(" ")
                     task_type, _, combined_data = payload.partition(" ")
 
-                    if task_type not in CLUSTER_TASKS:
+                    if transactions.latest[0] != peer_info["ltrans"]:
                         await self.send_command(
-                            "ACK CRIT", [peer_info["bind"]], ticket=ticket
+                            "ACK CRIT:LTRANS_MISMATCH",
+                            [peer_info["bind"]],
+                            ticket=ticket,
                         )
+
+                    elif task_type not in CLUSTER_TASKS:
+                        await self.send_command(
+                            "ACK CRIT:TASK_UNKNOWN", [peer_info["bind"]], ticket=ticket
+                        )
+
                     else:
                         try:
                             init_kwargs, task_kwargs = json.loads(combined_data)
+                            init_kwargs["transaction"] = ticket
+
                             if task_type.startswith("users_"):
                                 if task_type == "users_create_user":
                                     await Users.create(**init_kwargs).user(
@@ -252,13 +326,18 @@ class Cluster:
                                     )
                                 elif task_type == "objects_object_delete":
                                     await Objects.object(**init_kwargs).delete()
+
+                            transactions.write(ticket, cmd)
+                            await transactions.commit(ticket)
+
                             await self.send_command(
                                 "ACK", [peer_info["bind"]], ticket=ticket
                             )
+
                         except Exception as e:
                             logger.error(f"<task> {task_type} failed: {e}")
 
-                elif cmd == "STATUS":
+                elif cmd == "STATUS" or cmd == "JOIN":
                     await self.send_command("ACK", [peer_info["bind"]], ticket=ticket)
 
                 elif cmd == "UNLOCK":
@@ -306,10 +385,17 @@ class Cluster:
         successful_receivers = []
         for peer in receivers:
             if not peer in self.connections:
+                with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as sock:
+                    sock.settimeout(defaults.CLUSTER_PEERS_TIMEOUT)
+                    if sock.connect_ex((peer, self.port)) != 0:
+                        logger.warning(f"<{peer}> Connection timed out")
+                        continue
+
                 self.connections[peer] = {
                     "meta": dict(),
                     "streams": set(),
                 }
+
             if not self.connections[peer].get("streams"):
                 try:
                     self.connections[peer]["streams"] = await asyncio.open_connection(
@@ -327,7 +413,7 @@ class Cluster:
                     await self._send(self.connections[peer]["streams"], ticket, cmd)
                     successful_receivers.append(peer)
                 except Exception as e:
-                    logger.error(f"<{peer}> disconnected ({type(e)})")
+                    logger.error(f"<{peer}> disconnected ({type(e)}: {e})")
                     del self.connections[peer]
 
         return ticket, successful_receivers
@@ -359,22 +445,18 @@ class Cluster:
     async def __aenter__(self):
         IN_MEMORY_DB["tasks"] = []
         await self.acquire_lock()
-        self.token = IN_CLUSTER_CONTEXT.set(ntime_utc_now())
+        self._context_token = CLUSTER_CONTEXT.set(ntime_utc_now())
 
     async def __aexit__(self, exc_type, exc_value, exc_tb):
-        try:
+        if IN_MEMORY_DB["tasks"]:
             failed_tasks = await self._task_processor(IN_MEMORY_DB["tasks"])
             IN_MEMORY_DB["tasks"] = []
             if failed_tasks:
-                IN_MEMORY_DB["failed_tasks"] += failed_tasks
-                print("retrying some failed tasks:")
-                print(IN_MEMORY_DB["failed_tasks"])
-        except:
-            print("err")
+                print("do something")
+                pass  # todo
+            await transactions.commit(CLUSTER_CONTEXT.get())
 
-        print({"filename": f"database/main.{IN_CLUSTER_CONTEXT.get()}"})
-
-        IN_CLUSTER_CONTEXT.reset(self.token)
+        CLUSTER_CONTEXT.reset(self._context_token)
         await self.release()
 
     async def acquire_lock(self) -> str:
@@ -414,7 +496,7 @@ class Cluster:
                 await self._await_receivers(ticket, receivers, raise_on_error=False)
             raise DistLockCancelled("Master re-election")
 
-    async def run(self) -> None:
+    async def run(self, shutdown_trigger) -> None:
         server = await asyncio.start_server(
             self.connection_handler,
             self.host,
@@ -426,15 +508,17 @@ class Cluster:
         logger.info(f"Listening on {self.port} on address {" and ".join(self.host)}...")
 
         async with self.receiving:
+            ticket, receivers = await self.send_command("JOIN", "*")
+            await self._await_receivers(ticket, receivers, raise_on_error=False)
+
             ticket, receivers = await self.send_command("STATUS", "*")
             await self._await_receivers(ticket, receivers, raise_on_error=False)
 
         async with server:
-            await server.serve_forever()
+            await shutdown_trigger.wait()
 
     async def _await_receivers(self, ticket, receivers, raise_on_error: bool):
         _err_msg = None
-
         try:
             while not all(
                 r in [peer for peer, _ in self.tickets[ticket]] for r in receivers
@@ -449,19 +533,20 @@ class Cluster:
             _err_msg = f"missing receviers: {", ".join(missing_receivers)}"
         finally:
             responses = [response for _, response in self.tickets[ticket]]
+            crit_responses = [s for s in responses if "CRIT" in s]
 
             if len(responses) != len(receivers):
                 _err_msg = "unplausible amount of responses for ticket"
 
-            if "CRIT" in responses:
-                _err_msg = "one or more peers reported CRIT"
+            if crit_responses:
+                _err_msg = f"one or more peers reported CRIT: {self.tickets[ticket]}"
 
             del self.tickets[ticket]
 
             if _err_msg:
+                logger.error(_err_msg)
                 if raise_on_error:
                     raise IncompleteClusterResponses(f"<{ticket}> {_err_msg}")
-                logger.error(_err_msg)
             else:
                 logger.success(f"<{ticket}> ticket confirmed")
 
