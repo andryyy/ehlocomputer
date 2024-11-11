@@ -68,7 +68,6 @@ class Transaction:
                 if not record:
                     if f"{trans_id}:" in line:
                         record = True
-                        transaction, _, payload = line.partition(":")
                         after.append(self._process_data(line))
                 else:
                     if not include_following:
@@ -121,17 +120,19 @@ class Cluster:
         self.started = ntime_utc_now()
         self.tickets = dict()
         self._failed_peers = set()
+        self._established = None
 
         IN_MEMORY_DB["tasks"] = []
 
-    def set_master_node(self):
+    def _set_master_node(self):
         established = [k for k, v in self.connections.items() if v["meta"]]
-        online_peers = len(established) + 1
-        all_peers = len(defaults.CLUSTER_PEERS_THEM) + 1
+        n_online_peers = len(established) + 1
+        n_all_peers = len(defaults.CLUSTER_PEERS_THEM) + 1
+
         current_master_node = self.master_node
 
-        if not (online_peers >= (51 / 100) * all_peers):
-            logger.info("<set_master_node> Skipping election, not enough peers")
+        if not (n_online_peers >= (51 / 100) * n_all_peers):
+            logger.info("<set_master_node> skipping election, not enough peers")
             return
 
         master_node, started = min(
@@ -144,15 +145,39 @@ class Cluster:
             default=(None, float("inf")),  # Default value if no valid entries are found
         )
 
-        if self.started < started:
-            self.master_node = defaults.CLUSTER_PEERS_ME
-            self.role = Role.MASTER
-        else:
-            self.master_node = master_node
-            self.role = Role.SLAVE
+        if self.started < started:  # donkey elects itself
+            if self.master_node != defaults.CLUSTER_PEERS_ME:
+                logger.info(
+                    f"<set_master_node> elected self ({defaults.CLUSTER_PEERS_ME}) as master"
+                )
+                self.master_node = defaults.CLUSTER_PEERS_ME
+                self.role = Role.MASTER
 
-        if current_master_node != self.master_node:
-            logger.info(f"<set_master_node> Elected {self.master_node} as master")
+        else:
+            their_master = self.connections[master_node]["meta"]["master"]
+
+            if their_master == "ELECTING":
+                logger.info(
+                    f"<set_master_node> potential master {master_node} is still electing"
+                )
+                return
+
+            if their_master != master_node:
+                logger.warning(
+                    f"<set_master_node> not electing {master_node}: node reports different master (are we still joining or changed our swarm size?)"
+                )
+                return
+
+            if self.master_node != master_node:
+                self.master_node = master_node
+                self.role = Role.SLAVE
+                logger.info(
+                    f"<set_master_node> elected foreign peer {self.master_node} as master"
+                )
+
+        logger.debug(
+            f"<set_master_node> our swarm has {n_online_peers}/{n_all_peers} worms"
+        )
 
     def log_rx(self, peer: str, msg: str, max_msg_len=200):
         msg = msg[:max_msg_len] + (msg[max_msg_len:] and "...")
@@ -182,6 +207,7 @@ class Cluster:
             f"NAME {defaults.NODENAME}",
             f"STARTED {self.started}",
             f"LTRANS {transactions.latest[0]}",
+            "MASTER {master_node}".format(master_node=self.master_node or "ELECTING"),
             f"BIND {defaults.CLUSTER_PEERS_ME}",
             f"HTTP {defaults.HYPERCORN_BIND}",
         ]
@@ -208,6 +234,7 @@ class Cluster:
             r"NAME (?P<name>\S+)",
             r"STARTED (?P<started>\S+)",
             r"LTRANS (?P<ltrans>\S+)",
+            r"MASTER (?P<master>\S+)",
             r"BIND (?P<bind>\S+)",
             r"HTTP (?P<http>\S+)",
         ]
@@ -223,8 +250,8 @@ class Cluster:
         else:
             self.connections[meta_dict["bind"]]["meta"] = meta_dict
 
-        if cmd != "JOIN":
-            self.set_master_node()
+        if cmd != "BORN":
+            self._set_master_node()
 
         self.log_rx(
             "{bind}[{node}]".format(bind=meta_dict["bind"], node=meta_dict["name"]),
@@ -269,11 +296,15 @@ class Cluster:
                     break
 
             try:
-                if cmd.startswith("TASK"):
+                # A task starting with "R" indicates a resync
+                if cmd.startswith("TASK") or cmd.startswith("RTASK"):
                     _, _, payload = cmd.partition(" ")
                     task_type, _, combined_data = payload.partition(" ")
 
-                    if transactions.latest[0] != peer_info["ltrans"]:
+                    if (
+                        not cmd.startswith("RTASK")
+                        and transactions.latest[0] != peer_info["ltrans"]
+                    ):
                         await self.send_command(
                             "ACK CRIT:LTRANS_MISMATCH",
                             [peer_info["bind"]],
@@ -337,8 +368,39 @@ class Cluster:
                         except Exception as e:
                             logger.error(f"<task> {task_type} failed: {e}")
 
-                elif cmd == "STATUS" or cmd == "JOIN":
+                elif cmd == "BORN":
                     await self.send_command("ACK", [peer_info["bind"]], ticket=ticket)
+
+                elif cmd == "STATUS":
+                    await self.send_command("ACK", [peer_info["bind"]], ticket=ticket)
+
+                elif cmd == "SYNC":
+                    if transactions.latest[0] != peer_info["ltrans"]:
+                        if peer_info["ltrans"] > transactions.latest[0]:
+                            await self.send_command(
+                                "ACK CRIT:SLAVE_MORE_RECENT",
+                                [peer_info["bind"]],
+                                ticket=ticket,
+                            )
+                        else:
+                            matches = transactions.search(
+                                trans_id=peer_info["ltrans"], include_following=True
+                            )
+                            for t, task in matches[1:]:
+                                await self.send_command(
+                                    f"R{task}",  # prepend R
+                                    [peer_info["bind"]],
+                                    ticket=t,
+                                )
+                            await self.send_command(
+                                f"ACK RESYNCED {len(matches[1:])}",
+                                [peer_info["bind"]],
+                                ticket=ticket,
+                            )
+                    else:
+                        await self.send_command(
+                            "ACK LATEST", [peer_info["bind"]], ticket=ticket
+                        )
 
                 elif cmd == "UNLOCK":
                     self.lock.release()
@@ -420,7 +482,6 @@ class Cluster:
 
     async def release(self) -> str:
         errors = []
-
         if self.role == Role.SLAVE:
             async with self.receiving:
                 try:
@@ -508,11 +569,24 @@ class Cluster:
         logger.info(f"Listening on {self.port} on address {" and ".join(self.host)}...")
 
         async with self.receiving:
-            ticket, receivers = await self.send_command("JOIN", "*")
-            await self._await_receivers(ticket, receivers, raise_on_error=False)
+            for cmd in ["BORN", "STATUS"]:
+                ticket, receivers = await self.send_command(cmd, "*")
+                await self._await_receivers(ticket, receivers, raise_on_error=False)
 
-            ticket, receivers = await self.send_command("STATUS", "*")
-            await self._await_receivers(ticket, receivers, raise_on_error=False)
+            try:
+                ticket, receivers = await self.send_command("SYNC", [self.master_node])
+                _, responses = await self._await_receivers(
+                    ticket, receivers, raise_on_error=True
+                )
+                if responses:
+                    logger.success(f"<sync> {responses[0]}")
+
+            except:
+                shutdown_trigger.set()
+                for p, _ in self.connections.items():
+                    r, w = self.connections[p]["streams"]
+                    w.close()
+                    await w.wait_closed()
 
         async with server:
             await shutdown_trigger.wait()
