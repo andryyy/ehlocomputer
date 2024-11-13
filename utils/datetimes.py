@@ -20,7 +20,9 @@ def last_modified_http(file):
         last_modified_time = os.path.getmtime(file)
     except FileNotFoundError:
         last_modified_time = 0
-    return datetime.utcfromtimestamp(last_modified_time).strftime("%a, %d %b %Y %H:%M:%S GMT")
+    return datetime.utcfromtimestamp(last_modified_time).strftime(
+        "%a, %d %b %Y %H:%M:%S GMT"
+    )
 
 
 def parse_last_modified_http(last_modified_http):

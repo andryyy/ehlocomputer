@@ -1,9 +1,9 @@
 import asyncio
 import fileinput
 import json
+import os
 import random
 import re
-import os
 import socket
 import ssl
 
@@ -12,9 +12,10 @@ from config.database import IN_MEMORY_DB
 from config.logs import logger
 from contextlib import closing, suppress
 from enum import Enum
-from tools import CLUSTER_CONTEXT, CLUSTER_TASKS
+from tools import CONTEXT_TRANSACTION, TaskModel
 from tools.objects import Objects
 from tools.users import Users
+from utils.crypto import sha256_filedigest
 from utils.datetimes import ntime_utc_now
 from utils.helpers import ensure_list, read_n_to_last_line
 from uuid import uuid4
@@ -42,29 +43,50 @@ def get_ssl_context(type_value: str):
 
 
 class Transaction:
-    def __init__(self, fn: str = "database/.transactions"):
+    def __init__(self):
         from threading import Lock
 
-        self.fn = fn
+        self.trans_fn = "database/.transactions"
+        self.commits_fn = "database/.commits"
+        self.db_fn = "database/main"
         self.lock = Lock()
 
-    @staticmethod
-    def _process_data(data):
+        for fn in [self.trans_fn, self.commits_fn, self.db_fn]:
+            if not os.path.exists(fn):
+                with open(fn, "x"):
+                    pass
+            os.chmod(fn, 0o600)
+
+    def _process_data(self, data):
         if not data:
             return "0.0", ""
-        transaction, _, payload = data.partition(":")
-        return transaction, payload.strip()
+
+        transaction, commit_on, payload = data.strip().split(":", 2)
+        TaskModel.parse_raw_task(payload)
+
+        return transaction, payload
+
+    @property
+    def _db_matches_latest_commit(self):
+        with self.lock:
+            latest_commit = read_n_to_last_line(self.commits_fn, n=1)
+            if latest_commit:
+                _, commit_hash = latest_commit.strip().split(":")
+                return commit_hash == sha256_filedigest(self.db_fn)
+        return
 
     @property
     def latest(self):
         with self.lock:
-            return self._process_data(read_n_to_last_line(self.fn, n=1))
+            return self._process_data(read_n_to_last_line(self.trans_fn, n=1))
 
     def search(self, trans_id: float, include_following: bool = False):
         record = False
         after = []
         with self.lock:
-            for line in fileinput.input(self.fn):
+            for line in fileinput.input(self.trans_fn):
+                if line.startswith("#commit"):
+                    continue
                 if not record:
                     if f"{trans_id}:" in line:
                         record = True
@@ -77,19 +99,24 @@ class Transaction:
 
     def write(self, trans_id, data):
         with self.lock:
-            with open(self.fn, "a+") as f:
-                f.write(f"{trans_id}:{data}\n")
+            db_hash = sha256_filedigest(self.db_fn)
+            with open(self.trans_fn, "a+") as f:
+                f.write(f"{trans_id}:{db_hash}:{data}\n")
 
     async def commit(self, trans_id):
         from config.database import TinyDB, TINYDB_PARAMS
 
         with self.lock:
-            assert os.path.isfile(f"database/main.{trans_id}")
-            async with TinyDB(**TINYDB_PARAMS) as db:
-                os.rename(f"database/main.{trans_id}", f"database/main")
+            assert os.path.isfile(f"{self.db_fn}.{trans_id}")
+            async with TinyDB(**TINYDB_PARAMS) as db:  # acquires tinydbs lock
+                os.rename(f"{self.db_fn}.{trans_id}", self.db_fn)
+            with open(self.commits_fn, "a+") as f:
+                f.write(f"{trans_id}:{sha256_filedigest(self.db_fn)}\n")
 
 
 transactions = Transaction()
+if not transactions._db_matches_latest_commit:
+    logger.error("<transactions> mismatch of current database file and latest commit")
 
 
 class DistLockCancelled(Exception):
@@ -250,7 +277,7 @@ class Cluster:
         else:
             self.connections[meta_dict["bind"]]["meta"] = meta_dict
 
-        if cmd != "BORN":
+        if cmd != "INIT":
             self._set_master_node()
 
         self.log_rx(
@@ -259,21 +286,6 @@ class Cluster:
         )
 
         return ticket, cmd, meta_dict
-
-    async def _task_processor(self, tasks: list):
-        async with self.receiving:
-            failed_tasks = set()
-            enforce_ticket = str(CLUSTER_CONTEXT.get())
-            for task in tasks:
-                _, receivers = await self.send_command(task, "*", ticket=enforce_ticket)
-                try:
-                    await self._await_receivers(
-                        enforce_ticket, receivers, raise_on_error=True
-                    )
-                    transactions.write(enforce_ticket, task)
-                except:
-                    failed_tasks.add(task)
-            return list(failed_tasks)
 
     async def connection_handler(
         self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter
@@ -287,8 +299,11 @@ class Cluster:
         while True:
             try:
                 ticket, cmd, peer_info = await self._recv((reader, writer))
-                if (ntime_utc_now() - float(ticket)) > 5.0:
+                if ((ntime_utc_now() - float(ticket)) > 5.0) and not cmd.startswith(
+                    "RTASK"
+                ):
                     continue
+
             except asyncio.exceptions.IncompleteReadError:
                 async with self.receiving:
                     ticket, receivers = await self.send_command("STATUS", "*")
@@ -296,11 +311,11 @@ class Cluster:
                     break
 
             try:
-                # A task starting with "R" indicates a resync
-                if cmd.startswith("TASK") or cmd.startswith("RTASK"):
-                    _, _, payload = cmd.partition(" ")
-                    task_type, _, combined_data = payload.partition(" ")
+                if cmd == "INIT":
+                    await self.send_command("ACK", [peer_info["bind"]], ticket=ticket)
 
+                # A task starting with "R" indicates a resync
+                elif cmd.startswith("TASK") or cmd.startswith("RTASK"):
                     if (
                         not cmd.startswith("RTASK")
                         and transactions.latest[0] != peer_info["ltrans"]
@@ -311,51 +326,47 @@ class Cluster:
                             ticket=ticket,
                         )
 
-                    elif task_type not in CLUSTER_TASKS:
-                        await self.send_command(
-                            "ACK CRIT:TASK_UNKNOWN", [peer_info["bind"]], ticket=ticket
-                        )
-
                     else:
                         try:
-                            init_kwargs, task_kwargs = json.loads(combined_data)
+                            task_data = TaskModel.parse_raw_task(cmd)
+                            init_kwargs, task_kwargs = task_data.kwargs
                             init_kwargs["transaction"] = ticket
 
-                            if task_type.startswith("users_"):
-                                if task_type == "users_create_user":
+                            if task_data.name.startswith("users_"):
+                                if task_data.name == "users_create_user":
                                     await Users.create(**init_kwargs).user(
                                         **task_kwargs
                                     )
-                                elif task_type == "users_create_credential":
+                                elif task_data.name == "users_create_credential":
                                     await Users.create(**init_kwargs).credential(
                                         **task_kwargs
                                     )
-                                elif task_type == "users_user_delete":
+                                elif task_data.name == "users_user_delete":
                                     await Users.user(**init_kwargs).delete()
-                                elif task_type == "users_user_delete_credential":
+                                elif task_data.name == "users_user_delete_credential":
                                     await Users.user(**init_kwargs).delete_credential(
                                         **task_kwargs
                                     )
-                                elif task_type == "users_user_patch":
+                                elif task_data.name == "users_user_patch":
                                     await Users.user(**init_kwargs).patch(**task_kwargs)
-                                elif task_type == "users_user_patch_profile":
+                                elif task_data.name == "users_user_patch_profile":
                                     await Users.user(**init_kwargs).patch_profile(
                                         **task_kwargs
                                     )
-                                elif task_type == "users_user_patch_credential":
+                                elif task_data.name == "users_user_patch_credential":
                                     await Users.user(**init_kwargs).patch_credential(
                                         **task_kwargs
                                     )
-                            elif task_type.startswith("objects_"):
-                                if task_type == "objects_object_create":
+                            elif task_data.name.startswith("objects_"):
+                                if task_data.name == "objects_object_create":
                                     await Objects.object(**init_kwargs).create(
                                         **task_kwargs
                                     )
-                                elif task_type == "objects_object_patch":
+                                elif task_data.name == "objects_object_patch":
                                     await Objects.object(**init_kwargs).patch(
                                         **task_kwargs
                                     )
-                                elif task_type == "objects_object_delete":
+                                elif task_data.name == "objects_object_delete":
                                     await Objects.object(**init_kwargs).delete()
 
                             transactions.write(ticket, cmd)
@@ -366,10 +377,12 @@ class Cluster:
                             )
 
                         except Exception as e:
-                            logger.error(f"<task> {task_type} failed: {e}")
-
-                elif cmd == "BORN":
-                    await self.send_command("ACK", [peer_info["bind"]], ticket=ticket)
+                            logger.error(f"<task> {task_data.name} failed: {e}")
+                            await self.send_command(
+                                "ACK CRIT:TASK_FAILED",
+                                [peer_info["bind"]],
+                                ticket=ticket,
+                            )
 
                 elif cmd == "STATUS":
                     await self.send_command("ACK", [peer_info["bind"]], ticket=ticket)
@@ -506,18 +519,34 @@ class Cluster:
     async def __aenter__(self):
         IN_MEMORY_DB["tasks"] = []
         await self.acquire_lock()
-        self._context_token = CLUSTER_CONTEXT.set(ntime_utc_now())
+        self._context_token = CONTEXT_TRANSACTION.set(ntime_utc_now())
 
     async def __aexit__(self, exc_type, exc_value, exc_tb):
         if IN_MEMORY_DB["tasks"]:
-            failed_tasks = await self._task_processor(IN_MEMORY_DB["tasks"])
-            IN_MEMORY_DB["tasks"] = []
-            if failed_tasks:
-                print("do something")
-                pass  # todo
-            await transactions.commit(CLUSTER_CONTEXT.get())
+            transaction_id = str(CONTEXT_TRANSACTION.get())
 
-        CLUSTER_CONTEXT.reset(self._context_token)
+            async with self.receiving:
+                while IN_MEMORY_DB["tasks"]:
+                    task = IN_MEMORY_DB["tasks"].pop()
+
+                    _, receivers = await self.send_command(
+                        task, "*", ticket=transaction_id
+                    )
+
+                    try:
+                        await self._await_receivers(
+                            transaction_id, receivers, raise_on_error=True
+                        )
+                        transactions.write(transaction_id, task)
+                    except:
+                        logger.error(
+                            f"<tasks> requeuing task in transaction {transaction_id}"
+                        )
+                        IN_MEMORY_DB["tasks"].append(task)
+
+                await transactions.commit(transaction_id)
+
+        CONTEXT_TRANSACTION.reset(self._context_token)
         await self.release()
 
     async def acquire_lock(self) -> str:
@@ -569,7 +598,7 @@ class Cluster:
         logger.info(f"Listening on {self.port} on address {" and ".join(self.host)}...")
 
         async with self.receiving:
-            for cmd in ["BORN", "STATUS"]:
+            for cmd in ["INIT", "STATUS"]:
                 ticket, receivers = await self.send_command(cmd, "*")
                 await self._await_receivers(ticket, receivers, raise_on_error=False)
 

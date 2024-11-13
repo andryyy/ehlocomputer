@@ -20,15 +20,12 @@ __all__ = [
     "fernet_decrypt",
     "aes_cbc_encrypt",
     "aes_cbc_decrypt",
-    "sha1_hash",
 ]
 
 
-@validate_call
-def sha1_hash(data: str):
-    sha1 = hashlib.sha1()
-    sha1.update(data.encode("utf-8"))
-    return sha1.hexdigest()
+def sha256_filedigest(filename: str):
+    with open(filename, "rb", buffering=0) as f:
+        return hashlib.file_digest(f, "sha256").hexdigest()
 
 
 @validate_call
