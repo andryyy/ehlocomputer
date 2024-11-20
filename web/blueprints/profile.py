@@ -1,6 +1,4 @@
 from config.cluster import cluster
-from models.auth import CredentialRead, CredentialPatch
-from models.users import UserProfile, UserPatch
 from pydantic import ValidationError, validate_call
 from quart import (
     Blueprint,
@@ -22,6 +20,8 @@ blueprint = Blueprint("profile", __name__, url_prefix="/profile")
 
 @blueprint.context_processor
 def load_schemas():
+    from models.users import UserProfile
+
     return {
         "_user_profile_schema": UserProfile.model_json_schema(),
     }

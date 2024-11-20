@@ -9,7 +9,6 @@ from models.tables import TableSearchHelper
 from models import system as system_model
 from pydantic import ValidationError
 from quart import Blueprint, current_app as app, render_template, request, session
-from tools.cluster import get_peer_files
 from tools.system import get_system_settings, list_application_log_files
 from utils import wrappers
 from utils.helpers import batch
@@ -24,9 +23,12 @@ def load_system_defaults():
         f"_{schema_type}_schema": v.model_json_schema()
         for schema_type, v in system_model.model_classes["forms"].items()
     }
-    return {
-        "schemas": schemas,
-    }
+    if cluster.master_node != defaults.CLUSTER_PEERS_ME:
+        current_master = cluster.connections[cluster.master_node]["meta"]["name"]
+    else:
+        current_master = defaults.NODENAME
+
+    return {"schemas": schemas, "current_master": current_master}
 
 
 @blueprint.route("/settings", methods=["PATCH"])
@@ -141,10 +143,8 @@ async def refresh_cluster_logs():
         "/system/logs",
     )
 
-    async with cluster:
-        await get_peer_files(
-            cluster, defaults.CLUSTER_PEERS_THEM, "logs/application.log"
-        )
+    async with cluster as c:
+        await c.request_files("logs/application.log", defaults.CLUSTER_PEERS_THEM)
 
     await ws_htmx(
         session["login"],

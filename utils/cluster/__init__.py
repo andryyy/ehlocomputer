@@ -6,6 +6,9 @@ import random
 import re
 import socket
 import ssl
+import zlib
+import base64
+import sys
 
 from config import defaults
 from config.database import IN_MEMORY_DB
@@ -17,7 +20,7 @@ from tools.objects import Objects
 from tools.users import Users
 from utils.crypto import sha256_filedigest
 from utils.datetimes import ntime_utc_now
-from utils.helpers import ensure_list, read_n_to_last_line
+from utils.helpers import ensure_list, read_n_to_last_line, is_path_within_cwd
 from uuid import uuid4
 
 
@@ -116,7 +119,8 @@ class Transaction:
 
 transactions = Transaction()
 if not transactions._db_matches_latest_commit:
-    logger.error("<transactions> mismatch of current database file and latest commit")
+    logger.error("<transactions> database does not match the latest commit")
+    sys.exit(1)
 
 
 class DistLockCancelled(Exception):
@@ -415,6 +419,27 @@ class Cluster:
                             "ACK LATEST", [peer_info["bind"]], ticket=ticket
                         )
 
+                elif cmd.startswith("FILE"):
+                    _, _, payload = cmd.partition(" ")
+                    if not is_path_within_cwd(payload):
+                        await self.send_command(
+                            "ACK CRIT:INVALID_FILE_PATH",
+                            [peer_info["bind"]],
+                            ticket=ticket,
+                        )
+                    else:
+                        with open(payload, "rb") as f:
+                            compressed_data = zlib.compress(f.read())
+                            compressed_data_encoded = base64.b64encode(
+                                compressed_data
+                            ).decode("utf-8")
+
+                        await self.send_command(
+                            f"ACK {payload} {defaults.CLUSTER_PEERS_ME} {compressed_data_encoded}",
+                            [peer_info["bind"]],
+                            ticket=ticket,
+                        )
+
                 elif cmd == "UNLOCK":
                     self.lock.release()
                     await self.send_command("ACK", [peer_info["bind"]], ticket=ticket)
@@ -520,6 +545,7 @@ class Cluster:
         IN_MEMORY_DB["tasks"] = []
         await self.acquire_lock()
         self._context_token = CONTEXT_TRANSACTION.set(ntime_utc_now())
+        return self
 
     async def __aexit__(self, exc_type, exc_value, exc_tb):
         if IN_MEMORY_DB["tasks"]:
@@ -549,6 +575,32 @@ class Cluster:
         CONTEXT_TRANSACTION.reset(self._context_token)
         await self.release()
 
+    async def request_files(self, files: str | list, peers="*"):
+        files = ensure_list(files)
+        async with self.receiving:
+            try:
+                for file in files:
+                    if not is_path_within_cwd(file):
+                        logger.error(f"<request_files> file not within cwd: {file}")
+                        continue
+
+                    ticket, receivers = await self.send_command(f"FILE {file}", peers)
+                    _, responses = await self._await_receivers(
+                        ticket, receivers, raise_on_error=True
+                    )
+
+                    for r in responses:
+                        r_file, r_peer, r_data = r.split(" ")
+                        assert r_file == file
+                        assert r_peer in defaults.CLUSTER_PEERS_THEM
+                        file_dest = f"peer_files/{r_peer}/{file}"
+                        os.makedirs(os.path.dirname(file_dest), exist_ok=True)
+                        payload = zlib.decompress(base64.b64decode(r_data))
+                        with open(file_dest, "wb") as f:
+                            f.write(payload)
+            except Exception as e:
+                logger.error(f"<request_files> unhandled error: {e}")
+
     async def acquire_lock(self) -> str:
         try:
             await asyncio.wait_for(self.lock.acquire(), 3.0)
@@ -569,7 +621,7 @@ class Cluster:
                         errors.append("master_busy")
                 except asyncio.CancelledError:
                     errors.append("lock_cancelled")
-                except Exception:
+                except IncompleteClusterResponses:
                     errors.append("master_not_reachable")
 
         if "master_busy" in errors:
@@ -577,6 +629,7 @@ class Cluster:
             return await self.acquire_lock()
 
         if "lock_cancelled" in errors:
+            self.lock.release()
             errors.append("master_not_reachable")
 
         if "master_not_reachable" in errors:
@@ -674,8 +727,7 @@ class Cluster:
                     except:
                         writer.write(b"\x03")
                     await writer.drain()
-
-                if cmd == b"\x98":
+                elif cmd == b"\x98":
                     awaiting = dict()
                     idx = 1
                     for k, v in IN_MEMORY_DB.items():

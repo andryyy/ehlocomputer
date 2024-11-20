@@ -1,6 +1,7 @@
 import asyncio
 import signal
 import ssl
+import sys
 
 from config import defaults
 from config.cluster import cluster
@@ -33,28 +34,28 @@ async def main():
             exception, asyncio.sslproto._SSLProtocolTransport
         ):
             pass
+        elif isinstance(exception, OSError) and exception.errno == 99:
+            hypercorn_shutdown_event.set()
+            sys.exit(0)
         else:
             loop.default_exception_handler(context)
 
     loop.set_exception_handler(_exception_handler)
 
     async with asyncio.TaskGroup() as group:
-        try:
-            asyncio.create_task(
-                serve(
-                    ProxyFixMiddleware(app, mode="legacy", trusted_hops=1),
-                    hypercorn_config,
-                    shutdown_trigger=hypercorn_shutdown_event.wait,
-                ),
-                name="qrt",
+        asyncio.create_task(
+            serve(
+                ProxyFixMiddleware(app, mode="legacy", trusted_hops=1),
+                hypercorn_config,
+                shutdown_trigger=hypercorn_shutdown_event.wait,
             ),
-            asyncio.create_task(
-                cluster.run(shutdown_trigger=hypercorn_shutdown_event),
-                name="cluster",
-            ),
-            await hypercorn_shutdown_event.wait()
-        except:
-            hypercorn_shutdown_event.set()
+            name="qrt",
+        ),
+        asyncio.create_task(
+            cluster.run(shutdown_trigger=hypercorn_shutdown_event),
+            name="cluster",
+        ),
+        await hypercorn_shutdown_event.wait()
 
 
 asyncio.run(main())

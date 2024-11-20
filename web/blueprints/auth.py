@@ -132,6 +132,7 @@ async def login_request_start():
         "status": "awaiting",
         "requested_login": request_data.login,
     }
+
     app.add_background_task(
         expire_key,
         IN_MEMORY_DB,

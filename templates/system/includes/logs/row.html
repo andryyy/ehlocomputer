@@ -1,5 +1,5 @@
 <tr _="on click toggle @hidden on next .log-details end" class="pointer">
-  <td><mark>{{ log.text }}</mark></td>
+  <td><b>{% if current_master == log.text %}🥇{% endif %} {{ log.text }}</b></td>
   <td>{{ log.record.level.icon }}</td>
   <td _="init js return new Date('{{- log.record.time.repr -}}').toLocaleString() end then put result into me">{{- log.record.time.repr -}}</td>
   <td class="text-wrap"><samp>{{- log.record.message -}}</samp></td>
