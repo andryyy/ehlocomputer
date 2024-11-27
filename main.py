@@ -35,8 +35,8 @@ async def main():
         ):
             pass
         elif isinstance(exception, OSError) and exception.errno == 99:
+            print("ERROR: Unable to bind to an address")
             hypercorn_shutdown_event.set()
-            sys.exit(0)
         else:
             loop.default_exception_handler(context)
 
@@ -55,7 +55,12 @@ async def main():
             cluster.run(shutdown_trigger=hypercorn_shutdown_event),
             name="cluster",
         ),
-        await hypercorn_shutdown_event.wait()
+        try:
+            await hypercorn_shutdown_event.wait()
+            print("Received shutdown event, exit")
+            sys.exit(0)
+        except asyncio.CancelledError:
+            pass
 
 
 asyncio.run(main())

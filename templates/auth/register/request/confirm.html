@@ -1,0 +1,18 @@
+<dialog open id="auth-register-request" hx-ext="ignore:loading-states">
+  <article>
+    <header>Registration request</header>
+    <p>
+      Someone wants to register as {{ request.view_args.get("login") }}.
+    </p>
+    <footer>
+      <form>
+        <button
+          hx-on::after-request="event.detail.successful==true?this.closest('dialog').remove():null"
+          hx-post="asd">
+            Confirm
+        </button>
+        <button class="secondary" hx-on:click="this.closest('dialog').remove()">Ignore request</button>
+      </form>
+    </footer>
+  </article>
+</dialog>

@@ -3,7 +3,7 @@ import fileinput
 import json
 
 from config import defaults
-from config.cluster import cluster
+from config.cluster import ClusterLock, cluster
 from datetime import datetime
 from models.tables import TableSearchHelper
 from models import system as system_model
@@ -143,7 +143,7 @@ async def refresh_cluster_logs():
         "/system/logs",
     )
 
-    async with cluster as c:
+    async with ClusterLock("main") as c:
         await c.request_files("logs/application.log", defaults.CLUSTER_PEERS_THEM)
 
     await ws_htmx(

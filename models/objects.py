@@ -1,7 +1,7 @@
 from models.forms.objects import (
-    ObjectPatchDeskForm,
-    ObjectPatchRoomForm,
-    ObjectPatchThingForm,
+    ObjectPatchContactForm,
+    ObjectPatchCalendarForm,
+    ObjectPatchAppointmentForm,
 )
 from pydantic_core import PydanticCustomError
 from pydantic import (
@@ -25,16 +25,16 @@ class ObjectBase(BaseModel):
     updated: str
 
 
-class ObjectBaseRoom(ObjectBase):
-    details: ObjectPatchRoomForm = {}
+class ObjectBaseCalendar(ObjectBase):
+    details: ObjectPatchCalendarForm = {}
 
 
-class ObjectBaseDesk(ObjectBase):
-    details: ObjectPatchDeskForm = {}
+class ObjectBaseContact(ObjectBase):
+    details: ObjectPatchContactForm = {}
 
 
-class ObjectBaseThing(ObjectBase):
-    details: ObjectPatchThingForm = {}
+class ObjectBaseAppointment(ObjectBase):
+    details: ObjectPatchAppointmentForm = {}
 
 
 class ObjectAdd(BaseModel):
@@ -73,34 +73,34 @@ class ObjectPatch(BaseModel):
         return utc_now_as_str()
 
 
-class ObjectPatchDesk(ObjectPatch):
-    details: ObjectPatchDeskForm
+class ObjectPatchContact(ObjectPatch):
+    details: ObjectPatchContactForm
 
 
-class ObjectPatchRoom(ObjectPatch):
-    details: ObjectPatchRoomForm
+class ObjectPatchCalendar(ObjectPatch):
+    details: ObjectPatchCalendarForm
 
 
-class ObjectPatchThing(ObjectPatch):
-    details: ObjectPatchThingForm
+class ObjectPatchAppointment(ObjectPatch):
+    details: ObjectPatchAppointmentForm
 
 
 model_classes = {
-    "types": ["desks", "rooms", "things"],
+    "types": ["contacts", "calendars", "appointments"],
     "forms": {
-        "desks": ObjectPatchDeskForm,
-        "rooms": ObjectPatchRoomForm,
-        "things": ObjectPatchThingForm,
+        "contacts": ObjectPatchContactForm,
+        "calendars": ObjectPatchCalendarForm,
+        "appointments": ObjectPatchAppointmentForm,
     },
     "patch": {
-        "desks": ObjectPatchDesk,
-        "rooms": ObjectPatchRoom,
-        "things": ObjectPatchThing,
+        "contacts": ObjectPatchContact,
+        "calendars": ObjectPatchCalendar,
+        "appointments": ObjectPatchAppointment,
     },
     "base": {
-        "desks": ObjectBaseDesk,
-        "rooms": ObjectBaseRoom,
-        "things": ObjectBaseThing,
+        "contacts": ObjectBaseContact,
+        "calendars": ObjectBaseCalendar,
+        "appointments": ObjectBaseAppointment,
     },
 }
 

@@ -1,6 +1,6 @@
 import re
 
-from config.cluster import cluster
+from config.cluster import ClusterLock
 from models.tables import TableSearchHelper
 from models import objects as objects_model
 from pydantic import ValidationError
@@ -124,7 +124,7 @@ async def get_objects(object_type: str):
 @wrappers.acl("user")
 async def create_object(object_type: str):
     try:
-        async with cluster:
+        async with ClusterLock("main"):
             object_id = await Objects.object(object_type=object_type).create(
                 data=request.form_parsed
             )
@@ -151,7 +151,7 @@ async def delete_object(object_type: str, object_id: str | None = None):
         object_id = request.form_parsed.get("id")
     try:
         object_ids = ensure_list(object_id)
-        async with cluster:
+        async with ClusterLock("main"):
             await Objects.object(id=object_ids, object_type=object_type).delete()
 
     except ValidationError as e:
@@ -176,7 +176,7 @@ async def patch_object(object_type: str, object_id: str | None = None):
     if request.method == "POST":
         object_id = request.form_parsed.get("id")
     try:
-        async with cluster:
+        async with ClusterLock("main"):
             await Objects.object(id=object_id, object_type=object_type).patch(
                 data=request.form_parsed
             )

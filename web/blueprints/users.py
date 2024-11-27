@@ -1,6 +1,6 @@
 import re
 
-from config.cluster import cluster
+from config.cluster import ClusterLock
 from models.tables import TableSearchHelper
 from models.forms.users import UserProfile
 from pydantic import ValidationError
@@ -93,7 +93,7 @@ async def delete_user(user_id: str | None = None):
 
     try:
         user_ids = ensure_list(user_id)
-        async with cluster:
+        async with ClusterLock("main"):
             for user_id in user_ids:
                 await Users.user(id=user_id).delete()
 
@@ -116,7 +116,7 @@ async def delete_user(user_id: str | None = None):
 @wrappers.acl("system")
 async def patch_user_credential(user_id: str, hex_id: str):
     try:
-        async with cluster:
+        async with ClusterLock("main"):
             await Users.user(id=user_id).patch_credential(
                 hex_id=hex_id,
                 data=request.form_parsed,
@@ -144,7 +144,7 @@ async def patch_user(user_id: str | None = None):
         if not user_id:
             user_id = request.form_parsed.get("id")
 
-        async with cluster:
+        async with ClusterLock("main"):
             await Users.user(id=user_id).patch(data=request.form_parsed)
             await Users.user(id=user_id).patch_profile(
                 data=request.form_parsed.get("profile", {})

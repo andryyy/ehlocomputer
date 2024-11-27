@@ -1,4 +1,4 @@
-from config.cluster import cluster
+from config.cluster import ClusterLock
 from pydantic import ValidationError, validate_call
 from quart import (
     Blueprint,
@@ -53,7 +53,7 @@ async def user_profile_get():
 @wrappers.acl("any")
 async def user_profile_patch():
     try:
-        async with cluster:
+        async with ClusterLock("main"):
             await Users.user(id=session["id"]).patch_profile(data=request.form_parsed)
 
         user = await Users.user(id=session["id"]).get()
@@ -80,7 +80,7 @@ async def user_profile_patch():
 @wrappers.acl("any")
 async def patch_credential(credential_hex_id: str):
     try:
-        async with cluster:
+        async with ClusterLock("main"):
             await Users.user(id=session["id"]).patch_credential(
                 hex_id=credential_hex_id, data=request.form_parsed
             )

@@ -32,4 +32,4 @@ TLS_CERTFILE = "system/certs/fullchain.pem"
 TLS_KEYFILE = "system/certs/privkey.pem"
 TLS_CA = "/etc/ssl/certs/ca-certificates.crt"
 CLUSTER_CLI_BINDINGS = ["127.0.0.1", "::1"]
-CLUSTER_PEERS_TIMEOUT = 2.0
+CLUSTER_PEERS_TIMEOUT = 1.5

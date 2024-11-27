@@ -143,7 +143,7 @@ class Cluster:
 
         self.connections = dict()
         self.host = ensure_list(host) + defaults.CLUSTER_CLI_BINDINGS
-        self.lock = asyncio.Lock()
+        self.locks = dict()
         self.master_node = None
         self.port = port
         self.receiving = asyncio.Condition()
@@ -374,7 +374,6 @@ class Cluster:
                                     await Objects.object(**init_kwargs).delete()
 
                             transactions.write(ticket, cmd)
-                            await transactions.commit(ticket)
 
                             await self.send_command(
                                 "ACK", [peer_info["bind"]], ticket=ticket
@@ -387,6 +386,10 @@ class Cluster:
                                 [peer_info["bind"]],
                                 ticket=ticket,
                             )
+
+                elif cmd == "COMMIT":
+                    await transactions.commit(ticket)
+                    await self.send_command("ACK", [peer_info["bind"]], ticket=ticket)
 
                 elif cmd == "STATUS":
                     await self.send_command("ACK", [peer_info["bind"]], ticket=ticket)
@@ -440,13 +443,23 @@ class Cluster:
                             ticket=ticket,
                         )
 
-                elif cmd == "UNLOCK":
-                    self.lock.release()
+                elif cmd.startswith("UNLOCK"):
+                    _, _, lock_name = cmd.partition(" ")
+                    if lock_name == "":
+                        lock_name = "main"
+
+                    self.locks[lock_name].release()
                     await self.send_command("ACK", [peer_info["bind"]], ticket=ticket)
 
-                elif cmd == "LOCK":
+                elif cmd.startswith("LOCK"):
+                    _, _, lock_name = cmd.partition(" ")
+                    if lock_name == "":
+                        lock_name = "main"
+                    if not lock_name in self.locks:
+                        self.locks[lock_name] = asyncio.Lock()
+
                     try:
-                        await asyncio.wait_for(self.lock.acquire(), 0.45)
+                        await asyncio.wait_for(self.locks[lock_name].acquire(), 0.45)
                     except TimeoutError:
                         await self.send_command(
                             "ACK BUSY", [peer_info["bind"]], ticket=ticket
@@ -482,7 +495,9 @@ class Cluster:
 
         if ticket not in self.tickets:
             self.tickets[ticket] = set()
+
         successful_receivers = []
+
         for peer in receivers:
             if not peer in self.connections:
                 with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as sock:
@@ -518,43 +533,20 @@ class Cluster:
 
         return ticket, successful_receivers
 
-    async def release(self) -> str:
+    async def release(self, lock_name: str = "") -> str:
         errors = []
-        if self.role == Role.SLAVE:
-            async with self.receiving:
-                try:
-                    ticket, receivers = await self.send_command(
-                        "UNLOCK", [self.master_node]
-                    )
-                    ret, responses = await self._await_receivers(
-                        ticket, receivers, raise_on_error=True
-                    )
-                except Exception:
-                    errors.append("master_not_reachable")
 
-        with suppress(RuntimeError):
-            self.lock.release()
+        if lock_name == "":
+            lock_name = "main"
+        if not lock_name in self.locks:
+            self.locks[lock_name] = asyncio.Lock()
 
-        if "master_not_reachable" in errors:
-            async with self.receiving:
-                ticket, receivers = await self.send_command("STATUS", "*")
-                await self._await_receivers(ticket, receivers, raise_on_error=False)
-            raise DistLockCancelled("Master re-election")
-
-    async def __aenter__(self):
-        IN_MEMORY_DB["tasks"] = []
-        await self.acquire_lock()
-        self._context_token = CONTEXT_TRANSACTION.set(ntime_utc_now())
-        return self
-
-    async def __aexit__(self, exc_type, exc_value, exc_tb):
-        if IN_MEMORY_DB["tasks"]:
+        if IN_MEMORY_DB["tasks"] and not errors:
             transaction_id = str(CONTEXT_TRANSACTION.get())
 
             async with self.receiving:
                 while IN_MEMORY_DB["tasks"]:
                     task = IN_MEMORY_DB["tasks"].pop()
-
                     _, receivers = await self.send_command(
                         task, "*", ticket=transaction_id
                     )
@@ -565,15 +557,92 @@ class Cluster:
                         )
                         transactions.write(transaction_id, task)
                     except:
-                        logger.error(
-                            f"<tasks> requeuing task in transaction {transaction_id}"
-                        )
-                        IN_MEMORY_DB["tasks"].append(task)
+                        errors.append("remote_transaction_failed")
+                        break
 
-                await transactions.commit(transaction_id)
+                if not errors:
+                    _, receivers = await self.send_command(
+                        "COMMIT", "*", ticket=transaction_id
+                    )
+                    await self._await_receivers(
+                        transaction_id, receivers, raise_on_error=True
+                    )
+                    await transactions.commit(transaction_id)
 
         CONTEXT_TRANSACTION.reset(self._context_token)
-        await self.release()
+
+        if self.role == Role.SLAVE:
+            async with self.receiving:
+                try:
+                    ticket, receivers = await self.send_command(
+                        f"UNLOCK {lock_name}", [self.master_node]
+                    )
+                    ret, responses = await self._await_receivers(
+                        ticket, receivers, raise_on_error=True
+                    )
+                except Exception:
+                    errors.append("master_not_reachable")
+
+        with suppress(RuntimeError):
+            self.locks[lock_name].release()
+
+        if "remote_transaction_failed" in errors:
+            logger.error(
+                f"<tasks> a task failed to replicate, not committing transaction"
+            )
+
+        if "master_not_reachable" in errors:
+            async with self.receiving:
+                ticket, receivers = await self.send_command("STATUS", "*")
+                await self._await_receivers(ticket, receivers, raise_on_error=False)
+            raise DistLockCancelled("Master re-election")
+
+    async def acquire_lock(self, lock_name: str = "") -> str:
+        try:
+            if lock_name == "":
+                lock_name = "main"
+            if not lock_name in self.locks:
+                self.locks[lock_name] = asyncio.Lock()
+
+            await asyncio.wait_for(self.locks[lock_name].acquire(), 3.0)
+
+        except TimeoutError:
+            raise DistLockCancelled("Unable to acquire local lock")
+
+        errors = []
+        if self.role == Role.SLAVE:
+            async with self.receiving:
+                try:
+                    ticket, receivers = await self.send_command(
+                        f"LOCK {lock_name}", [self.master_node]
+                    )
+                    result, responses = await self._await_receivers(
+                        ticket, receivers, raise_on_error=True
+                    )
+                    if "BUSY" in responses:
+                        errors.append("master_busy")
+                except asyncio.CancelledError:
+                    errors.append("lock_cancelled")
+                except IncompleteClusterResponses:
+                    errors.append("master_not_reachable")
+
+        if "master_busy" in errors:
+            self.locks[lock_name].release()
+            return await self.acquire_lock(lock_name)
+
+        if "lock_cancelled" in errors:
+            self.locks[lock_name].release()
+            errors.append("master_not_reachable")
+
+        if "master_not_reachable" in errors:
+            self.locks[lock_name].release()
+            async with self.receiving:
+                ticket, receivers = await self.send_command("STATUS", "*")
+                await self._await_receivers(ticket, receivers, raise_on_error=False)
+            raise DistLockCancelled("Master re-election")
+
+        IN_MEMORY_DB["tasks"] = []
+        self._context_token = CONTEXT_TRANSACTION.set(ntime_utc_now())
 
     async def request_files(self, files: str | list, peers="*"):
         files = ensure_list(files)
@@ -600,44 +669,6 @@ class Cluster:
                             f.write(payload)
             except Exception as e:
                 logger.error(f"<request_files> unhandled error: {e}")
-
-    async def acquire_lock(self) -> str:
-        try:
-            await asyncio.wait_for(self.lock.acquire(), 3.0)
-        except TimeoutError:
-            raise DistLockCancelled("Unable to acquire local lock")
-
-        errors = []
-        if self.role == Role.SLAVE:
-            async with self.receiving:
-                try:
-                    ticket, receivers = await self.send_command(
-                        "LOCK", [self.master_node]
-                    )
-                    result, responses = await self._await_receivers(
-                        ticket, receivers, raise_on_error=True
-                    )
-                    if "BUSY" in responses:
-                        errors.append("master_busy")
-                except asyncio.CancelledError:
-                    errors.append("lock_cancelled")
-                except IncompleteClusterResponses:
-                    errors.append("master_not_reachable")
-
-        if "master_busy" in errors:
-            self.lock.release()
-            return await self.acquire_lock()
-
-        if "lock_cancelled" in errors:
-            self.lock.release()
-            errors.append("master_not_reachable")
-
-        if "master_not_reachable" in errors:
-            self.lock.release()
-            async with self.receiving:
-                ticket, receivers = await self.send_command("STATUS", "*")
-                await self._await_receivers(ticket, receivers, raise_on_error=False)
-            raise DistLockCancelled("Master re-election")
 
     async def run(self, shutdown_trigger) -> None:
         server = await asyncio.start_server(

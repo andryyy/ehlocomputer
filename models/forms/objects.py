@@ -6,7 +6,7 @@ from utils.helpers import ensure_list, to_unique_sorted_str_list
 from uuid import uuid4
 
 
-class ObjectPatchDeskForm(BaseModel):
+class ObjectPatchContactForm(BaseModel):
     @field_validator("email", mode="before")
     def email_validator(cls, v):
         if v in [None, ""]:
@@ -66,7 +66,7 @@ class ObjectPatchDeskForm(BaseModel):
     )
 
 
-class ObjectPatchThingForm(BaseModel):
+class ObjectPatchCalendarForm(BaseModel):
     @field_validator("email", mode="before")
     def email_validator(cls, v):
         if v in [None, ""]:
@@ -93,7 +93,7 @@ class ObjectPatchThingForm(BaseModel):
     )
 
 
-class ObjectPatchRoomForm(BaseModel):
+class ObjectPatchAppointmentForm(BaseModel):
     @field_validator("email", mode="before")
     def email_validator(cls, v):
         if v in [None, ""]:

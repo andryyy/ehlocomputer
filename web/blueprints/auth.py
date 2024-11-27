@@ -5,7 +5,7 @@ import qrcode.image.svg
 
 from base64 import b64decode, b64encode
 from config import defaults
-from config.cluster import cluster
+from config.cluster import ClusterLock
 from config.database import IN_MEMORY_DB
 from models import auth as auth_model
 from pydantic import ValidationError, TypeAdapter
@@ -62,6 +62,12 @@ async def login_request_confirm(request_token: str):
     session["request_token"] = None
 
     return "", 200, {"HX-Redirect": "/profile", "HX-Refresh": False}
+
+
+@blueprint.route("/register/request/confirm/<login>", methods=["POST", "GET"])
+@wrappers.acl("system")
+async def register_request_confirm_modal(login: str):
+    return await render_template("auth/register/request/confirm.html")
 
 
 # As shown to user that is currently logged in
@@ -328,6 +334,11 @@ async def register_token():
             token,
             120,
         )
+        await ws_htmx(
+            "system",
+            "beforeend",
+            f'<div id="auth-permit" hx-trigger="load" hx-get="/auth/register/request/confirm/{request_data.login}"></div>',
+        )
 
     except ValidationError as e:
         return validation_error(e.errors())
@@ -474,10 +485,10 @@ async def register_webauthn():
 
     try:
         if not appending_passkey:
-            async with cluster:
+            async with ClusterLock("main"):
                 await Users.create(_enforce_uuid=user_id).user(data={"login": login})
 
-        async with cluster:
+        async with ClusterLock("main"):
             await Users.create.credential(
                 data={
                     "id": verification.credential_id,
@@ -584,7 +595,7 @@ async def auth_login_verify():
         if matched_user_credential.sign_count != 0:
             data["sign_count"] = verification.new_sign_count
 
-        async with cluster:
+        async with ClusterLock("main"):
             await Users.user(login=login).patch_credential(
                 hex_id=credential.raw_id.hex(),
                 data=data,
