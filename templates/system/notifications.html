@@ -1,0 +1,48 @@
+{% if not request.headers.get("Hx-Request") %}
+  {% extends "base.html" %}
+{% endif %}
+
+{% block breadcrumb %}
+<nav aria-label="breadcrumb" id="nav-breadcrumb" hx-swap-oob="true">
+  <ul>
+    <li>System</li>
+    <li><a href="#" hx-target="#body-main" hx-get="{{ request.path }}">Notifications</a></li>
+  </ul>
+</nav>
+{% endblock breadcrumb %}
+
+{% block body %}
+
+<h4>System notifications</h4>
+
+<article id="system-notifications">
+  <div class="overflow-auto">
+  <table>
+    <tbody>
+      <tr>
+        <th scope="row" colspan="3"><b>Cluster peer status</b></th>
+      </tr>
+      {% for k, v in data.notifications.peer_failures.items() %}
+      <tr>
+        <th scope="row"><samp>{{ k }}</samp></th>
+        <td _="on htmx:afterRequest[event.detail.successful==true]
+          put 0 into me
+        end
+        ">
+          {% if v > CLUSTER_PEER_MAX_FAILURES %}
+            <b class="color-red">Peer failed</b> - <a href="#" hx-post="/system/cluster/reset-failed-peer" hx-vars='{"peer": "{{- k -}}"}'>reset</a>
+          {% elif v > 0 %}
+            <b class="color-pumpkin">{{ v }}</b> - <a href="#" hx-post="/system/cluster/reset-failed-peer" hx-vars='{"peer": "{{- k -}}"}'>reset</a>
+          {% else %}
+            {{ v }}
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</article>
+
+{% endblock body %}
+

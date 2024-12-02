@@ -130,23 +130,6 @@ table td a[role="button"] {
 /*
 # Notifications
 */
-#system-notifications {
-  width: fit-content;
-  position: fixed;
-  max-height: 30%;
-  overflow-y: scroll;
-  right: .25rem;
-  top: .25rem;
-}
-.system-notification {
-  background-color: #{$purple-550};
-  color: #{$slate-50};
-  top: var(--pico-spacing);
-  padding: var(--pico-form-element-spacing-vertical) .5rem;
-  margin-bottom: .25rem;
-  font-size: 0.875rem;
-  cursor: pointer;
-}
 #notification-container {
   position: fixed;
   left: .25rem;

@@ -2990,25 +2990,6 @@ table td a[role=button] {
 /*
 # Notifications
 */
-#system-notifications {
-  width: fit-content;
-  position: fixed;
-  max-height: 30%;
-  overflow-y: scroll;
-  right: 0.25rem;
-  top: 0.25rem;
-}
-
-.system-notification {
-  background-color: #aa40bf;
-  color: #eff1f4;
-  top: var(--pico-spacing);
-  padding: var(--pico-form-element-spacing-vertical) 0.5rem;
-  margin-bottom: 0.25rem;
-  font-size: 0.875rem;
-  cursor: pointer;
-}
-
 #notification-container {
   position: fixed;
   left: 0.25rem;

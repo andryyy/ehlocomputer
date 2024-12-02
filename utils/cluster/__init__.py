@@ -81,17 +81,23 @@ class Transaction:
     @property
     def latest(self):
         with self.lock:
-            return self._process_data(read_n_to_last_line(self.trans_fn, n=1))
+            latest_commit = read_n_to_last_line(self.commits_fn, n=1)
+            if latest_commit:
+                trans_id, _ = latest_commit.strip().split(":")
+                return trans_id
+            return "0.0"
 
     def search(self, trans_id: float, include_following: bool = False):
         record = False
         after = []
+
         with self.lock:
+            with open(self.commits_fn, "r") as f:
+                commited_trans_ids = [t.strip().split(":")[0] for t in f.readlines()]
+
             for line in fileinput.input(self.trans_fn):
-                if line.startswith("#commit"):
-                    continue
                 if not record:
-                    if f"{trans_id}:" in line:
+                    if f"{trans_id}:" in line and trans_id in commited_trans_ids:
                         record = True
                         after.append(self._process_data(line))
                 else:
@@ -150,12 +156,17 @@ class Cluster:
         self.role = Role.SLAVE
         self.started = ntime_utc_now()
         self.tickets = dict()
-        self._failed_peers = set()
-        self._established = None
+        self.server_init = False
 
         IN_MEMORY_DB["tasks"] = []
+        IN_MEMORY_DB["peer_failures"] = dict()
 
     def _set_master_node(self):
+        def _destroy():
+            self.master_node = None
+            self.role = Role.SLAVE
+            self.server_init = False
+
         established = [k for k, v in self.connections.items() if v["meta"]]
         n_online_peers = len(established) + 1
         n_all_peers = len(defaults.CLUSTER_PEERS_THEM) + 1
@@ -164,6 +175,7 @@ class Cluster:
 
         if not (n_online_peers >= (51 / 100) * n_all_peers):
             logger.info("<set_master_node> skipping election, not enough peers")
+            _destroy()
             return
 
         master_node, started = min(
@@ -181,6 +193,7 @@ class Cluster:
                 logger.info(
                     f"<set_master_node> elected self ({defaults.CLUSTER_PEERS_ME}) as master"
                 )
+                self.server_init = True
                 self.master_node = defaults.CLUSTER_PEERS_ME
                 self.role = Role.MASTER
 
@@ -194,12 +207,14 @@ class Cluster:
                 return
 
             if their_master != master_node:
+                _destroy()
                 logger.warning(
                     f"<set_master_node> not electing {master_node}: node reports different master (are we still joining or changed our swarm size?)"
                 )
                 return
 
             if self.master_node != master_node:
+                self.server_init = True
                 self.master_node = master_node
                 self.role = Role.SLAVE
                 logger.info(
@@ -237,7 +252,7 @@ class Cluster:
             "META",
             f"NAME {defaults.NODENAME}",
             f"STARTED {self.started}",
-            f"LTRANS {transactions.latest[0]}",
+            f"LTRANS {transactions.latest}",
             "MASTER {master_node}".format(master_node=self.master_node or "ELECTING"),
             f"BIND {defaults.CLUSTER_PEERS_ME}",
             f"HTTP {defaults.HYPERCORN_BIND}",
@@ -303,6 +318,7 @@ class Cluster:
         while True:
             try:
                 ticket, cmd, peer_info = await self._recv((reader, writer))
+                IN_MEMORY_DB["peer_failures"][peer_info["bind"]] = 0
                 if ((ntime_utc_now() - float(ticket)) > 5.0) and not cmd.startswith(
                     "RTASK"
                 ):
@@ -315,14 +331,21 @@ class Cluster:
                     break
 
             try:
-                if cmd == "INIT":
+                if not self.server_init and not any(
+                    map(lambda s: cmd.startswith(s), ["ACK", "STATUS", "SYNC", "INIT"])
+                ):
+                    await self.send_command(
+                        "ACK CRIT:NOT_READY", [peer_info["bind"]], ticket=ticket
+                    )
+
+                elif cmd == "INIT":
                     await self.send_command("ACK", [peer_info["bind"]], ticket=ticket)
 
                 # A task starting with "R" indicates a resync
                 elif cmd.startswith("TASK") or cmd.startswith("RTASK"):
                     if (
                         not cmd.startswith("RTASK")
-                        and transactions.latest[0] != peer_info["ltrans"]
+                        and transactions.latest != peer_info["ltrans"]
                     ):
                         await self.send_command(
                             "ACK CRIT:LTRANS_MISMATCH",
@@ -375,6 +398,9 @@ class Cluster:
 
                             transactions.write(ticket, cmd)
 
+                            if cmd.startswith("RTASK"):
+                                await transactions.commit(ticket)
+
                             await self.send_command(
                                 "ACK", [peer_info["bind"]], ticket=ticket
                             )
@@ -395,8 +421,8 @@ class Cluster:
                     await self.send_command("ACK", [peer_info["bind"]], ticket=ticket)
 
                 elif cmd == "SYNC":
-                    if transactions.latest[0] != peer_info["ltrans"]:
-                        if peer_info["ltrans"] > transactions.latest[0]:
+                    if transactions.latest != peer_info["ltrans"]:
+                        if peer_info["ltrans"] > transactions.latest:
                             await self.send_command(
                                 "ACK CRIT:SLAVE_MORE_RECENT",
                                 [peer_info["bind"]],
@@ -422,7 +448,7 @@ class Cluster:
                             "ACK LATEST", [peer_info["bind"]], ticket=ticket
                         )
 
-                elif cmd.startswith("FILE"):
+                elif cmd.startswith("FILEGET"):
                     _, _, payload = cmd.partition(" ")
                     if not is_path_within_cwd(payload):
                         await self.send_command(
@@ -448,19 +474,31 @@ class Cluster:
                     if lock_name == "":
                         lock_name = "main"
 
-                    self.locks[lock_name].release()
+                    self.locks[lock_name]["lock"].release()
+                    self.locks[lock_name]["ticket"] = None
+
                     await self.send_command("ACK", [peer_info["bind"]], ticket=ticket)
 
                 elif cmd.startswith("LOCK"):
                     _, _, lock_name = cmd.partition(" ")
                     if lock_name == "":
                         lock_name = "main"
+
                     if not lock_name in self.locks:
-                        self.locks[lock_name] = asyncio.Lock()
+                        self.locks[lock_name] = {
+                            "lock": asyncio.Lock(),
+                            "ticket": None
+                        }
 
                     try:
-                        await asyncio.wait_for(self.locks[lock_name].acquire(), 0.45)
+                        await asyncio.wait_for(self.locks[lock_name]["lock"].acquire(), 0.45)
+                        self.locks[lock_name]["ticket"] = ticket
+
                     except TimeoutError:
+                        if ntime_utc_now() - float(self.locks[lock_name]["ticket"]) > 5.0:
+                            with suppress(RuntimeError):
+                                self.locks[lock_name]["lock"].release()
+                                self.locks[lock_name]["ticket"] = None
                         await self.send_command(
                             "ACK BUSY", [peer_info["bind"]], ticket=ticket
                         )
@@ -499,11 +537,20 @@ class Cluster:
         successful_receivers = []
 
         for peer in receivers:
+            if peer not in IN_MEMORY_DB["peer_failures"]:
+                IN_MEMORY_DB["peer_failures"][peer] = 0
+            elif IN_MEMORY_DB["peer_failures"][peer] > defaults.CLUSTER_PEER_MAX_FAILURES:
+                logger.warning(
+                    f"<send_command> not trying peer {peer} due to {IN_MEMORY_DB["peer_failures"][peer]} failed connection attempts"
+                )
+                continue
+
             if not peer in self.connections:
                 with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as sock:
                     sock.settimeout(defaults.CLUSTER_PEERS_TIMEOUT)
                     if sock.connect_ex((peer, self.port)) != 0:
                         logger.warning(f"<{peer}> Connection timed out")
+                        IN_MEMORY_DB["peer_failures"][peer] += 1
                         continue
 
                 self.connections[peer] = {
@@ -516,12 +563,11 @@ class Cluster:
                     self.connections[peer]["streams"] = await asyncio.open_connection(
                         peer, self.port, ssl=get_ssl_context("client")
                     )
-                    with suppress(KeyError):
-                        self._failed_peers.remove(peer)
+                    IN_MEMORY_DB["peer_failures"][peer] = 0
                 except ConnectionRefusedError:
-                    if peer not in self._failed_peers:
+                    if IN_MEMORY_DB["peer_failures"][peer] == 0:
                         logger.warning(f"<{peer}> ConnectionRefusedError")
-                        self._failed_peers.add(peer)
+                    IN_MEMORY_DB["peer_failures"][peer] += 1
 
             if self.connections[peer]["streams"]:
                 try:
@@ -530,6 +576,7 @@ class Cluster:
                 except Exception as e:
                     logger.error(f"<{peer}> disconnected ({type(e)}: {e})")
                     del self.connections[peer]
+                    self._set_master_node()
 
         return ticket, successful_receivers
 
@@ -538,8 +585,6 @@ class Cluster:
 
         if lock_name == "":
             lock_name = "main"
-        if not lock_name in self.locks:
-            self.locks[lock_name] = asyncio.Lock()
 
         if IN_MEMORY_DB["tasks"] and not errors:
             transaction_id = str(CONTEXT_TRANSACTION.get())
@@ -556,7 +601,7 @@ class Cluster:
                             transaction_id, receivers, raise_on_error=True
                         )
                         transactions.write(transaction_id, task)
-                    except:
+                    except IncompleteClusterResponses:
                         errors.append("remote_transaction_failed")
                         break
 
@@ -566,7 +611,7 @@ class Cluster:
                     )
                     await self._await_receivers(
                         transaction_id, receivers, raise_on_error=True
-                    )
+                    )  # not raising, todo
                     await transactions.commit(transaction_id)
 
         CONTEXT_TRANSACTION.reset(self._context_token)
@@ -580,11 +625,12 @@ class Cluster:
                     ret, responses = await self._await_receivers(
                         ticket, receivers, raise_on_error=True
                     )
-                except Exception:
+                except IncompleteClusterResponses:
                     errors.append("master_not_reachable")
 
         with suppress(RuntimeError):
-            self.locks[lock_name].release()
+            self.locks[lock_name]["lock"].release()
+            self.locks[lock_name]["ticket"] = None
 
         if "remote_transaction_failed" in errors:
             logger.error(
@@ -602,9 +648,13 @@ class Cluster:
             if lock_name == "":
                 lock_name = "main"
             if not lock_name in self.locks:
-                self.locks[lock_name] = asyncio.Lock()
+                self.locks[lock_name] = {
+                    "lock": asyncio.Lock(),
+                    "ticket": None,
+                }
 
-            await asyncio.wait_for(self.locks[lock_name].acquire(), 3.0)
+            await asyncio.wait_for(self.locks[lock_name]["lock"].acquire(), 3.0)
+            self.locks[lock_name]["ticket"] = str(ntime_utc_now())
 
         except TimeoutError:
             raise DistLockCancelled("Unable to acquire local lock")
@@ -613,6 +663,9 @@ class Cluster:
         if self.role == Role.SLAVE:
             async with self.receiving:
                 try:
+                    if not self.master_node:
+                        raise IncompleteClusterResponses
+
                     ticket, receivers = await self.send_command(
                         f"LOCK {lock_name}", [self.master_node]
                     )
@@ -627,15 +680,15 @@ class Cluster:
                     errors.append("master_not_reachable")
 
         if "master_busy" in errors:
-            self.locks[lock_name].release()
+            self.locks[lock_name]["lock"].release()
             return await self.acquire_lock(lock_name)
 
         if "lock_cancelled" in errors:
-            self.locks[lock_name].release()
+            self.locks[lock_name]["lock"].release()
             errors.append("master_not_reachable")
 
         if "master_not_reachable" in errors:
-            self.locks[lock_name].release()
+            self.locks[lock_name]["lock"].release()
             async with self.receiving:
                 ticket, receivers = await self.send_command("STATUS", "*")
                 await self._await_receivers(ticket, receivers, raise_on_error=False)
@@ -653,7 +706,9 @@ class Cluster:
                         logger.error(f"<request_files> file not within cwd: {file}")
                         continue
 
-                    ticket, receivers = await self.send_command(f"FILE {file}", peers)
+                    ticket, receivers = await self.send_command(
+                        f"FILEGET {file}", peers
+                    )
                     _, responses = await self._await_receivers(
                         ticket, receivers, raise_on_error=True
                     )
@@ -667,6 +722,10 @@ class Cluster:
                         payload = zlib.decompress(base64.b64decode(r_data))
                         with open(file_dest, "wb") as f:
                             f.write(payload)
+            except IncompleteClusterResponses:
+                logger.error(
+                    f"<request_files> sending command to peers '{peers}'' failed"
+                )
             except Exception as e:
                 logger.error(f"<request_files> unhandled error: {e}")
 
@@ -685,7 +744,6 @@ class Cluster:
             for cmd in ["INIT", "STATUS"]:
                 ticket, receivers = await self.send_command(cmd, "*")
                 await self._await_receivers(ticket, receivers, raise_on_error=False)
-
             try:
                 ticket, receivers = await self.send_command("SYNC", [self.master_node])
                 _, responses = await self._await_receivers(
@@ -694,7 +752,7 @@ class Cluster:
                 if responses:
                     logger.success(f"<sync> {responses[0]}")
 
-            except:
+            except IncompleteClusterResponses:
                 shutdown_trigger.set()
                 for p, _ in self.connections.items():
                     r, w = self.connections[p]["streams"]

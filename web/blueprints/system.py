@@ -4,9 +4,10 @@ import json
 
 from config import defaults
 from config.cluster import ClusterLock, cluster
+from config.database import IN_MEMORY_DB
 from datetime import datetime
-from models.tables import TableSearchHelper
 from models import system as system_model
+from models.tables import TableSearchHelper
 from pydantic import ValidationError
 from quart import Blueprint, current_app as app, render_template, request, session
 from tools.system import get_system_settings, list_application_log_files
@@ -24,11 +25,46 @@ def load_system_defaults():
         for schema_type, v in system_model.model_classes["forms"].items()
     }
     if cluster.master_node != defaults.CLUSTER_PEERS_ME:
-        current_master = cluster.connections[cluster.master_node]["meta"]["name"]
+        try:
+            current_master = cluster.connections[cluster.master_node]["meta"]["name"]
+        except:
+            current_master = "Starting..."
     else:
         current_master = defaults.NODENAME
 
     return {"schemas": schemas, "current_master": current_master}
+
+
+@blueprint.route("/cluster/reset-failed-peer", methods=["POST"])
+@wrappers.acl("system")
+async def cluster_reset_failed_peer():
+    peer = request.form_parsed.get("peer")
+    if peer and peer in IN_MEMORY_DB["peer_failures"]:
+        IN_MEMORY_DB["peer_failures"][peer] = 0
+        return trigger_notification(
+            level="success",
+            response_body="",
+            response_code=204,
+            title="Peer reset",
+            message="Peer failed counter was reset",
+        )
+    else:
+        return trigger_notification(
+            level="error",
+            response_body="",
+            response_code=409,
+            title="Unknown peer",
+            message="Peer was not reset",
+        )
+
+
+@blueprint.route("/notifications", methods=["GET"])
+@wrappers.acl("system")
+async def information():
+    notifications = {"peer_failures": IN_MEMORY_DB["peer_failures"]}
+    return await render_template(
+        "system/notifications.html", data={"notifications": notifications}
+    )
 
 
 @blueprint.route("/settings", methods=["PATCH"])
