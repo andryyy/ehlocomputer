@@ -209,7 +209,9 @@ class Cluster:
             if their_master != master_node:
                 _destroy()
                 logger.warning(
-                    f"<set_master_node> not electing {master_node}: node reports different master (are we still joining or changed our swarm size?)"
+                    f"<set_master_node> not electing {master_node}:"
+                    + "node reports different master (are we still joining or changed our swarm size?) - "
+                    + "waiting for change"
                 )
                 return
 
@@ -296,9 +298,6 @@ class Cluster:
         else:
             self.connections[meta_dict["bind"]]["meta"] = meta_dict
 
-        if cmd != "INIT":
-            self._set_master_node()
-
         self.log_rx(
             "{bind}[{node}]".format(bind=meta_dict["bind"], node=meta_dict["name"]),
             f"Ticket {ticket}, Command {cmd}",
@@ -318,16 +317,17 @@ class Cluster:
         while True:
             try:
                 ticket, cmd, peer_info = await self._recv((reader, writer))
+                self._set_master_node()
                 IN_MEMORY_DB["peer_failures"][peer_info["bind"]] = 0
                 if ((ntime_utc_now() - float(ticket)) > 5.0) and not cmd.startswith(
                     "RTASK"
                 ):
                     continue
-
             except asyncio.exceptions.IncompleteReadError:
                 async with self.receiving:
                     ticket, receivers = await self.send_command("STATUS", "*")
                     await self._await_receivers(ticket, receivers, raise_on_error=False)
+                    self._set_master_node()
                     break
 
             try:
@@ -337,9 +337,6 @@ class Cluster:
                     await self.send_command(
                         "ACK CRIT:NOT_READY", [peer_info["bind"]], ticket=ticket
                     )
-
-                elif cmd == "INIT":
-                    await self.send_command("ACK", [peer_info["bind"]], ticket=ticket)
 
                 # A task starting with "R" indicates a resync
                 elif cmd.startswith("TASK") or cmd.startswith("RTASK"):
@@ -397,7 +394,6 @@ class Cluster:
                                     await Objects.object(**init_kwargs).delete()
 
                             transactions.write(ticket, cmd)
-
                             if cmd.startswith("RTASK"):
                                 await transactions.commit(ticket)
 
@@ -417,10 +413,11 @@ class Cluster:
                     await transactions.commit(ticket)
                     await self.send_command("ACK", [peer_info["bind"]], ticket=ticket)
 
-                elif cmd == "STATUS":
+                elif (cmd == "STATUS" or cmd == "INIT"):
                     await self.send_command("ACK", [peer_info["bind"]], ticket=ticket)
 
                 elif cmd == "SYNC":
+                    assert self.role == Role.MASTER
                     if transactions.latest != peer_info["ltrans"]:
                         if peer_info["ltrans"] > transactions.latest:
                             await self.send_command(
@@ -495,7 +492,7 @@ class Cluster:
                         self.locks[lock_name]["ticket"] = ticket
 
                     except TimeoutError:
-                        if ntime_utc_now() - float(self.locks[lock_name]["ticket"]) > 5.0:
+                        if ntime_utc_now() - float(self.locks[lock_name]["ticket"]) > 25.0:
                             with suppress(RuntimeError):
                                 self.locks[lock_name]["lock"].release()
                                 self.locks[lock_name]["ticket"] = None
@@ -576,7 +573,6 @@ class Cluster:
                 except Exception as e:
                     logger.error(f"<{peer}> disconnected ({type(e)}: {e})")
                     del self.connections[peer]
-                    self._set_master_node()
 
         return ticket, successful_receivers
 
@@ -740,17 +736,26 @@ class Cluster:
 
         logger.info(f"Listening on {self.port} on address {" and ".join(self.host)}...")
 
+        ret = False
+        while not ret or not self.server_init:
+            async with self.receiving:
+                ticket, receivers = await self.send_command("INIT", "*")
+                ret, responses = await self._await_receivers(ticket, receivers, raise_on_error=False)
+                if ret:
+                    self._set_master_node()
+                if not self.server_init:
+                    await asyncio.sleep(1.0)
+
         async with self.receiving:
-            for cmd in ["INIT", "STATUS"]:
-                ticket, receivers = await self.send_command(cmd, "*")
-                await self._await_receivers(ticket, receivers, raise_on_error=False)
             try:
                 ticket, receivers = await self.send_command("SYNC", [self.master_node])
                 _, responses = await self._await_receivers(
                     ticket, receivers, raise_on_error=True
                 )
                 if responses:
-                    logger.success(f"<sync> {responses[0]}")
+                    if responses[0] != "LATEST":
+                        logger.success(f"<server_init> resynced; result: {responses[0]}")
+                    logger.info(f"<server_init> NSYNC (baby, we are synced)")
 
             except IncompleteClusterResponses:
                 shutdown_trigger.set()

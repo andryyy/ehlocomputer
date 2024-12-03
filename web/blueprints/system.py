@@ -58,13 +58,11 @@ async def cluster_reset_failed_peer():
         )
 
 
-@blueprint.route("/notifications", methods=["GET"])
+@blueprint.route("/status", methods=["GET"])
 @wrappers.acl("system")
-async def information():
-    notifications = {"peer_failures": IN_MEMORY_DB["peer_failures"]}
-    return await render_template(
-        "system/notifications.html", data={"notifications": notifications}
-    )
+async def status():
+    status = {"peer_failures": IN_MEMORY_DB["peer_failures"]}
+    return await render_template("system/status.html", data={"status": status})
 
 
 @blueprint.route("/settings", methods=["PATCH"])

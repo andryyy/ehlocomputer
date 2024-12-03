@@ -6,23 +6,23 @@
 <nav aria-label="breadcrumb" id="nav-breadcrumb" hx-swap-oob="true">
   <ul>
     <li>System</li>
-    <li><a href="#" hx-target="#body-main" hx-get="{{ request.path }}">Notifications</a></li>
+    <li><a href="#" hx-target="#body-main" hx-get="{{ request.path }}">Status</a></li>
   </ul>
 </nav>
 {% endblock breadcrumb %}
 
 {% block body %}
 
-<h4>System notifications</h4>
+<h4>System Status</h4>
 
-<article id="system-notifications">
+<article id="system-status">
   <div class="overflow-auto">
   <table>
     <tbody>
       <tr>
         <th scope="row" colspan="3"><b>Cluster peer status</b></th>
       </tr>
-      {% for k, v in data.notifications.peer_failures.items() %}
+      {% for k, v in data.status.peer_failures.items() %}
       <tr>
         <th scope="row"><samp>{{ k }}</samp></th>
         <td _="on htmx:afterRequest[event.detail.successful==true]
