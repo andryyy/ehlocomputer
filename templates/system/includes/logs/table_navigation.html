@@ -32,7 +32,7 @@
         <code class="paging {{ "disabled" if data.page == data.pages else "pointer" }}" data-value="{{ data.pages }}">❱❱</code>
       </div>
       <div>
-        #<b><span id="system-logs-count">{{- data.elements -}}</span></b> elements
+        <b><span id="system-logs-count">{{- data.page_size if data.elements >= data.page_size else data.elements -}}/{{- data.elements -}}</span></b> elements
       </div>
     </div>
     <br>

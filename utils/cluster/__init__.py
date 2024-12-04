@@ -200,9 +200,10 @@ class Cluster:
         else:
             their_master = self.connections[master_node]["meta"]["master"]
 
-            if their_master == "ELECTING":
+            if their_master == "?CONFUSED":
+                _destroy()
                 logger.info(
-                    f"<set_master_node> potential master {master_node} is still electing"
+                    f"<set_master_node> potential master {master_node} is still confused, waiting"
                 )
                 return
 
@@ -211,7 +212,7 @@ class Cluster:
                 logger.warning(
                     f"<set_master_node> not electing {master_node}:"
                     + "node reports different master (are we still joining or changed our swarm size?) - "
-                    + "waiting for change"
+                    + "waiting"
                 )
                 return
 
@@ -254,10 +255,9 @@ class Cluster:
             "META",
             f"NAME {defaults.NODENAME}",
             f"STARTED {self.started}",
-            f"LTRANS {transactions.latest}",
-            "MASTER {master_node}".format(master_node=self.master_node or "ELECTING"),
+            f"COMMIT {transactions.latest}",
+            "MASTER {master_node}".format(master_node=self.master_node or "?CONFUSED"),
             f"BIND {defaults.CLUSTER_PEERS_ME}",
-            f"HTTP {defaults.HYPERCORN_BIND}",
         ]
 
         buffer_bytes = " ".join(buffer_data).encode("utf-8")
@@ -281,10 +281,9 @@ class Cluster:
         patterns = [
             r"NAME (?P<name>\S+)",
             r"STARTED (?P<started>\S+)",
-            r"LTRANS (?P<ltrans>\S+)",
+            r"COMMIT (?P<commit>\S+)",
             r"MASTER (?P<master>\S+)",
             r"BIND (?P<bind>\S+)",
-            r"HTTP (?P<http>\S+)",
         ]
 
         match = re.search(" ".join(patterns), meta)
@@ -342,10 +341,10 @@ class Cluster:
                 elif cmd.startswith("TASK") or cmd.startswith("RTASK"):
                     if (
                         not cmd.startswith("RTASK")
-                        and transactions.latest != peer_info["ltrans"]
+                        and transactions.latest != peer_info["commit"]
                     ):
                         await self.send_command(
-                            "ACK CRIT:LTRANS_MISMATCH",
+                            "ACK CRIT:COMMIT_MISMATCH",
                             [peer_info["bind"]],
                             ticket=ticket,
                         )
@@ -418,8 +417,8 @@ class Cluster:
 
                 elif cmd == "SYNC":
                     assert self.role == Role.MASTER
-                    if transactions.latest != peer_info["ltrans"]:
-                        if peer_info["ltrans"] > transactions.latest:
+                    if transactions.latest != peer_info["commit"]:
+                        if peer_info["commit"] > transactions.latest:
                             await self.send_command(
                                 "ACK CRIT:SLAVE_MORE_RECENT",
                                 [peer_info["bind"]],
@@ -427,7 +426,7 @@ class Cluster:
                             )
                         else:
                             matches = transactions.search(
-                                trans_id=peer_info["ltrans"], include_following=True
+                                trans_id=peer_info["commit"], include_following=True
                             )
                             for t, task in matches[1:]:
                                 await self.send_command(
@@ -755,7 +754,7 @@ class Cluster:
                 if responses:
                     if responses[0] != "LATEST":
                         logger.success(f"<server_init> resynced; result: {responses[0]}")
-                    logger.info(f"<server_init> NSYNC (baby, we are synced)")
+                    logger.info(f"<server_init> Server is synchronized")
 
             except IncompleteClusterResponses:
                 shutdown_trigger.set()
