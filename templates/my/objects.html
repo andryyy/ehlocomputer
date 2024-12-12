@@ -5,7 +5,7 @@
 {% block breadcrumb %}
 <nav aria-label="breadcrumb" id="nav-breadcrumb" hx-swap-oob="true">
   <ul>
-    <li>Objects</li>
+    <li>Personal objects</li>
     <li><a href="#" hx-target="#body-main" hx-get="{{ request.path }}">{{ request.view_args.get("object_type")|capitalize }}</a></li>
   </ul>
 </nav>
@@ -27,7 +27,7 @@
         trigger submit on #{{ request.view_args.get("object_type") }}-table-search
       end
       "
-      hx-post="/objects/{{ request.view_args.get("object_type") }}"
+      hx-post="/my/{{ request.view_args.get("object_type") }}"
       id="{{ request.view_args.get("object_type") }}-form">
         <fieldset>
           <label for="name">Name
@@ -43,7 +43,7 @@
   </article>
 
   <article id="{{ request.view_args.get("object_type") }}-full-table">
-    {% include "objects/includes/table.html" %}
+    {% include "my/includes/table.html" %}
   </article>
 </div>
 

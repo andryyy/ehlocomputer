@@ -3,7 +3,7 @@
 
 <tr id="system-users-table-navigation-row">
   <td class="table-navigation" data-loading-disable colspan="2">
-    <div class="flex-space-between">
+    <div class="flex flex-space-between">
       <div>
         <select name="page_size" form="system-users-table-search" _="on change trigger submit on #system-users-table-search">
           <option {{ "selected" if data.page_size == 1 }} value="1">1</option>
@@ -24,7 +24,7 @@
         <small>Page</small>
       </div>
     </div>
-    <div class="flex-space-between">
+    <div class="flex flex-space-between">
       <div _="on click from <.paging:not(.disabled)/> in me set value of <[name='page']/> in closest <tr/> to target's @data-value then trigger submit on #system-users-table-search end">
         <code class="paging {{ "disabled" if data.page <= 1 else "pointer" }}" data-value="1">❰❰</code>
         <code class="paging {{ "disabled" if data.page <= 1 else "pointer" }}" data-value="{{ data.page - 1 }}">❬</code>

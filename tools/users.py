@@ -21,19 +21,21 @@ def _create_credentials_mapping(credentials: dict):
 
 class Users:
     def __init__(self):
-        pass
+        self.db_params = evaluate_db_params()
 
     class create:
         def __init__(self, *args, **kwargs):
-            self.db_params = evaluate_db_params(kwargs)
-            self._enforce_uuid = kwargs.get("_enforce_uuid")
+            self.db_params = evaluate_db_params()
+
+            for key, value in kwargs.items():
+                setattr(self, key, value)
 
         @cluster_task("users_create_user", enforce_uuid=True)
         async def user(self, data: dict):
             validated_data = users_model.UserAdd.parse_obj(data).dict()
 
-            if self._enforce_uuid:
-                validated_data["id"] = self._enforce_uuid
+            if self.uuid:
+                validated_data["id"] = self.uuid
 
             async with TinyDB(**self.db_params) as db:
                 name_conflict = db.table("users").search(
@@ -45,34 +47,12 @@ class Users:
 
             return validated_data["id"]
 
-        @cluster_task("users_create_credential", enforce_uuid=True)
-        async def credential(data: dict, assign_user_id: str | None = None):
-            validated_data = auth_model.AddCredential.parse_obj(data).dict()
-
-            async with TinyDB(**self.db_params) as db:
-                if assign_user_id:
-                    user = db.table("users").get(Query().id == assign_user_id)
-                    if not user:
-                        raise ValueError(
-                            "name",
-                            "The provided user ID for auto assignment does not exist, credential was not created",
-                        )
-
-                db.table("credentials").insert(validated_data)
-
-                if assign_user_id:
-                    user["credentials"].append(validated_data["id"])
-                    db.table("users").update(
-                        {"credentials": user["credentials"]},
-                        Query().id == assign_user_id,
-                    )
-
-            return validated_data["id"]
-
     class user:
         def __init__(self, *args, **kwargs):
-            self.db_params = evaluate_db_params(kwargs)
-            self.init_kwargs = kwargs
+            self.db_params = evaluate_db_params()
+
+            for key, value in kwargs.items():
+                setattr(self, key, value)
 
             users_attr = users_model._Users_attr.parse_obj(kwargs)
 
@@ -105,6 +85,19 @@ class Users:
                 deleted = db.table("users").remove(self._query_filter)
                 return user["id"]
 
+        @cluster_task("users_user_create_credential")
+        async def create_credential(self, data: dict):
+            validated_data = auth_model.AddCredential.parse_obj(data).dict()
+            async with TinyDB(**self.db_params) as db:
+                user = db.table("users").get(self._query_filter)
+                db.table("credentials").insert(validated_data)
+                user["credentials"].append(validated_data["id"])
+                db.table("users").update(
+                    {"credentials": user["credentials"]},
+                    self._query_filter,
+                )
+                return validated_data["id"]
+
         @cluster_task("users_user_delete_credential")
         @validate_call
         async def delete_credential(
@@ -113,7 +106,7 @@ class Users:
             async with TinyDB(**self.db_params) as db:
                 user = db.table("users").get(self._query_filter)
                 if hex_id in user["credentials"]:
-                    del user["credentials"][hex_id]
+                    user["credentials"].remove(hex_id)
                     db.table("credentials").remove(Query().id == hex_id)
                     db.table("users").update(
                         {"credentials": user["credentials"]},
@@ -177,29 +170,15 @@ class Users:
 
                 return hex_id
 
-    async def exists(
-        self, id: str | list | None = None, login: str | list | None = None
-    ) -> bool:
-        attr = users_model._Users_attr(id=id, login=login)
-        ids = ensure_list(attr.id)
-        logins = ensure_list(attr.login)
-
-        async with TinyDB(**TINYDB_PARAMS) as db:
-            matches = db.table("users").search(
-                Query().id.one_of(ids) if ids else Query().login.one_of(logins)
-            )
-            if ids:
-                return set([m["id"] for m in matches]) == set(ids)
-            return set([m["login"] for m in matches]) == set(login)
-
     @validate_call
-    async def search(self, q: constr(strip_whitespace=True, min_length=0) = Field(...)):
-        in_q = lambda s: q in s
-        async with TinyDB(**TINYDB_PARAMS) as db:
-            matches = db.table("users").search(
-                (Query().login.test(in_q)) | (Query().id.test(in_q))
-            )
+    async def search(
+        self, name: constr(strip_whitespace=True, min_length=0) = Field(...)
+    ):
+        def search_name(s):
+            return name in s
 
+        async with TinyDB(**self.db_params) as db:
+            matches = db.table("users").search(Query().login.test(search_name))
             _parsed = []
             for user in matches:
                 user = users_model.User.parse_obj(user)
@@ -216,7 +195,7 @@ class Users:
         self, q: constr(strip_whitespace=True, min_length=0) = Field(...)
     ):
         in_q = lambda s: q in s
-        async with TinyDB(**TINYDB_PARAMS) as db:
+        async with TinyDB(**self.db_params) as db:
             matches = db.table("credentials").search(
                 (Query().id.test(in_q)) | (Query().friendly_name.test(in_q))
             )

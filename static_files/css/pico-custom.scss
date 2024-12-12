@@ -34,6 +34,7 @@ small {
 mark {
   margin-block: calc(var(--pico-spacing)/4);
   display: inline-block;
+  border-radius: .25rem;
 }
 
 pre {
@@ -51,12 +52,26 @@ shake {
   100% { transform: translateX(0) }
 }
 
+#nav-system-mode-switch:checked {
+  --pico-background-color: #{$red-350};
+  --pico-border-color: #{$red-350};
+}
 #nav-theme-toggle {
   cursor:pointer !important;
 }
-
-#nav-theme-toggle.dark {
+.dark {
   filter: grayscale(100%);
+}
+.nav-logo {
+  transition: 350ms filter cubic-bezier(0,.75,.75,1);
+}
+.system-mode-filter {
+  filter: hue-rotate(250deg) saturate(190%);
+}
+
+option[value=""] {
+  color: var(--pico-muted-color) !important;
+  padding: .5rem;
 }
 
 table tr fieldset {
@@ -177,18 +192,23 @@ table td a[role="button"] {
   --pico-color: #{$fuchsia-100};
 }
 
-.flex-center {
+.flex {
   display: flex;
-  justify-content: center;
-  align-items: center;
   gap: var(--pico-spacing);
+  align-items: center;
+}
+.flex label {
+  display: inline;
+}
+.flex-center {
+  justify-content: center;
   flex-wrap: wrap;
 }
+.flex-end {
+  justify-content: flex-end;
+}
 .flex-space-between {
-  display: flex;
   justify-content: space-between;
-  align-items: center;
-  gap: var(--pico-spacing);
 }
 
 thead th, thead td, tfoot th, tfoot td {
@@ -264,9 +284,9 @@ nav details.dropdown {
     grid-column-gap: 0;
     grid-row-gap: 0;
   }
-  .split-grid.grid > article:first-child {
-    margin-bottom: 0.25rem;
-    padding: calc(var(--pico-spacing)/2);
+  .split-grid.grid > article {
+    margin-bottom: .5rem;
+    padding: calc(var(--pico-spacing)/4);
     background-color: transparent;
     box-shadow: none;
   }

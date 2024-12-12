@@ -1,43 +1,26 @@
 <nav hx-target="#body-main">
   <ul>
     <li>
-      <a href="#" hx-get="/" hx-target="#body-main">
+      <a href="#" hx-get="/" hx-target="#body-main" class="nav-logo"
+        {%- if "system" in session.get("acl", []) -%}
+        _="def toggleSysMode()
+          if #nav-system-mode-switch's checked is true
+            take @hidden from .nav-menu for .user-menu
+            add .system-mode-filter settle
+          else
+            take @hidden from .nav-menu for .system-menu
+            remove .system-mode-filter settle
+          end
+        init toggleSysMode() end
+        on click from #nav-system-mode-switch toggleSysMode() end"
+        {%- endif -%}>
         {% include "ehlo.svg" %}
       </a>
       <span aria-busy="true" data-loading></span>
     </li>
   </ul>
+
   <ul>
-    <li>
-      <span id="nav-theme-toggle"
-        _="on updateTheme
-            if not localStorage.theme
-              if window.matchMedia('(prefers-color-scheme: light)').matches
-                set (@data-theme of <html/>) to 'light'
-              else
-                set (@data-theme of <html/>) to 'dark'
-              end
-            else
-              set (@data-theme of <html/>) to localStorage.theme
-            end
-            set my @class to (@data-theme of <html/>)
-            set localStorage.theme to (@data-theme of <html/>)
-          end
-
-          init trigger updateTheme end
-
-          on click
-            if I match .light
-              set (@data-theme of <html/>) to 'dark'
-            else
-              set (@data-theme of <html/>) to 'light'
-            end
-            set localStorage.theme to (@data-theme of <html/>)
-            toggle between .light and .dark
-          end
-
-        ">&#128161;</span>
-    </li>
     {% if not session["login"] %}
     <li>
       <a class="contrast" role="button" _="
@@ -52,24 +35,26 @@
           <span class="login-register" hidden>Login</span>
       </a>
     </li>
-    {% else %}
-    <li>
+    {% endif %}
+
+    {% if "system" in session.get("acl", []) %}
+    <li class="nav-menu system-menu">
       <details class="dropdown" hx-on:click="event.target.nodeName==='A'?this.open=false:null">
         <summary>Objects</summary>
         <ul>
           <li>
-            <a href="#" class="secondary" hx-get="/objects/calendars">Calendars</a>
+            <a href="#" class="secondary" hx-get="/objects/domains">Domains</a>
           </li>
           <li>
-            <a href="#" class="secondary" hx-get="/objects/contacts">Contacts</a>
+            <a href="#" class="secondary" hx-get="/objects/mailboxes">Mailboxes</a>
           </li>
           <li>
-            <a href="#" class="secondary" hx-get="/objects/appointments">Appointments</a>
+            <a href="#" class="secondary" hx-get="/objects/groups">Groups</a>
           </li>
         </ul>
       </details>
     </li>
-    <li>
+    <li class="nav-menu system-menu">
       <details class="dropdown" hx-on:click="event.target.nodeName==='A'?this.open=false:null">
         <summary>System</summary>
         <ul>
@@ -94,27 +79,95 @@
       </details>
     </li>
     {% endif %}
+
+    {% if "user" in session.get("acl", []) %}
+    <li class="nav-menu user-menu">
+      <details class="dropdown" hx-on:click="event.target.nodeName==='A'?this.open=false:null">
+        <summary>My</summary>
+        <ul>
+          <li>
+            <a href="#" class="secondary" hx-get="/my/domains">Domains</a>
+          </li>
+          <li>
+            <a href="#" class="secondary" hx-get="/my/mailboxes">Mailboxes</a>
+          </li>
+          <li>
+            <a href="#" class="secondary" hx-get="/my/groups">Groups</a>
+          </li>
+          <li>
+            <hr>
+            <a href="#" class="secondary" hx-get="/my/files">Files</a>
+          </li>
+        </ul>
+      </details>
+    </li>
+    <li class="nav-menu user-menu">
+      <details class="dropdown" hx-on:click="event.target.nodeName==='A'?this.open=false:null">
+        <summary>User</summary>
+        <ul>
+          <li>
+            <a href="#" hx-get="/profile">Profile</a>
+          </li>
+          <li>
+            <hr>
+            <a href="#" hx-post="/logout" hx-swap="innerHTML">Logout</a>
+          </li>
+        </ul>
+      </details>
+    </li>
+    {% endif %}
+
   </ul>
 </nav>
 
-{% if session["login"] %}
 <hr>
 
-
-<div class="flex-space-between" hx-target="#body-main">
+{% if session["login"] %}
+<div class="flex flex-space-between" hx-target="#body-main">
   <div class="no-text-wrap">
-  Hi <b><a href="#" hx-get="/profile">{{ session["login"] }} 👋</a></b>
+    Hi <b><a href="#" hx-get="/profile">{{ session.get("login") or "guest" }} 👋</a></b>
   </div>
   <div>
-  {% if session["acl"] %}
-    Roles: {% for role in session["acl"] %}<mark>{{ role }}</mark>&nbsp;{% endfor %}
+  {% for role in session.get("acl", []) %}<mark>{{ role }}</mark>&nbsp;{% endfor %}
+  </div>
+</div>
+{% endif %}
+
+<div class="flex flex-end">
+  {% if "system" in session.get("acl", []) %}
+  <div>
+    <label><input id="nav-system-mode-switch" type="checkbox" role="switch" /> System</label>
+  </div>
   {% endif %}
-  {% if session.app_status == "degraded" %}
-  <span class="color-red"><b>Degraded</b></span>
-  {% elif session.app_status == "ready_to_recover" %}
-  <a href="#" class="color-fuchsia" hx-get="/system/recover">Recover</a>
-  {% endif %}
+
+  <div id="nav-theme-toggle"
+    _="on updateTheme
+        if not localStorage.theme
+          if window.matchMedia('(prefers-color-scheme: light)').matches
+            set (@data-theme of <html/>) to 'light'
+          else
+            set (@data-theme of <html/>) to 'dark'
+          end
+        else
+          set (@data-theme of <html/>) to localStorage.theme
+        end
+        set my @class to (@data-theme of <html/>)
+        set localStorage.theme to (@data-theme of <html/>)
+      end
+
+      init trigger updateTheme end
+
+      on click
+        if I match .light
+          set (@data-theme of <html/>) to 'dark'
+        else
+          set (@data-theme of <html/>) to 'light'
+        end
+        set localStorage.theme to (@data-theme of <html/>)
+        toggle between .light and .dark
+      end
+    ">&#128161; Theme
   </div>
 </div>
 
-{% endif %}
+<hr>

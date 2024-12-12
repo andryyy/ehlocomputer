@@ -6,6 +6,7 @@ from aiotinydb.storage import AIOStorage
 from pydantic import validate_call
 from tinydb import Query
 from tinydb.table import Document
+from tinydb.queries import QueryInstance
 from typing import Literal
 from utils.datetimes import ntime_utc_now
 from utils.helpers import is_path_within_cwd

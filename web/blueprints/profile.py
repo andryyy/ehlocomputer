@@ -100,7 +100,10 @@ async def patch_credential(credential_hex_id: str):
 @wrappers.acl("any")
 async def delete_credential(credential_hex_id: str):
     try:
-        await Users.user(id=session["id"]).delete_credential(hex_id=credential_hex_id)
+        async with ClusterLock("main"):
+            await Users.user(id=session["id"]).delete_credential(
+                hex_id=credential_hex_id
+            )
     except ValidationError as e:
         return validation_error(e.errors())
 

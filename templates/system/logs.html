@@ -15,12 +15,13 @@
 
 <h4>System logs</h4>
 
-<p>
-  <small>🥇 indicates master node</small>
-</p>
-
-<article id="system-logs-full-table">
-  {% include "system/includes/logs/table.html" %}
-</article>
+<div class="grid split-grid">
+  <article>
+      <p>🥇 indicates master node</p>
+  </article>
+  <article id="system-logs-full-table">
+    {% include "system/includes/logs/table.html" %}
+  </article>
+</div>
 
 {% endblock body %}

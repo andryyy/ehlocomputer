@@ -4,6 +4,25 @@ import os
 
 from pydantic import ValidationError, validate_call
 from typing import Any, Literal
+from copy import deepcopy
+
+
+def merge_deep(dict1: dict, dict2: dict):
+    result = deepcopy(dict1)
+
+    def _recursive_merge(_dict1, _dict2):
+        for key in _dict2:
+            if (
+                key in _dict1
+                and isinstance(_dict1[key], dict)
+                and isinstance(_dict2[key], dict)
+            ):
+                _recursive_merge(_dict1[key], _dict2[key])
+            else:
+                _dict1[key] = _dict2[key]
+
+    _recursive_merge(result, dict2)
+    return result
 
 
 @validate_call

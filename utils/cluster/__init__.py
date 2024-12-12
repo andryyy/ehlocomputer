@@ -76,7 +76,6 @@ class Transaction:
             if latest_commit:
                 _, commit_hash = latest_commit.strip().split(":")
                 return commit_hash == sha256_filedigest(self.db_fn)
-        return
 
     @property
     def latest(self):
@@ -124,7 +123,7 @@ class Transaction:
 
 
 transactions = Transaction()
-if not transactions._db_matches_latest_commit:
+if transactions._db_matches_latest_commit == False:
     logger.error("<transactions> database does not match the latest commit")
     sys.exit(1)
 
@@ -353,23 +352,19 @@ class Cluster:
                         try:
                             task_data = TaskModel.parse_raw_task(cmd)
                             init_kwargs, task_kwargs = task_data.kwargs
-                            init_kwargs["transaction"] = ticket
+                            self._context_token = CONTEXT_TRANSACTION.set(ticket)
 
                             if task_data.name.startswith("users_"):
                                 if task_data.name == "users_create_user":
                                     await Users.create(**init_kwargs).user(
                                         **task_kwargs
                                     )
-                                elif task_data.name == "users_create_credential":
-                                    await Users.create(**init_kwargs).credential(
-                                        **task_kwargs
-                                    )
+                                elif task_data.name == "users_user_create_credential":
+                                    await Users.user(**init_kwargs).create_credential(**task_kwargs)
                                 elif task_data.name == "users_user_delete":
                                     await Users.user(**init_kwargs).delete()
                                 elif task_data.name == "users_user_delete_credential":
-                                    await Users.user(**init_kwargs).delete_credential(
-                                        **task_kwargs
-                                    )
+                                    await Users.user(**init_kwargs).delete_credential(**task_kwargs)
                                 elif task_data.name == "users_user_patch":
                                     await Users.user(**init_kwargs).patch(**task_kwargs)
                                 elif task_data.name == "users_user_patch_profile":
@@ -381,8 +376,8 @@ class Cluster:
                                         **task_kwargs
                                     )
                             elif task_data.name.startswith("objects_"):
-                                if task_data.name == "objects_object_create":
-                                    await Objects.object(**init_kwargs).create(
+                                if task_data.name == "objects_create_object":
+                                    await Objects.create(**init_kwargs).object(
                                         **task_kwargs
                                     )
                                 elif task_data.name == "objects_object_patch":
@@ -407,6 +402,9 @@ class Cluster:
                                 [peer_info["bind"]],
                                 ticket=ticket,
                             )
+                        finally:
+                            CONTEXT_TRANSACTION.reset(self._context_token)
+                            IN_MEMORY_DB["tasks"] = []
 
                 elif cmd == "COMMIT":
                     await transactions.commit(ticket)

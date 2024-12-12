@@ -1,7 +1,7 @@
 from models.forms.objects import (
-    ObjectPatchContactForm,
-    ObjectPatchCalendarForm,
-    ObjectPatchAppointmentForm,
+    ObjectMailbox,
+    ObjectDomain,
+    ObjectGroup,
 )
 from pydantic_core import PydanticCustomError
 from pydantic import (
@@ -11,6 +11,7 @@ from pydantic import (
     AfterValidator,
     constr,
     model_validator,
+    ConfigDict,
 )
 from typing import Annotated, Literal
 from uuid import uuid4, UUID
@@ -25,21 +26,20 @@ class ObjectBase(BaseModel):
     updated: str
 
 
-class ObjectBaseCalendar(ObjectBase):
-    details: ObjectPatchCalendarForm = {}
+class ObjectBaseDomain(ObjectBase):
+    details: ObjectDomain = {}
 
 
-class ObjectBaseContact(ObjectBase):
-    details: ObjectPatchContactForm = {}
+class ObjectBaseMailbox(ObjectBase):
+    details: ObjectMailbox = {}
 
 
-class ObjectBaseAppointment(ObjectBase):
-    details: ObjectPatchAppointmentForm = {}
+class ObjectBaseGroup(ObjectBase):
+    details: ObjectGroup = {}
 
 
 class ObjectAdd(BaseModel):
     name: constr(strip_whitespace=True, min_length=1) = Field(...)
-    details: dict = {}
 
     @computed_field
     @property
@@ -57,6 +57,18 @@ class ObjectAdd(BaseModel):
         return utc_now_as_str()
 
 
+class ObjectAddDomain(ObjectAdd):
+    details: ObjectDomain
+
+
+class ObjectAddMailbox(ObjectAdd):
+    details: ObjectMailbox
+
+
+class ObjectAddGroup(ObjectAdd):
+    details: ObjectGroup
+
+
 class ObjectDelete(BaseModel):
     id: Annotated[
         str | list,
@@ -65,6 +77,7 @@ class ObjectDelete(BaseModel):
 
 
 class ObjectPatch(BaseModel):
+    model_config = ConfigDict(validate_assignment=True)
     name: Annotated[constr(strip_whitespace=True), Field(min_length=1)]
 
     @computed_field
@@ -73,43 +86,48 @@ class ObjectPatch(BaseModel):
         return utc_now_as_str()
 
 
-class ObjectPatchContact(ObjectPatch):
-    details: ObjectPatchContactForm
+class ObjectPatchDomain(ObjectPatch):
+    details: ObjectDomain
 
 
-class ObjectPatchCalendar(ObjectPatch):
-    details: ObjectPatchCalendarForm
+class ObjectPatchMailbox(ObjectPatch):
+    details: ObjectMailbox
 
 
-class ObjectPatchAppointment(ObjectPatch):
-    details: ObjectPatchAppointmentForm
+class ObjectPatchGroup(ObjectPatch):
+    details: ObjectGroup
 
 
 model_classes = {
-    "types": ["contacts", "calendars", "appointments"],
+    "types": ["domains", "mailboxes", "groups"],
     "forms": {
-        "contacts": ObjectPatchContactForm,
-        "calendars": ObjectPatchCalendarForm,
-        "appointments": ObjectPatchAppointmentForm,
+        "domains": ObjectDomain,
+        "mailboxes": ObjectMailbox,
+        "groups": ObjectGroup,
     },
     "patch": {
-        "contacts": ObjectPatchContact,
-        "calendars": ObjectPatchCalendar,
-        "appointments": ObjectPatchAppointment,
+        "domains": ObjectPatchDomain,
+        "mailboxes": ObjectPatchMailbox,
+        "groups": ObjectPatchGroup,
+    },
+    "add": {
+        "domains": ObjectAddDomain,
+        "mailboxes": ObjectAddMailbox,
+        "groups": ObjectAddGroup,
     },
     "base": {
-        "contacts": ObjectBaseContact,
-        "calendars": ObjectBaseCalendar,
-        "appointments": ObjectBaseAppointment,
+        "domains": ObjectBaseDomain,
+        "mailboxes": ObjectBaseMailbox,
+        "groups": ObjectBaseGroup,
     },
 }
 
 
 class _Objects_attr(BaseModel):
     id: Annotated[
-        str | list[str] | None,
+        str | list[str],
         AfterValidator(lambda v: ensure_list(v) or None),
-    ] = None
+    ]
     object_type: Literal[*model_classes["types"]]
 
     @model_validator(mode="after")

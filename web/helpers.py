@@ -9,24 +9,6 @@ from tools.users import Users
 from typing import Literal
 
 
-def merge_deep(dict1, dict2):
-    result = deepcopy(dict1)
-
-    def _recursive_merge(_dict1, _dict2):
-        for key in _dict2:
-            if (
-                key in _dict1
-                and isinstance(_dict1[key], dict)
-                and isinstance(_dict2[key], dict)
-            ):
-                _recursive_merge(_dict1[key], _dict2[key])
-            else:
-                _dict1[key] = _dict2[key]
-
-    _recursive_merge(result, dict2)
-    return result
-
-
 @validate_call
 def parse_form_to_dict(key, value):
     keys = key.split(".")
@@ -44,7 +26,7 @@ def parse_form_to_dict(key, value):
 async def ws_htmx(channel, strategy: str, data, if_path: str = ""):
     if channel in defaults.USER_ACLS:
         matched_users = [
-            m.login for m in await Users().search(q="") if channel in m.acl
+            m.login for m in await Users().search(name="") if channel in m.acl
         ]
         if matched_users:
             for user in matched_users:

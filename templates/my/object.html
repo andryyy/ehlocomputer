@@ -6,18 +6,20 @@
 <nav aria-label="breadcrumb" id="nav-breadcrumb" hx-swap-oob="true">
   <ul>
     <li>Objects</li>
-    <li><a href="#" hx-target="#body-main" hx-get="/objects/{{ request.view_args.get("object_type") }}">{{ request.view_args.get("object_type")|capitalize }}</a></li>
-    <li><a href="#" hx-target="#body-main" hx-get="/objects/{{ request.view_args.get("object_type") }}/{{ object.id }}">{{ object.name }}</a></li>
+    <li><a href="#" hx-target="#body-main" hx-get="/my/{{ request.view_args.get("object_type") }}">{{ request.view_args.get("object_type")|capitalize }}</a></li>
+    <li><a href="#" hx-target="#body-main" hx-get="/my/{{ request.view_args.get("object_type") }}/{{ object.id }}">{{ object.name }}</a></li>
   </ul>
 </nav>
 {% endblock breadcrumb %}
 
 {% block body %}
 
+<h4 id="object-name">{{ object.name }}</h4>
+
 <div class="grid split-grid">
   <article>
     <hgroup>
-      <h5 id="object-name">{{ object.name }}</h5>
+      <h5>Object details</h5>
       <p>Modify the object details here.<br></p>
     </hgroup>
   </article>
@@ -28,9 +30,9 @@
     hx-select="#object-details"
     hx-select-oob="#object-name"
     hx-swap="outerHTML"
-    hx-get="/objects/{{ request.view_args.get("object_type") }}/{{ object.id }}">
+    hx-get="/my/{{ request.view_args.get("object_type") }}/{{ object.id }}">
 
-    <form id="object-form" hx-trigger="submit throttle:200ms" hx-patch="/objects/{{ request.view_args.get("object_type") }}/{{ object.id }}">
+    <form id="object-form" hx-trigger="submit throttle:200ms" hx-patch="/my/{{ request.view_args.get("object_type") }}/{{ object.id }}">
       <fieldset>
         <label for="object-name">Name</label>
         <input autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" id="object-name"
@@ -44,7 +46,8 @@
         {% with
           schema=schemas["_" + request.view_args.get("object_type") + "_schema"],
           current_data=object.details,
-          root_key="details"
+          root_key="details",
+          without=["assigned_users"]
         %}
           {% include "includes/form_builder.html" %}
         {% endwith %}

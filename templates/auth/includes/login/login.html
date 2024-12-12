@@ -24,23 +24,34 @@
           hx-swap="innerHTML">
             Passkey login
         </button>
-        <button type="submit"
-          id="token-authentication"
-          hx-post="/auth/login/request/start"
-          hx-target="#body-main"
-          hx-swap="innerHTML">
-            Request login
-        </button>
       </fieldset>
-      <p>
-        <a href="#" class="secondary no-text-decoration"
-          _="on click
+      <hr>
+      <article>
+        ❔ <a href="" class="no-text-decoration" hx-on:click="event.preventDefault();document.getElementById('auth-options').toggleAttribute('hidden')">Other authentication options</a>
+        <div id="auth-options" hidden>
+          <hr>
+          <fieldset>
+            <label>Send a login request logged in users</label>
+            <button href="#" id="token-authentication"
+            hx-post="/auth/login/request/start"
+            hx-target="#body-main"
+            hx-swap="innerHTML">
+            Send login request
+            </button>
+          </fieldset>
+
+          <fieldset>
+            <label>Use a terminal to confirm a token</label>
+            <button href="#"
+            _="on click
             halt the event
             set value of #token-login to value of #webauthn-login
             take @hidden from <form/> in #login-form for closest <form/>
-          end">Use <mark>token supported</mark> authentication
-        </a>
-      </p>
+            end">Token authentication
+            </button>
+          </fieldset>
+        </div>
+      </article>
   </form>
 
   <form
@@ -60,12 +71,12 @@
           Start authentication
       </button>
       <p>
-        A token will be generated and needs to be validated via <i>command line</i>:<br>
+        A token will be generated and needs to be validated via command line:
         <code class="pointer" hx-on:click="!window.s?s=this.textContent:null;navigator.clipboard.writeText(s);this.textContent='Copied';setTimeout(()=>{this.textContent=s}, 1000)">./ctrl -t</code>
       </p>
       <hr>
       <p>
-        <a href="#" class="secondary no-text-decoration"
+        <a href="#"
           _="on click
             halt the event
             set value of #webauthn-login to value of #token-login

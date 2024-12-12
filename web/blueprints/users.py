@@ -49,7 +49,7 @@ async def get_users():
         return validation_error(e.errors())
 
     if request.method == "POST":
-        matched_users = [m.dict() for m in await Users().search(q=search_model.q)]
+        matched_users = [m.dict() for m in await Users().search(name=search_model.q)]
 
         user_pages = [
             m

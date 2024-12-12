@@ -54,3 +54,10 @@ htmx.on("body", "authRegFailed", async function(evt){
     	}
 	)
 })
+
+function datetime_local(add_minutes) {
+	var now = new Date();
+	minutes = (now.getMinutes() + add_minutes)
+	now.setMinutes(minutes - now.getTimezoneOffset());
+	return now.toISOString().slice(0,16);
+}

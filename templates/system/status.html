@@ -16,18 +16,18 @@
 <h4>System Status</h4>
 
 <article id="system-status">
+  <p>You are connected to <mark>{{ CLUSTER_PEERS_ME }}</mark></p>
   <div class="overflow-auto">
   <table>
     <tbody>
       <tr>
         <th scope="row" colspan="3">
           <h5>Cluster status</h5>
-          <small>You are connected to <mark>{{ CLUSTER_PEERS_ME }}</mark></small>
         </th>
       </tr>
       <tr>
         <th scope="row">Peer</th>
-        <th scope="row">Continuing failures <sup>1</sup></th>
+        <th scope="row">Consecutive failures <sup>1</sup></th>
         <th scope="row">Meta <sup>2</sup></th>
       </tr>
       {% for peer in CLUSTER_PEERS_THEM %}
@@ -58,12 +58,12 @@
         </td>
       </tr>
       {% endfor %}
-      <th scope="row" colspan="3">
-        <small><sup>1</sup> A failed peer will not be retried until its status is reset</small><br>
-        <small><sup>2</sup> The cluster is updated in a lazy manner</small>
-      </th>
     </tbody>
   </table>
+  <p class="no-text-wrap">
+    <small><sup>1</sup> A failed peer will not be retried until its status is reset</small><br>
+    <small><sup>2</sup> The cluster is updated in a lazy manner</small>
+  </p>
   </div>
 </article>
 

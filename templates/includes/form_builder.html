@@ -8,10 +8,22 @@ DATA FIELDS
 
 #}
 
-{% for k, v in schema.properties.items() if v.hidden != True %}
+{% for k, v in schema.properties.items() if k not in without %}
 
   {% if v.type in ["text", "email", "number"] %}
+    {% set readonly = True if "readonly" in v.input_extra else False %}
+    <fieldset>
+      <label for="{{ v.form_id }}">{{ v.title }} {{ "🚫" if readonly }}</label>
+      <input {{ v.input_extra|safe }} id="{{ v.form_id }}"
+        name="{% if root_key %}{{ root_key }}.{{ k }}{% else %}{{ k }}{% endif %}"
+        type="{{ v.type }}"
+        value="{{ current_data.get(k, v.default) }}">
+      {% if v.description %}
+      <small>{{ v.description|safe }}</small>
+      {% endif %}
+    </fieldset>
 
+  {% elif v.type in ["date", "datetime-local"] %}
     {% set readonly = True if "readonly" in v.input_extra else False %}
     <fieldset>
       <label for="{{ v.form_id }}">{{ v.title }} {{ "🚫" if readonly }}</label>
@@ -29,11 +41,11 @@ DATA FIELDS
     {% set option_values = v.options|map(attribute="value")|list %}
     <fieldset>
       <label for="{{ v.form_id }}">{{ v.title }}</label>
-      <select {{ v.input_extra|safe }} {{ "multiple" if v.type == "select:multi" }}
+      <select {{ v.input_extra|safe }} {{ "multiple" if v.type == "select:multi" }} size="{{ option_values|length if option_values|length < 5 and v.type == "select:multi" else 5 }}"
         name="{% if root_key %}{{ root_key }}.{{ k }}{% else %}{{ k }}{% endif %}"
         id="{{ v.form_id }}">
         {% for option in v.options %}
-        <option value="{{ option["value"] }}" {{ "selected" if option["value"] in current_data.get(k) }}>{{ option["name"] }}</option>
+        <option value="{{ option["value"] }}" {{ "selected" if option["value"] in current_data.get(k) or option["value"] == "" and not current_data.get(k) }}>{{ option["name"] }}</option>
         {% endfor %}
       </select>
       {% if v.description %}
@@ -41,21 +53,63 @@ DATA FIELDS
       {% endif %}
     </fieldset>
 
+  {% elif v.type == "datalist" %}
+
+    {% set option_values = v.options|map(attribute="value")|list %}
+    <fieldset>
+      <label for="{{ v.form_id }}">{{ v.title }}</label>
+      <input list="{{ v.form_id }}-datalist"
+        name="{% if root_key %}{{ root_key }}.{{ k }}{% else %}{{ k }}{% endif %}"
+        id="{{ v.form_id }}"
+        value="{{ current_data.get(k, v.default) }}" {{ v.input_extra|safe }}>
+      <datalist
+        id="{{ v.form_id }}-datalist">
+        {% for option in v.options %}
+        <option value="{{ option }}">
+        {% endfor %}
+      </datalist>
+      {% if v.description %}
+      <small>{{ v.description|safe }}</small>
+      {% endif %}
+    </fieldset>
+
   {% elif v.type == "users:multi" or v.type == "users" %}
 
-    {% if user_options == [] %}
-      <p><b>Error:</b> No users found (is user_options defined?)</p>
+    {% if not user_options or user_options == [] %}
+      <p>No users found</p>
     {% else %}
       {% set option_values = user_options|map(attribute="value")|list %}
       <fieldset>
         <label for="{{ v.form_id }}">{{ v.title }}</label>
-        <select {{ v.input_extra|safe }} {{ "multiple" if v.type == "users:multi" }}
+        <select {{ v.input_extra|safe }} {{ "multiple" if v.type == "users:multi" }} size="{{ option_values|length if option_values|length < 5 and v.type == "users:multi" else 5 }}"
           name="{% if root_key %}{{ root_key }}.{{ k }}{% else %}{{ k }}{% endif %}"
           id="{{ v.form_id }}">
           {% for option in user_options %}
           <option value="{{ option["value"] }}" {{ "selected" if option["value"] in current_data.get(k) }}>{{ option["name"] }}</option>
           {% endfor %}
         </select>
+        {% if v.description %}
+        <small>{{ v.description|safe }}</small>
+        {% endif %}
+      </fieldset>
+    {% endif %}
+
+  {% elif v.type == "object_groups:multi" or v.type == "object_groups" %}
+
+    {% if not object_group_options or object_group_options == [] %}
+      <p>No object groups available</p>
+    {% else %}
+      {% set option_values = object_group_options|map(attribute="value")|list %}
+      <fieldset>
+        <label for="{{ v.form_id }}">{{ v.title }}</label>
+        <select {{ v.input_extra|safe }} {{ "multiple" if v.type == "object_groups:multi" }} size="{{ option_values|length if option_values|length < 5 and v.type == "object_groups:multi" else 5 }}"
+          name="{% if root_key %}{{ root_key }}.{{ k }}{% else %}{{ k }}{% endif %}"
+          id="{{ v.form_id }}">
+          {% for option in object_group_options %}
+          <option value="{{ option["value"] }}" {{ "selected" if option["value"] in current_data.get(k) }}>{{ option["name"] }}</option>
+          {% endfor %}
+        </select>
+        <input type="hidden" name="{% if root_key %}{{ root_key }}.{{ k }}{% else %}{{ k }}{% endif %}" value="">
         {% if v.description %}
         <small>{{ v.description|safe }}</small>
         {% endif %}

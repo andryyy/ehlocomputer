@@ -14,7 +14,7 @@
         trigger submit on #{{ request.view_args.get("object_type") }}-table-search
       end
     "
-    hx-post="/objects/{{ request.view_args.get("object_type") }}/delete"
+    hx-post="/my/{{ request.view_args.get("object_type") }}/delete"
     hx-target="#body-main"
     hx-trigger="confirmedButton throttle:200ms"
     hx-include="[name='id']">Delete</button>

@@ -282,12 +282,9 @@ async def login_webauthn_options():
     try:
         user = await Users.user(login=request.form_parsed.get("login")).get()
         if not user.credentials:
-            return validation_error(
-                [{"loc": ["login"], "msg": f"User is not available"}]
-            )
-
-    except ValidationError as e:
-        return validation_error(e.errors())
+            raise ValidationError
+    except ValidationError:
+        return validation_error([{"loc": ["login"], "msg": f"User is not available"}])
 
     allow_credentials = [
         PublicKeyCredentialDescriptor(id=bytes.fromhex(c))
@@ -322,7 +319,6 @@ async def register_token():
     try:
         request_data = auth_model.AuthToken.parse_obj(request.form_parsed)
         token = request_data.token
-
         IN_MEMORY_DB[token] = {
             "intention": f"Register user: {request_data.login}",
             "status": "awaiting",
@@ -484,19 +480,17 @@ async def register_webauthn():
     }
 
     try:
-        if not appending_passkey:
-            async with ClusterLock("main"):
-                await Users.create(_enforce_uuid=user_id).user(data={"login": login})
-
         async with ClusterLock("main"):
-            await Users.create.credential(
+            if not appending_passkey:
+                await Users.create(uuid=user_id).user(data={"login": login})
+
+            await Users.user(id=user_id).create_credential(
                 data={
                     "id": verification.credential_id,
                     "public_key": verification.credential_public_key,
                     "sign_count": verification.sign_count,
                     "transports": json_body.get("transports", []),
-                },
-                assign_user_id=user_id,
+                }
             )
 
     except Exception as e:
