@@ -4,11 +4,12 @@ import json
 import os
 import shutil
 
-from config.database import IN_MEMORY_DB, TINYDB_PARAMS, QueryInstance
+from config.database import IN_MEMORY_DB, QueryInstance, TINYDB_PARAMS
 from copy import copy
 from functools import wraps
 from models.tasks import TaskModel
 from pydantic import ValidationError
+from quart import current_app, session
 from typing import Literal
 from utils.helpers import is_path_within_cwd
 
@@ -23,6 +24,16 @@ class _TaskJSONEncoder(json.JSONEncoder):
 
 
 CONTEXT_TRANSACTION = contextvars.ContextVar("context_transaction", default=None)
+
+
+def whoami(func):
+    @wraps(func)
+    def wrapper(self, *args, **kwargs):
+        if current_app and session.get("id"):
+            self.user_id = session["id"]
+        func(self, *args, **kwargs)
+
+    return wrapper
 
 
 def evaluate_db_params():

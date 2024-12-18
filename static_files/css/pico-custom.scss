@@ -2,7 +2,7 @@
   $enable-semantic-container: true,
   $enable-responsive-spacings: true,
   $enable-responsive-typography: false,
-  $theme-color: "grey",
+  $theme-color: "slate",
   $breakpoints: (
     sm: (breakpoint: 576px, viewport: 95%),
     md: (breakpoint: 768px, viewport: 95%),
@@ -67,11 +67,6 @@ shake {
 }
 .system-mode-filter {
   filter: hue-rotate(250deg) saturate(190%);
-}
-
-option[value=""] {
-  color: var(--pico-muted-color) !important;
-  padding: .5rem;
 }
 
 table tr fieldset {
@@ -290,4 +285,10 @@ nav details.dropdown {
     background-color: transparent;
     box-shadow: none;
   }
+}
+
+textarea.dns-data {
+  border: 0;
+  background: transparent;
+  font-family: monospace;
 }

@@ -29,15 +29,13 @@
       "
       hx-post="/my/{{ request.view_args.get("object_type") }}"
       id="{{ request.view_args.get("object_type") }}-form">
-        <fieldset>
-          <label for="name">Name
-          <input type="text" name="name" id="name"
-            autocomplete="off"
-            autocorrect="off"
-            autocapitalize="off"
-            spellcheck="false">
-          </label>
-        </fieldset>
+        {% with
+          schema=schemas["_" + request.view_args.get("object_type") + "_base_schema"],
+          current_data={},
+          root_key=""
+        %}
+          {% include "includes/form_builder.html" %}
+        {% endwith %}
         <button data-loading-disable type="submit" _="install buttonCheckHtmxResponse">Create</button>
     </form>
   </article>

@@ -144,6 +144,8 @@ class Users:
             )
             async with TinyDB(**self.db_params) as db:
                 user = db.table("users").get(self._query_filter)
+                if not user:
+                    raise ValueError("name", "The provided user does not exist")
                 patched = db.table("users").update(
                     {"profile": user["profile"] | validated_data},
                     self._query_filter,

@@ -38,10 +38,13 @@ DATA FIELDS
 
   {% elif v.type == "select:multi" or v.type == "select" %}
 
-    {% set option_values = v.options|map(attribute="value")|list %}
     <fieldset>
       <label for="{{ v.form_id }}">{{ v.title }}</label>
-      <select {{ v.input_extra|safe }} {{ "multiple" if v.type == "select:multi" }} size="{{ option_values|length if option_values|length < 5 and v.type == "select:multi" else 5 }}"
+      <select {{ v.input_extra|safe }}
+        {% if v.type == "select:multi" %}
+        multiple
+        size="5"
+        {% endif %}
         name="{% if root_key %}{{ root_key }}.{{ k }}{% else %}{{ k }}{% endif %}"
         id="{{ v.form_id }}">
         {% for option in v.options %}
@@ -55,7 +58,6 @@ DATA FIELDS
 
   {% elif v.type == "datalist" %}
 
-    {% set option_values = v.options|map(attribute="value")|list %}
     <fieldset>
       <label for="{{ v.form_id }}">{{ v.title }}</label>
       <input list="{{ v.form_id }}-datalist"
@@ -78,10 +80,13 @@ DATA FIELDS
     {% if not user_options or user_options == [] %}
       <p>No users found</p>
     {% else %}
-      {% set option_values = user_options|map(attribute="value")|list %}
       <fieldset>
         <label for="{{ v.form_id }}">{{ v.title }}</label>
-        <select {{ v.input_extra|safe }} {{ "multiple" if v.type == "users:multi" }} size="{{ option_values|length if option_values|length < 5 and v.type == "users:multi" else 5 }}"
+        <select {{ v.input_extra|safe }}
+          {% if v.type == "users:multi" %}
+          multiple
+          size="5"
+          {% endif %}
           name="{% if root_key %}{{ root_key }}.{{ k }}{% else %}{{ k }}{% endif %}"
           id="{{ v.form_id }}">
           {% for option in user_options %}
@@ -94,22 +99,25 @@ DATA FIELDS
       </fieldset>
     {% endif %}
 
-  {% elif v.type == "object_groups:multi" or v.type == "object_groups" %}
+  {% elif v.type == "emailusers:multi" or v.type == "emailusers" %}
 
-    {% if not object_group_options or object_group_options == [] %}
-      <p>No object groups available</p>
+    {% if not object_emailuser_options or object_emailuser_options == [] %}
+      <p>No email users available</p>
     {% else %}
-      {% set option_values = object_group_options|map(attribute="value")|list %}
       <fieldset>
         <label for="{{ v.form_id }}">{{ v.title }}</label>
-        <select {{ v.input_extra|safe }} {{ "multiple" if v.type == "object_groups:multi" }} size="{{ option_values|length if option_values|length < 5 and v.type == "object_groups:multi" else 5 }}"
+        <select {{ v.input_extra|safe }}
+          {% if v.type == "emailusers:multi" %}
+          multiple
+          size="5"
+          {% endif %}
           name="{% if root_key %}{{ root_key }}.{{ k }}{% else %}{{ k }}{% endif %}"
           id="{{ v.form_id }}">
-          {% for option in object_group_options %}
+          <option value="">-- None --</option>
+          {% for option in object_emailuser_options %}
           <option value="{{ option["value"] }}" {{ "selected" if option["value"] in current_data.get(k) }}>{{ option["name"] }}</option>
           {% endfor %}
         </select>
-        <input type="hidden" name="{% if root_key %}{{ root_key }}.{{ k }}{% else %}{{ k }}{% endif %}" value="">
         {% if v.description %}
         <small>{{ v.description|safe }}</small>
         {% endif %}
@@ -163,6 +171,36 @@ DATA FIELDS
       <small>{{ v.description|safe }}</small>
       {% endif %}
     </fieldset>
+
+  {% elif v.type == "keypair" %}
+
+    {% if not keypair_options or keypair_options == [] %}
+      <p>No key pairs available</p>
+    {% else %}
+      <fieldset>
+        <label for="{{ v.form_id }}">{{ v.title }}</label>
+        <select {{ v.input_extra|safe }}
+          name="{% if root_key %}{{ root_key }}.{{ k }}{% else %}{{ k }}{% endif %}"
+          id="{{ v.form_id }}"
+          _="on change or load get (@data-dns of <option:checked/> in me) as String put it into #dns-data-{{ v.form_id }} trigger validate on #dns-data-{{ v.form_id }} end">
+          <option data-dns="" value="" {{ "selected" if current_data.get(k) == "" }}>-- None --</option>
+          {% for option in keypair_options %}
+          <option data-dns="{{ option["dns_formatted"] }}" value="{{ option["value"] }}" {{ "selected" if option["value"] == current_data.get(k) }}>{{ option["name"] }}</option>
+          {% endfor %}
+        </select>
+        {% if v.description %}
+        <small>{{ v.description|safe }}</small>
+        <div hidden>
+          <small><i>The required DNS TXT record's value for your convenience.</i></small>
+          <textarea class="dns-data" rows="8" readonly id="dns-data-{{ v.form_id }}" _="
+            on validate add @hidden to closest <div/> if my value is empty else remove @hidden from closest <div/> end end
+            on click call my.setSelectionRange(0, -1) end">
+          {{- "" -}}
+          </textarea>
+        </div>
+        {% endif %}
+      </fieldset>
+    {% endif %}
 
   {% endif %}
 {% endfor %}

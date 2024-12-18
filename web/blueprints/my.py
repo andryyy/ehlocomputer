@@ -17,27 +17,35 @@ blueprint = Blueprint("my", __name__, url_prefix="/my")
 
 @blueprint.context_processor
 async def load_schemas():
-    schemas = {
-        f"_{object_type}_schema": v.model_json_schema()
-        for object_type, v in objects_model.model_classes["forms"].items()
-    }
-    return {
-        "schemas": schemas,
-    }
-
-
-@blueprint.context_processor
-async def load_schemas():
-    schemas = {
-        f"_{object_type}_schema": v.model_json_schema()
-        for object_type, v in objects_model.model_classes["forms"].items()
-    }
+    schemas = {}
+    schemas.update(
+        {
+            f"_{object_type}_schema": v.model_json_schema()
+            for object_type, v in objects_model.model_classes["forms"].items()
+        }
+    )
+    schemas.update(
+        {
+            f"_{object_type}_base_schema": v.model_json_schema()
+            for object_type, v in objects_model.model_classes["base"].items()
+        }
+    )
     return {
         "schemas": schemas,
         # injects object_group_options if route endpoint == "objects.get_object" to allow selecting users in object form
-        "object_group_options": [
+        "object_emailuser_options": [
             {"name": group.name, "value": group.id}
-            for group in await Objects().search(object_type="groups", q="")
+            for group in await Objects().search(object_type="emailusers", q="")
+        ]
+        if request.endpoint == "my.get_object"
+        else [],
+        "keypair_options": [
+            {
+                "name": group.name,
+                "value": group.id,
+                "dns_formatted": group.details.dns_formatted,
+            }
+            for group in await Objects().search(object_type="keypairs", q="")
         ]
         if request.endpoint == "my.get_object"
         else [],

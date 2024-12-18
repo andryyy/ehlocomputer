@@ -1,5 +1,4 @@
 import re
-
 from config.cluster import ClusterLock
 from models.tables import TableSearchHelper
 from models import objects as objects_model
@@ -17,10 +16,19 @@ blueprint = Blueprint("objects", __name__, url_prefix="/objects")
 
 @blueprint.context_processor
 async def load_schemas():
-    schemas = {
-        f"_{object_type}_schema": v.model_json_schema()
-        for object_type, v in objects_model.model_classes["forms"].items()
-    }
+    schemas = {}
+    schemas.update(
+        {
+            f"_{object_type}_schema": v.model_json_schema()
+            for object_type, v in objects_model.model_classes["forms"].items()
+        }
+    )
+    schemas.update(
+        {
+            f"_{object_type}_base_schema": v.model_json_schema()
+            for object_type, v in objects_model.model_classes["base"].items()
+        }
+    )
     return {
         "schemas": schemas,
         # injects options for forms depending on route endpoint
@@ -30,9 +38,31 @@ async def load_schemas():
         ]
         if request.endpoint == "objects.get_object"
         else [],
-        "object_group_options": [
+        "object_emailuser_options": [
             {"name": group.name, "value": group.id}
-            for group in await Objects().search(object_type="groups", q="")
+            for group in await Objects().search(
+                object_type="emailusers",
+                q="",
+                filter_details={"assigned_users": [session["id"]]}
+                if not "system" in session["acl"]
+                else {},
+            )
+        ]
+        if request.endpoint == "objects.get_object"
+        else [],
+        "keypair_options": [
+            {
+                "name": group.name,
+                "value": group.id,
+                "dns_formatted": group.details.dns_formatted,
+            }
+            for group in await Objects().search(
+                object_type="keypairs",
+                q="",
+                filter_details={"assigned_users": [session["id"]]}
+                if not "system" in session["acl"]
+                else {},
+            )
         ]
         if request.endpoint == "objects.get_object"
         else [],
@@ -60,6 +90,9 @@ async def objects_before_request():
 async def get_object(object_type: str, object_id: str):
     try:
         object_data = await Objects.object(id=object_id, object_type=object_type).get()
+        if not object_data:
+            return (f"<h1>Object not found</h1><p>Object is unknown</p>", 404)
+
     except ValidationError as e:
         return validation_error(e.errors())
     except ValueError as e:
@@ -85,7 +118,11 @@ async def get_objects(object_type: str):
             matched_objects = [
                 m.dict()
                 for m in await Objects().search(
-                    object_type=object_type, q=search_model.q
+                    object_type=object_type,
+                    q=search_model.q,
+                    filter_details={"assigned_users": [session["id"]]}
+                    if not "system" in session["acl"]
+                    else {},
                 )
             ]
         except ValidationError as e:
@@ -130,7 +167,6 @@ async def get_objects(object_type: str):
 @wrappers.acl("user")
 async def create_object(object_type: str):
     try:
-        request.form_parsed["details"] = {"assigned_users": [session["id"]]}
         async with ClusterLock("main"):
             object_id = await Objects.create(object_type=object_type).object(
                 data=request.form_parsed
@@ -159,7 +195,9 @@ async def delete_object(object_type: str, object_id: str | None = None):
     try:
         object_ids = ensure_list(object_id)
         async with ClusterLock("main"):
-            await Objects.object(id=object_ids, object_type=object_type).delete()
+            deleted_objects = await Objects.object(
+                id=object_ids, object_type=object_type
+            ).delete()
 
     except ValidationError as e:
         return validation_error(e.errors())
@@ -172,7 +210,7 @@ async def delete_object(object_type: str, object_id: str | None = None):
         response_body="",
         response_code=204,
         title="Object removed",
-        message=f"{len(object_ids)} object{'s' if len(object_ids) > 1 else ''} removed",
+        message=f"{len(deleted_objects)} object{'s' if len(deleted_objects) > 1 else ''} removed",
     )
 
 
@@ -184,9 +222,9 @@ async def patch_object(object_type: str, object_id: str | None = None):
         object_id = request.form_parsed.get("id")
     try:
         async with ClusterLock("main"):
-            await Objects.object(id=object_id, object_type=object_type).patch(
-                data=request.form_parsed
-            )
+            patched_objects = await Objects.object(
+                id=object_id, object_type=object_type
+            ).patch(data=request.form_parsed)
 
     except ValidationError as e:
         return validation_error(e.errors())
@@ -195,9 +233,9 @@ async def patch_object(object_type: str, object_id: str | None = None):
         return validation_error([{"loc": [name], "msg": message}])
 
     return trigger_notification(
-        level="success",
+        level="success" if len(patched_objects) > 0 else "warning",
         response_body="",
         response_code=204,
-        title="Object modified",
-        message=f"Object data modified",
+        title="Patch completed",
+        message=f"{len(patched_objects)} object{'s' if (len(patched_objects) > 1 or len(patched_objects) == 0) else ''} modified",
     )

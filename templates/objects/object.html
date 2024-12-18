@@ -31,24 +31,21 @@
     hx-get="/objects/{{ request.view_args.get("object_type") }}/{{ object.id }}">
 
     <form id="object-form" hx-trigger="submit throttle:200ms" hx-patch="/objects/{{ request.view_args.get("object_type") }}/{{ object.id }}">
-      <fieldset>
-        <label for="object-name">Name</label>
-        <input autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" id="object-name"
-          name="name"
-          type="text"
-          value="{{ object.name }}">
-        <small>An object's name must be unique across objects of its type</small>
-      </fieldset>
+      {% with
+        schema=schemas["_" + request.view_args.get("object_type") + "_base_schema"],
+        current_data=object,
+        root_key=""
+      %}
+        {% include "includes/form_builder.html" %}
+      {% endwith %}
 
-      <section>
-        {% with
-          schema=schemas["_" + request.view_args.get("object_type") + "_schema"],
-          current_data=object.details,
-          root_key="details"
-        %}
-          {% include "includes/form_builder.html" %}
-        {% endwith %}
-      </section>
+      {% with
+        schema=schemas["_" + request.view_args.get("object_type") + "_schema"],
+        current_data=object.details,
+        root_key="details"
+      %}
+        {% include "includes/form_builder.html" %}
+      {% endwith %}
       <button data-loading-disable type="submit">Update</button>
     </form>
   </article>

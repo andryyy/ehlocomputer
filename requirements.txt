@@ -2,9 +2,8 @@ quart
 jinja2
 pydantic
 webauthn
-qrcode
 email-validator
 loguru
-aiohttp
 tinydb
 aiotinydb
+

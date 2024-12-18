@@ -36,7 +36,7 @@ app.config["SEND_FILE_MAX_AGE_DEFAULT"] = defaults.SEND_FILE_MAX_AGE_DEFAULT
 app.config["SECRET_KEY"] = defaults.SECRET_KEY
 app.config["TEMPLATES_AUTO_RELOAD"] = defaults.TEMPLATES_AUTO_RELOAD
 app.config["SERVER_NAME"] = defaults.HOSTNAME
-app.config["SESSION_VALIDATED"] = set()
+app.config["SESSION_VALIDATED"] = dict()
 app.config["WS_CONNECTIONS"] = dict()
 
 

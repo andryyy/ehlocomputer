@@ -34,15 +34,14 @@ async def verify_session(acl: Literal[*defaults.USER_ACLS, "any"]) -> None:
     if session["id"] not in app.config["SESSION_VALIDATED"]:
         try:
             user = await Users.user(id=session["id"]).get()
+            app.config["SESSION_VALIDATED"].update({session["id"]: user.acl})
         except:
             session_clear()
             raise AuthException("User unknown")
 
-        if acl != "any":
-            if acl not in user.acl:
-                raise AuthException("Access denied by ACL")
-
-        app.config["SESSION_VALIDATED"].add(session["id"])
+    if acl != "any":
+        if acl not in app.config["SESSION_VALIDATED"][session["id"]]:
+            raise AuthException("Access denied by ACL")
 
 
 async def create_session_by_token(token):

@@ -35,10 +35,25 @@
           <span class="login-register" hidden>Login</span>
       </a>
     </li>
+    {% else %}
+    <li class="nav-menu">
+      <details class="dropdown" hx-on:click="event.target.nodeName==='A'?this.open=false:null">
+        <summary>User</summary>
+        <ul>
+          <li>
+            <a href="#" hx-get="/profile">Profile</a>
+          </li>
+          <li>
+            <hr>
+            <a href="#" hx-post="/logout" hx-swap="innerHTML">Logout</a>
+          </li>
+        </ul>
+      </details>
+    </li>
     {% endif %}
 
-    {% if "system" in session.get("acl", []) %}
-    <li class="nav-menu system-menu">
+    {% if "system" in session.get("acl", []) or "user" in session.get("acl", []) %}
+    <li class="nav-menu">
       <details class="dropdown" hx-on:click="event.target.nodeName==='A'?this.open=false:null">
         <summary>Objects</summary>
         <ul>
@@ -46,14 +61,19 @@
             <a href="#" class="secondary" hx-get="/objects/domains">Domains</a>
           </li>
           <li>
-            <a href="#" class="secondary" hx-get="/objects/mailboxes">Mailboxes</a>
+            <a href="#" class="secondary" hx-get="/objects/addresses">Addresses</a>
           </li>
           <li>
-            <a href="#" class="secondary" hx-get="/objects/groups">Groups</a>
+            <a href="#" class="secondary" hx-get="/objects/emailusers">Email Users</a>
+          </li>
+          <li>
+            <a href="#" class="secondary" hx-get="/objects/keypairs">Signing keys</a>
           </li>
         </ul>
       </details>
     </li>
+    {% endif %}
+    {% if "system" in session.get("acl", []) %}
     <li class="nav-menu system-menu">
       <details class="dropdown" hx-on:click="event.target.nodeName==='A'?this.open=false:null">
         <summary>System</summary>
@@ -79,44 +99,6 @@
       </details>
     </li>
     {% endif %}
-
-    {% if "user" in session.get("acl", []) %}
-    <li class="nav-menu user-menu">
-      <details class="dropdown" hx-on:click="event.target.nodeName==='A'?this.open=false:null">
-        <summary>My</summary>
-        <ul>
-          <li>
-            <a href="#" class="secondary" hx-get="/my/domains">Domains</a>
-          </li>
-          <li>
-            <a href="#" class="secondary" hx-get="/my/mailboxes">Mailboxes</a>
-          </li>
-          <li>
-            <a href="#" class="secondary" hx-get="/my/groups">Groups</a>
-          </li>
-          <li>
-            <hr>
-            <a href="#" class="secondary" hx-get="/my/files">Files</a>
-          </li>
-        </ul>
-      </details>
-    </li>
-    <li class="nav-menu user-menu">
-      <details class="dropdown" hx-on:click="event.target.nodeName==='A'?this.open=false:null">
-        <summary>User</summary>
-        <ul>
-          <li>
-            <a href="#" hx-get="/profile">Profile</a>
-          </li>
-          <li>
-            <hr>
-            <a href="#" hx-post="/logout" hx-swap="innerHTML">Logout</a>
-          </li>
-        </ul>
-      </details>
-    </li>
-    {% endif %}
-
   </ul>
 </nav>
 

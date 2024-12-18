@@ -1,7 +1,10 @@
+import email_validator
+import json
 from models.forms.objects import (
-    ObjectMailbox,
     ObjectDomain,
-    ObjectGroup,
+    ObjectAddress,
+    ObjectUser,
+    ObjectKeyPair,
 )
 from pydantic_core import PydanticCustomError
 from pydantic import (
@@ -11,12 +14,16 @@ from pydantic import (
     AfterValidator,
     constr,
     model_validator,
+    field_validator,
     ConfigDict,
 )
-from typing import Annotated, Literal
+from typing import Annotated, Literal, Any
 from uuid import uuid4, UUID
 from utils.helpers import ensure_list, to_unique_sorted_str_list
 from utils.datetimes import utc_now_as_str
+
+email_validator.TEST_ENVIRONMENT = True
+validate_email = email_validator.validate_email
 
 
 class ObjectBase(BaseModel):
@@ -27,15 +34,66 @@ class ObjectBase(BaseModel):
 
 
 class ObjectBaseDomain(ObjectBase):
-    details: ObjectDomain = {}
+    name: constr(strip_whitespace=True, min_length=1) = Field(
+        default="",
+        json_schema_extra={
+            "title": "Domain name",
+            "description": "A valid domain name.",
+            "type": "text",
+            "input_extra": 'autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"',
+            "form_id": f"name-{str(uuid4())}",
+        },
+    )
+
+    details: ObjectDomain
 
 
-class ObjectBaseMailbox(ObjectBase):
-    details: ObjectMailbox = {}
+class ObjectBaseUser(ObjectBase):
+    name: constr(strip_whitespace=True, min_length=1) = Field(
+        default="",
+        json_schema_extra={
+            "title": "Mail user",
+            "description": "A username to identify to a server.",
+            "type": "text",
+            "input_extra": 'autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"',
+            "form_id": f"name-{str(uuid4())}",
+        },
+    )
+    details: ObjectUser
 
 
-class ObjectBaseGroup(ObjectBase):
-    details: ObjectGroup = {}
+class ObjectBaseAddress(ObjectBase):
+    name: constr(strip_whitespace=True, min_length=1) = Field(
+        default="",
+        json_schema_extra={
+            "title": "Email address",
+            "description": "Must be a valid email address.",
+            "type": "email",
+            "input_extra": 'autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"',
+            "form_id": f"name-{str(uuid4())}",
+        },
+    )
+
+    @computed_field
+    @property
+    def domain(self) -> str:
+        return validate_email(self.name).ascii_domain
+
+    details: ObjectAddress
+
+
+class ObjectBaseKeyPair(ObjectBase):
+    name: constr(strip_whitespace=True, min_length=1) = Field(
+        default="",
+        json_schema_extra={
+            "title": "Display name",
+            "description": "A display name for a key pair.",
+            "type": "text",
+            "input_extra": 'autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"',
+            "form_id": f"name-{str(uuid4())}",
+        },
+    )
+    details: ObjectKeyPair
 
 
 class ObjectAdd(BaseModel):
@@ -58,15 +116,77 @@ class ObjectAdd(BaseModel):
 
 
 class ObjectAddDomain(ObjectAdd):
+    @field_validator("name", mode="before")
+    def name_as_domain(cls, v):
+        try:
+            name = validate_email(f"name@{v}").ascii_domain
+        except:
+            raise
+            raise PydanticCustomError(
+                "name_invalid",
+                "The provided name is not a valid domain name",
+                dict(name_invalid=v),
+            )
+        return name
+
     details: ObjectDomain
 
 
-class ObjectAddMailbox(ObjectAdd):
-    details: ObjectMailbox
+class ObjectAddAddress(ObjectAdd):
+    @field_validator("name", mode="before")
+    def email_validator(cls, v):
+        try:
+            name = validate_email(v).ascii_email
+        except:
+            raise
+            raise PydanticCustomError(
+                "name_invalid",
+                "The provided name is not a valid email address",
+                dict(name_invalid=v),
+            )
+        return name
+
+    @computed_field
+    @property
+    def domain(self) -> str:
+        return validate_email(self.name).ascii_domain
+
+    details: ObjectAddress
 
 
-class ObjectAddGroup(ObjectAdd):
-    details: ObjectGroup
+class ObjectAddUser(ObjectAdd):
+    details: ObjectUser
+
+
+class ObjectAddKeyPair(ObjectAdd):
+    @model_validator(mode="before")
+    @classmethod
+    def pre_init(cls, data: Any) -> Any:
+        if not all(
+            data["details"].get(k)
+            for k in ObjectKeyPair.__fields__
+            if k != "assigned_users"
+        ):
+            data["details"] = cls.generate_rsa(
+                2048, data["details"].get("assigned_users", [])
+            )
+        return data
+
+    @classmethod
+    def generate_rsa(
+        cls, key_size: int = 2048, assigned_users: list = []
+    ) -> "ObjectKeyPair":
+        from utils.dkim import generate_rsa_dkim
+
+        priv, pub = generate_rsa_dkim(key_size)
+        return ObjectKeyPair(
+            private_key_pem=priv,
+            public_key_base64=pub,
+            key_size=key_size,
+            assigned_users=assigned_users,
+        ).dict()
+
+    details: ObjectKeyPair
 
 
 class ObjectDelete(BaseModel):
@@ -87,38 +207,76 @@ class ObjectPatch(BaseModel):
 
 
 class ObjectPatchDomain(ObjectPatch):
+    @field_validator("name", mode="before")
+    def name_as_domain(cls, v):
+        try:
+            name = validate_email(f"name@{v}").ascii_domain
+        except:
+            raise
+            raise PydanticCustomError(
+                "name_invalid",
+                "The provided name is not a valid domain name",
+                dict(name_invalid=v),
+            )
+        return name
+
     details: ObjectDomain
 
 
-class ObjectPatchMailbox(ObjectPatch):
-    details: ObjectMailbox
+class ObjectPatchUser(ObjectPatch):
+    details: ObjectUser
 
 
-class ObjectPatchGroup(ObjectPatch):
-    details: ObjectGroup
+class ObjectPatchAddress(ObjectPatch):
+    @field_validator("name", mode="before")
+    def email_validator(cls, v):
+        try:
+            name = validate_email(v).ascii_email
+        except:
+            raise PydanticCustomError(
+                "name_invalid",
+                "The provided name is not a valid email address",
+                dict(name_invalid=v),
+            )
+        return name
+
+    @computed_field
+    @property
+    def domain(self) -> str:
+        return validate_email(self.name).ascii_domain
+
+    details: ObjectAddress
+
+
+class ObjectPatchKeyPair(ObjectPatch):
+    details: ObjectKeyPair
 
 
 model_classes = {
-    "types": ["domains", "mailboxes", "groups"],
+    "types": ["domains", "addresses", "emailusers", "keypairs"],
     "forms": {
         "domains": ObjectDomain,
-        "mailboxes": ObjectMailbox,
-        "groups": ObjectGroup,
+        "addresses": ObjectAddress,
+        "emailusers": ObjectUser,
+        "keypairs": ObjectKeyPair,
     },
     "patch": {
         "domains": ObjectPatchDomain,
-        "mailboxes": ObjectPatchMailbox,
-        "groups": ObjectPatchGroup,
+        "addresses": ObjectPatchAddress,
+        "emailusers": ObjectPatchUser,
+        "keypairs": ObjectPatchKeyPair,
     },
     "add": {
         "domains": ObjectAddDomain,
-        "mailboxes": ObjectAddMailbox,
-        "groups": ObjectAddGroup,
+        "addresses": ObjectAddAddress,
+        "emailusers": ObjectAddUser,
+        "keypairs": ObjectAddKeyPair,
     },
     "base": {
         "domains": ObjectBaseDomain,
-        "mailboxes": ObjectBaseMailbox,
-        "groups": ObjectBaseGroup,
+        "addresses": ObjectBaseAddress,
+        "emailusers": ObjectBaseUser,
+        "keypairs": ObjectBaseKeyPair,
     },
 }
 

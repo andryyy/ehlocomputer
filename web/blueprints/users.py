@@ -156,7 +156,7 @@ async def patch_user(user_id: str | None = None):
         name, message = e.args
         return validation_error([{"loc": [name], "msg": message}])
 
-    app.config["SESSION_VALIDATED"].discard(user_id)
+    app.config["SESSION_VALIDATED"].pop(user_id, None)
 
     return trigger_notification(
         level="success",
