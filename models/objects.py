@@ -121,7 +121,6 @@ class ObjectAddDomain(ObjectAdd):
         try:
             name = validate_email(f"name@{v}").ascii_domain
         except:
-            raise
             raise PydanticCustomError(
                 "name_invalid",
                 "The provided name is not a valid domain name",
@@ -138,7 +137,6 @@ class ObjectAddAddress(ObjectAdd):
         try:
             name = validate_email(v).ascii_email
         except:
-            raise
             raise PydanticCustomError(
                 "name_invalid",
                 "The provided name is not a valid email address",
@@ -212,7 +210,6 @@ class ObjectPatchDomain(ObjectPatch):
         try:
             name = validate_email(f"name@{v}").ascii_domain
         except:
-            raise
             raise PydanticCustomError(
                 "name_invalid",
                 "The provided name is not a valid domain name",
