@@ -30,7 +30,7 @@ class Users:
             for key, value in kwargs.items():
                 setattr(self, key, value)
 
-        @cluster_task("users_create_user", enforce_uuid=True)
+        @cluster_task("users_create_user")
         async def user(self, data: dict):
             validated_data = users_model.UserAdd.parse_obj(data).dict()
 

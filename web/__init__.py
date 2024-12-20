@@ -13,7 +13,6 @@ from web.blueprints import objects
 from web.blueprints import profile
 from web.blueprints import root
 from web.blueprints import system
-from web.blueprints import my
 from web.blueprints import users
 from web.helpers import parse_form_to_dict
 
@@ -30,7 +29,6 @@ app.register_blueprint(objects.blueprint)
 app.register_blueprint(profile.blueprint)
 app.register_blueprint(system.blueprint)
 app.register_blueprint(users.blueprint)
-app.register_blueprint(my.blueprint)
 
 app.config["SEND_FILE_MAX_AGE_DEFAULT"] = defaults.SEND_FILE_MAX_AGE_DEFAULT
 app.config["SECRET_KEY"] = defaults.SECRET_KEY

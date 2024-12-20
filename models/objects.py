@@ -68,16 +68,22 @@ class ObjectBaseAddress(ObjectBase):
         json_schema_extra={
             "title": "Email address",
             "description": "Must be a valid email address.",
-            "type": "email",
+            "type": "text",
             "input_extra": 'autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"',
             "form_id": f"name-{str(uuid4())}",
         },
     )
 
-    @computed_field
-    @property
-    def domain(self) -> str:
-        return validate_email(self.name).ascii_domain
+    assigned_domain: str = Field(
+        default="",
+        json_schema_extra={
+            "title": "Assigned domain",
+            "description": "Assign a domain for this address.",
+            "type": "domain",
+            "input_extra": 'autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"',
+            "form_id": f"domain-{str(uuid4())}",
+        },
+    )
 
     details: ObjectAddress
 
@@ -135,7 +141,7 @@ class ObjectAddAddress(ObjectAdd):
     @field_validator("name", mode="before")
     def email_validator(cls, v):
         try:
-            name = validate_email(v).ascii_email
+            name = validate_email(f"{v}@example.org").ascii_local_part
         except:
             raise PydanticCustomError(
                 "name_invalid",
@@ -144,11 +150,7 @@ class ObjectAddAddress(ObjectAdd):
             )
         return name
 
-    @computed_field
-    @property
-    def domain(self) -> str:
-        return validate_email(self.name).ascii_domain
-
+    assigned_domain: str
     details: ObjectAddress
 
 
@@ -187,13 +189,6 @@ class ObjectAddKeyPair(ObjectAdd):
     details: ObjectKeyPair
 
 
-class ObjectDelete(BaseModel):
-    id: Annotated[
-        str | list,
-        AfterValidator(lambda x: to_unique_sorted_str_list(ensure_list(x))),
-    ]
-
-
 class ObjectPatch(BaseModel):
     model_config = ConfigDict(validate_assignment=True)
     name: Annotated[constr(strip_whitespace=True), Field(min_length=1)]
@@ -228,7 +223,7 @@ class ObjectPatchAddress(ObjectPatch):
     @field_validator("name", mode="before")
     def email_validator(cls, v):
         try:
-            name = validate_email(v).ascii_email
+            name = validate_email(f"{v}@example.org").ascii_local_part
         except:
             raise PydanticCustomError(
                 "name_invalid",
@@ -237,11 +232,7 @@ class ObjectPatchAddress(ObjectPatch):
             )
         return name
 
-    @computed_field
-    @property
-    def domain(self) -> str:
-        return validate_email(self.name).ascii_domain
-
+    assigned_domain: str
     details: ObjectAddress
 
 
@@ -278,27 +269,8 @@ model_classes = {
 }
 
 
-class _Objects_attr(BaseModel):
-    id: Annotated[
-        str | list[str],
-        AfterValidator(lambda v: ensure_list(v) or None),
+class ObjectIdList(BaseModel):
+    object_id: Annotated[
+        UUID | list[UUID],
+        AfterValidator(lambda x: to_unique_sorted_str_list(ensure_list(x))),
     ]
-    object_type: Literal[*model_classes["types"]]
-
-    @model_validator(mode="after")
-    def post_init(self):
-        try:
-            if isinstance(self.id, list):
-                if len(self.id) == 1:
-                    self.id = str(UUID(self.id.pop()))
-                else:
-                    self.id = [str(UUID(uid)) for uid in self.id]
-            elif isinstance(self.id, str):
-                self.id = str(UUID(self.id))
-        except:
-            raise PydanticCustomError(
-                "id",
-                "One or more IDs cannot be intepreted as UUID values",
-                dict(provided_id=self.id),
-            )
-        return self

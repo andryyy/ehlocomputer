@@ -101,7 +101,7 @@ DATA FIELDS
 
   {% elif v.type == "emailusers:multi" or v.type == "emailusers" %}
 
-    {% if not object_emailuser_options or object_emailuser_options == [] %}
+    {% if not emailuser_options or emailuser_options == [] %}
       <p>No email users available</p>
     {% else %}
       <fieldset>
@@ -114,7 +114,7 @@ DATA FIELDS
           name="{% if root_key %}{{ root_key }}.{{ k }}{% else %}{{ k }}{% endif %}"
           id="{{ v.form_id }}">
           <option value="">-- None --</option>
-          {% for option in object_emailuser_options %}
+          {% for option in emailuser_options %}
           <option value="{{ option["value"] }}" {{ "selected" if option["value"] in current_data.get(k) }}>{{ option["name"] }}</option>
           {% endfor %}
         </select>
@@ -198,6 +198,26 @@ DATA FIELDS
           {{- "" -}}
           </textarea>
         </div>
+        {% endif %}
+      </fieldset>
+    {% endif %}
+
+  {% elif v.type == "domain" %}
+
+    {% if not domain_options or domain_options == [] %}
+      <p>No domain available</p>
+    {% else %}
+      <fieldset>
+        <label for="{{ v.form_id }}">{{ v.title }}</label>
+        <select {{ v.input_extra|safe }}
+          name="{% if root_key %}{{ root_key }}.{{ k }}{% else %}{{ k }}{% endif %}"
+          id="{{ v.form_id }}">
+          {% for option in domain_options %}
+          <option value="{{ option["value"] }}" {{ "selected" if option["value"] in current_data.get(k, []) }}>{{ option["name"] }}</option>
+          {% endfor %}
+        </select>
+        {% if v.description %}
+        <small>{{ v.description|safe }}</small>
         {% endif %}
       </fieldset>
     {% endif %}

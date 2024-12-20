@@ -5,7 +5,13 @@ from models import objects as objects_model
 from pydantic import ValidationError
 from quart import Blueprint, current_app as app, render_template, request, session
 from tools.users import Users
-from tools.objects import Objects
+from tools.objects import (
+    create as _create_object,
+    search as _search_object,
+    delete as _delete_object,
+    patch as _patch_object,
+    get as _get_object,
+)
 from utils import wrappers
 from utils.helpers import batch, ensure_list
 from uuid import uuid4
@@ -38,9 +44,9 @@ async def load_schemas():
         ]
         if request.endpoint == "objects.get_object"
         else [],
-        "object_emailuser_options": [
+        "emailuser_options": [
             {"name": group.name, "value": group.id}
-            for group in await Objects().search(
+            for group in await _search_object(
                 object_type="emailusers",
                 q="",
                 filter_details={"assigned_users": [session["id"]]}
@@ -56,7 +62,7 @@ async def load_schemas():
                 "value": group.id,
                 "dns_formatted": group.details.dns_formatted,
             }
-            for group in await Objects().search(
+            for group in await _search_object(
                 object_type="keypairs",
                 q="",
                 filter_details={"assigned_users": [session["id"]]}
@@ -65,6 +71,21 @@ async def load_schemas():
             )
         ]
         if request.endpoint == "objects.get_object"
+        else [],
+        "domain_options": [
+            {
+                "name": domain.name,
+                "value": domain.id,
+            }
+            for domain in await _search_object(
+                object_type="domains",
+                q="",
+                filter_details={"assigned_users": [session["id"]]}
+                if not "system" in session["acl"]
+                else {},
+            )
+        ]
+        if request.endpoint in ["objects.get_object", "objects.get_objects"]
         else [],
     }
 
@@ -89,7 +110,7 @@ async def objects_before_request():
 @wrappers.acl("user")
 async def get_object(object_type: str, object_id: str):
     try:
-        object_data = await Objects.object(id=object_id, object_type=object_type).get()
+        object_data = await _get_object(object_id=object_id, object_type=object_type)
         if not object_data:
             return (f"<h1>Object not found</h1><p>Object is unknown</p>", 404)
 
@@ -117,7 +138,7 @@ async def get_objects(object_type: str):
         try:
             matched_objects = [
                 m.dict()
-                for m in await Objects().search(
+                for m in await _search_object(
                     object_type=object_type,
                     q=search_model.q,
                     filter_details={"assigned_users": [session["id"]]}
@@ -167,9 +188,9 @@ async def get_objects(object_type: str):
 @wrappers.acl("user")
 async def create_object(object_type: str):
     try:
-        async with ClusterLock("main"):
-            object_id = await Objects.create(object_type=object_type).object(
-                data=request.form_parsed
+        async with ClusterLock(object_type):
+            object_id = await _create_object(
+                object_type=object_type, data=request.form_parsed
             )
     except ValidationError as e:
         return validation_error(e.errors())
@@ -194,10 +215,10 @@ async def delete_object(object_type: str, object_id: str | None = None):
         object_id = request.form_parsed.get("id")
     try:
         object_ids = ensure_list(object_id)
-        async with ClusterLock("main"):
-            deleted_objects = await Objects.object(
-                id=object_ids, object_type=object_type
-            ).delete()
+        async with ClusterLock(object_type):
+            deleted_objects = await _delete_object(
+                object_id=object_ids, object_type=object_type
+            )
 
     except ValidationError as e:
         return validation_error(e.errors())
@@ -221,10 +242,10 @@ async def patch_object(object_type: str, object_id: str | None = None):
     if request.method == "POST":
         object_id = request.form_parsed.get("id")
     try:
-        async with ClusterLock("main"):
-            patched_objects = await Objects.object(
-                id=object_id, object_type=object_type
-            ).patch(data=request.form_parsed)
+        async with ClusterLock(object_type):
+            patched_objects = await _patch_object(
+                object_id=object_id, object_type=object_type, data=request.form_parsed
+            )
 
     except ValidationError as e:
         return validation_error(e.errors())

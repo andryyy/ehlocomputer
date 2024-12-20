@@ -11,13 +11,12 @@ import base64
 import sys
 
 from config import defaults
-from config.database import IN_MEMORY_DB
+from config.database import *
 from config.logs import logger
 from contextlib import closing, suppress
+from deepdiff import Delta
 from enum import Enum
-from tools import CONTEXT_TRANSACTION, TaskModel
-from tools.objects import Objects
-from tools.users import Users
+from tools import CONTEXT_TRANSACTION, evaluate_db_params
 from utils.crypto import sha256_filedigest
 from utils.datetimes import ntime_utc_now
 from utils.helpers import ensure_list, read_n_to_last_line, is_path_within_cwd
@@ -43,89 +42,6 @@ def get_ssl_context(type_value: str):
     context.verify_mode = ssl.VerifyMode.CERT_REQUIRED
     context.minimum_version = ssl.TLSVersion.TLSv1_3
     return context
-
-
-class Transaction:
-    def __init__(self):
-        from threading import Lock
-
-        self.trans_fn = "database/.transactions"
-        self.commits_fn = "database/.commits"
-        self.db_fn = "database/main"
-        self.lock = Lock()
-
-        for fn in [self.trans_fn, self.commits_fn, self.db_fn]:
-            if not os.path.exists(fn):
-                with open(fn, "x"):
-                    pass
-            os.chmod(fn, 0o600)
-
-    def _process_data(self, data):
-        if not data:
-            return "0.0", ""
-
-        transaction, commit_on, payload = data.strip().split(":", 2)
-        TaskModel.parse_raw_task(payload)
-
-        return transaction, payload
-
-    @property
-    def _db_matches_latest_commit(self):
-        with self.lock:
-            latest_commit = read_n_to_last_line(self.commits_fn, n=1)
-            if latest_commit:
-                _, commit_hash = latest_commit.strip().split(":")
-                return commit_hash == sha256_filedigest(self.db_fn)
-
-    @property
-    def latest(self):
-        with self.lock:
-            latest_commit = read_n_to_last_line(self.commits_fn, n=1)
-            if latest_commit:
-                trans_id, _ = latest_commit.strip().split(":")
-                return trans_id
-            return "0.0"
-
-    def search(self, trans_id: float, include_following: bool = False):
-        record = False
-        after = []
-
-        with self.lock:
-            with open(self.commits_fn, "r") as f:
-                commited_trans_ids = [t.strip().split(":")[0] for t in f.readlines()]
-
-            for line in fileinput.input(self.trans_fn):
-                if not record:
-                    if f"{trans_id}:" in line and trans_id in commited_trans_ids:
-                        record = True
-                        after.append(self._process_data(line))
-                else:
-                    if not include_following:
-                        break
-                    after.append(self._process_data(line))
-        return after
-
-    def write(self, trans_id, data):
-        with self.lock:
-            db_hash = sha256_filedigest(self.db_fn)
-            with open(self.trans_fn, "a+") as f:
-                f.write(f"{trans_id}:{db_hash}:{data}\n")
-
-    async def commit(self, trans_id):
-        from config.database import TinyDB, TINYDB_PARAMS
-
-        with self.lock:
-            assert os.path.isfile(f"{self.db_fn}.{trans_id}")
-            async with TinyDB(**TINYDB_PARAMS) as db:  # acquires tinydbs lock
-                os.rename(f"{self.db_fn}.{trans_id}", self.db_fn)
-            with open(self.commits_fn, "a+") as f:
-                f.write(f"{trans_id}:{sha256_filedigest(self.db_fn)}\n")
-
-
-transactions = Transaction()
-if transactions._db_matches_latest_commit == False:
-    logger.error("<transactions> database does not match the latest commit")
-    sys.exit(1)
 
 
 class DistLockCancelled(Exception):
@@ -157,7 +73,6 @@ class Cluster:
         self.tickets = dict()
         self.server_init = False
 
-        IN_MEMORY_DB["tasks"] = []
         IN_MEMORY_DB["peer_failures"] = dict()
 
     def _set_master_node(self):
@@ -254,7 +169,6 @@ class Cluster:
             "META",
             f"NAME {defaults.NODENAME}",
             f"STARTED {self.started}",
-            f"COMMIT {transactions.latest}",
             "MASTER {master_node}".format(master_node=self.master_node or "?CONFUSED"),
             f"BIND {defaults.CLUSTER_PEERS_ME}",
         ]
@@ -280,7 +194,6 @@ class Cluster:
         patterns = [
             r"NAME (?P<name>\S+)",
             r"STARTED (?P<started>\S+)",
-            r"COMMIT (?P<commit>\S+)",
             r"MASTER (?P<master>\S+)",
             r"BIND (?P<bind>\S+)",
         ]
@@ -330,117 +243,44 @@ class Cluster:
 
             try:
                 if not self.server_init and not any(
-                    map(lambda s: cmd.startswith(s), ["ACK", "STATUS", "SYNC", "INIT"])
+                    map(lambda s: cmd.startswith(s), ["ACK", "STATUS", "APPLY", "INIT"])
                 ):
                     await self.send_command(
                         "ACK CRIT:NOT_READY", [peer_info["bind"]], ticket=ticket
                     )
 
                 # A task starting with "R" indicates a resync
-                elif cmd.startswith("TASK") or cmd.startswith("RTASK"):
-                    if (
-                        not cmd.startswith("RTASK")
-                        and transactions.latest != peer_info["commit"]
-                    ):
-                        await self.send_command(
-                            "ACK CRIT:COMMIT_MISMATCH",
-                            [peer_info["bind"]],
-                            ticket=ticket,
-                        )
-
-                    else:
-                        try:
-                            task_data = TaskModel.parse_raw_task(cmd)
-                            init_kwargs, task_kwargs = task_data.kwargs
-                            self._context_token = CONTEXT_TRANSACTION.set(ticket)
-
-                            if task_data.name.startswith("users_"):
-                                if task_data.name == "users_create_user":
-                                    await Users.create(**init_kwargs).user(
-                                        **task_kwargs
-                                    )
-                                elif task_data.name == "users_user_create_credential":
-                                    await Users.user(**init_kwargs).create_credential(**task_kwargs)
-                                elif task_data.name == "users_user_delete":
-                                    await Users.user(**init_kwargs).delete()
-                                elif task_data.name == "users_user_delete_credential":
-                                    await Users.user(**init_kwargs).delete_credential(**task_kwargs)
-                                elif task_data.name == "users_user_patch":
-                                    await Users.user(**init_kwargs).patch(**task_kwargs)
-                                elif task_data.name == "users_user_patch_profile":
-                                    await Users.user(**init_kwargs).patch_profile(
-                                        **task_kwargs
-                                    )
-                                elif task_data.name == "users_user_patch_credential":
-                                    await Users.user(**init_kwargs).patch_credential(
-                                        **task_kwargs
-                                    )
-                            elif task_data.name.startswith("objects_"):
-                                if task_data.name == "objects_create_object":
-                                    await Objects.create(**init_kwargs).object(
-                                        **task_kwargs
-                                    )
-                                elif task_data.name == "objects_object_patch":
-                                    await Objects.object(**init_kwargs).patch(
-                                        **task_kwargs
-                                    )
-                                elif task_data.name == "objects_object_delete":
-                                    await Objects.object(**init_kwargs).delete()
-
-                            transactions.write(ticket, cmd)
-                            if cmd.startswith("RTASK"):
-                                await transactions.commit(ticket)
-
+                elif cmd.startswith("APPLY"):
+                    _, _, payload = cmd.partition(" ")
+                    table, delta_payload = payload.split(" ")
+                    table_delta = Delta(base64.b64decode(delta_payload), safe_to_import="tinydb.table.Document")
+                    db_params = evaluate_db_params(ticket)
+                    async with TinyDB(**db_params) as db:
+                        if not table in db.tables():
                             await self.send_command(
-                                "ACK", [peer_info["bind"]], ticket=ticket
+                                "ACK CRIT:NO_SUCH_TABLE", [peer_info["bind"]], ticket=ticket
                             )
-
-                        except Exception as e:
-                            logger.error(f"<task> {task_data.name} failed: {e}")
-                            await self.send_command(
-                                "ACK CRIT:TASK_FAILED",
-                                [peer_info["bind"]],
-                                ticket=ticket,
-                            )
-                        finally:
-                            CONTEXT_TRANSACTION.reset(self._context_token)
-                            IN_MEMORY_DB["tasks"] = []
+                        else:
+                            try:
+                                table_data = db.table(table).all()
+                                db.table(table).truncate()
+                                db.table(table).insert_multiple(table_data + table_delta)
+                                await self.send_command("ACK", [peer_info["bind"]], ticket=ticket)
+                            except Exception as e:
+                                logger.error(f"<connection_handler> {type(e)}: {e}")
+                                await self.send_command("CRIT:CANNOT_APPLY", [peer_info["bind"]], ticket=ticket)
 
                 elif cmd == "COMMIT":
-                    await transactions.commit(ticket)
-                    await self.send_command("ACK", [peer_info["bind"]], ticket=ticket)
+                    db_params = evaluate_db_params(ticket)
+                    if not os.path.isfile(db_params["filename"]):
+                        await self.send_command("CRIT:NOTHING_TO_COMMIT", [peer_info["bind"]], ticket=ticket)
+                    else:
+                        async with TinyDB(**db_params) as db:  # acquires tinydbs lock
+                            os.rename(db_params["filename"], TINYDB_PARAMS["filename"])
+                        await self.send_command("ACK", [peer_info["bind"]], ticket=ticket)
 
                 elif (cmd == "STATUS" or cmd == "INIT"):
                     await self.send_command("ACK", [peer_info["bind"]], ticket=ticket)
-
-                elif cmd == "SYNC":
-                    assert self.role == Role.MASTER
-                    if transactions.latest != peer_info["commit"]:
-                        if peer_info["commit"] > transactions.latest:
-                            await self.send_command(
-                                "ACK CRIT:SLAVE_MORE_RECENT",
-                                [peer_info["bind"]],
-                                ticket=ticket,
-                            )
-                        else:
-                            matches = transactions.search(
-                                trans_id=peer_info["commit"], include_following=True
-                            )
-                            for t, task in matches[1:]:
-                                await self.send_command(
-                                    f"R{task}",  # prepend R
-                                    [peer_info["bind"]],
-                                    ticket=t,
-                                )
-                            await self.send_command(
-                                f"ACK RESYNCED {len(matches[1:])}",
-                                [peer_info["bind"]],
-                                ticket=ticket,
-                            )
-                    else:
-                        await self.send_command(
-                            "ACK LATEST", [peer_info["bind"]], ticket=ticket
-                        )
 
                 elif cmd.startswith("FILEGET"):
                     _, _, payload = cmd.partition(" ")
@@ -579,34 +419,6 @@ class Cluster:
         if lock_name == "":
             lock_name = "main"
 
-        if IN_MEMORY_DB["tasks"] and not errors:
-            transaction_id = str(CONTEXT_TRANSACTION.get())
-
-            async with self.receiving:
-                while IN_MEMORY_DB["tasks"]:
-                    task = IN_MEMORY_DB["tasks"].pop()
-                    _, receivers = await self.send_command(
-                        task, "*", ticket=transaction_id
-                    )
-
-                    try:
-                        await self._await_receivers(
-                            transaction_id, receivers, raise_on_error=True
-                        )
-                        transactions.write(transaction_id, task)
-                    except IncompleteClusterResponses:
-                        errors.append("remote_transaction_failed")
-                        break
-
-                if not errors:
-                    _, receivers = await self.send_command(
-                        "COMMIT", "*", ticket=transaction_id
-                    )
-                    await self._await_receivers(
-                        transaction_id, receivers, raise_on_error=True
-                    )  # not raising, todo
-                    await transactions.commit(transaction_id)
-
         CONTEXT_TRANSACTION.reset(self._context_token)
 
         if self.role == Role.SLAVE:
@@ -687,7 +499,6 @@ class Cluster:
                 await self._await_receivers(ticket, receivers, raise_on_error=False)
             raise DistLockCancelled("Master re-election")
 
-        IN_MEMORY_DB["tasks"] = []
         self._context_token = CONTEXT_TRANSACTION.set(ntime_utc_now())
 
     async def request_files(self, files: str | list, peers="*"):
@@ -733,33 +544,15 @@ class Cluster:
 
         logger.info(f"Listening on {self.port} on address {" and ".join(self.host)}...")
 
-        ret = False
-        while not ret or not self.server_init:
+        status = False
+        while not status or not self.server_init:
             async with self.receiving:
                 ticket, receivers = await self.send_command("INIT", "*")
-                ret, responses = await self._await_receivers(ticket, receivers, raise_on_error=False)
-                if ret:
+                status, responses = await self._await_receivers(ticket, receivers, raise_on_error=False)
+                if status:
                     self._set_master_node()
                 if not self.server_init:
                     await asyncio.sleep(1.0)
-
-        async with self.receiving:
-            try:
-                ticket, receivers = await self.send_command("SYNC", [self.master_node])
-                _, responses = await self._await_receivers(
-                    ticket, receivers, raise_on_error=True
-                )
-                if responses:
-                    if responses[0] != "LATEST":
-                        logger.success(f"<server_init> resynced; result: {responses[0]}")
-                    logger.info(f"<server_init> Server is synchronized")
-
-            except IncompleteClusterResponses:
-                shutdown_trigger.set()
-                for p, _ in self.connections.items():
-                    r, w = self.connections[p]["streams"]
-                    w.close()
-                    await w.wait_closed()
 
         async with server:
             await shutdown_trigger.wait()

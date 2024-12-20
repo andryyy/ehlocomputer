@@ -9,7 +9,6 @@ from copy import copy
 from functools import wraps
 from models.tasks import TaskModel
 from pydantic import ValidationError
-from quart import current_app, session
 from typing import Literal
 from utils.helpers import is_path_within_cwd
 
@@ -26,20 +25,12 @@ class _TaskJSONEncoder(json.JSONEncoder):
 CONTEXT_TRANSACTION = contextvars.ContextVar("context_transaction", default=None)
 
 
-def whoami(func):
-    @wraps(func)
-    def wrapper(self, *args, **kwargs):
-        if current_app and session.get("id"):
-            self.user_id = session["id"]
-        func(self, *args, **kwargs)
-
-    return wrapper
-
-
-def evaluate_db_params():
+def evaluate_db_params(ticket: str | None = None):
     db_params = copy(TINYDB_PARAMS)
 
-    if CONTEXT_TRANSACTION.get():
+    if ticket:
+        transaction_file = f"database/main.{ticket}"
+    elif CONTEXT_TRANSACTION.get():
         transaction_file = f"database/main.{CONTEXT_TRANSACTION.get()}"
     else:
         transaction_file = "database/main"
@@ -54,18 +45,18 @@ def evaluate_db_params():
     return db_params
 
 
-def cluster_task(task_name, enforce_uuid: bool = False):
+def cluster_task(task_name, init: list = []):
     def form_task(func):
         @wraps(func)
         async def wrapper(self, *args, **kwargs):
             result = await func(self, *args, **kwargs)
 
-            if enforce_uuid:
-                self.uuid = result
-
             task_request = "TASK {task_name} [{init_kwargs}, {task_kwargs}]".format(
                 task_name=task_name,
-                init_kwargs=json.dumps(vars(self), cls=_TaskJSONEncoder),
+                init_kwargs=json.dumps(
+                    {k: v for k, v in vars(self).items() if k in init},
+                    cls=_TaskJSONEncoder,
+                ),
                 task_kwargs=json.dumps(kwargs, cls=_TaskJSONEncoder),
             )
 

@@ -5,6 +5,7 @@ import os
 from pydantic import ValidationError, validate_call
 from typing import Any, Literal
 from copy import deepcopy
+from uuid import UUID
 
 
 def merge_deep(dict1: dict, dict2: dict):
@@ -55,15 +56,15 @@ def ensure_list(a: Any | list[Any] | None) -> list:
 
 
 @validate_call
-def to_unique_sorted_str_list(l: list[str]) -> list:
-    _l = [x for x in set(l) if x]
-    return sorted(_l, key=lambda x: str(x))
+def to_unique_sorted_str_list(l: list[str | UUID]) -> list:
+    _l = [str(x) for x in set(l) if x]
+    return sorted(_l)
 
 
 @validate_call
 def to_unique_list(l: list[Any]) -> list:
     _l = [x for x in set(l) if x]
-    return sorted(_l, key=lambda x: x)
+    return sorted(_l)
 
 
 @validate_call
