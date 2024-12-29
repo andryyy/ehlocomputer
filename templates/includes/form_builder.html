@@ -75,7 +75,7 @@ DATA FIELDS
       {% endif %}
     </fieldset>
 
-  {% elif v.type == "users:multi" or v.type == "users" %}
+  {% elif (v.type == "users:multi" or v.type == "users") and "system" in session["acl"] %}
 
     {% if not user_options or user_options == [] %}
       <p>No users found</p>
@@ -100,9 +100,9 @@ DATA FIELDS
     {% endif %}
 
   {% elif v.type == "emailusers:multi" or v.type == "emailusers" %}
-
-    {% if not emailuser_options or emailuser_options == [] %}
-      <p>No email users available</p>
+    {% if emailuser_options == [] %}
+      <label for="{{ v.form_id }}">{{ v.title }}</label>
+      <p><mark>No email users available</mark></p>
     {% else %}
       <fieldset>
         <label for="{{ v.form_id }}">{{ v.title }}</label>
@@ -204,8 +204,12 @@ DATA FIELDS
 
   {% elif v.type == "domain" %}
 
-    {% if not domain_options or domain_options == [] %}
-      <p>No domain available</p>
+    {% if domain_options == [] %}
+      <label for="{{ v.form_id }}">{{ v.title }}</label>
+      <p><mark>No domain available</mark></p>
+    {% elif domain_options == False %}
+      <label for="{{ v.form_id }}">{{ v.title }}</label>
+      <p><mark>Cannot change domain of object</mark></p>
     {% else %}
       <fieldset>
         <label for="{{ v.form_id }}">{{ v.title }}</label>

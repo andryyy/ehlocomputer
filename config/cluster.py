@@ -25,15 +25,17 @@ class ClusterLock:
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         async with TinyDB(**self.db_params) as db:
-            aexit_db_data = db.table(self.lock_name).all()
-            aexit_diff = DeepDiff(
+            db_data = db.table(self.lock_name).all()
+            diff = DeepDiff(
                 self.aenter_db_data,
-                aexit_db_data,
+                db_data,
                 ignore_order=True,
                 report_repetition=True,
+                view="tree",
             )
-            if aexit_diff:
-                table_delta = Delta(aexit_diff)
+            if diff:
+                print(diff.to_json())
+                table_delta = Delta(diff)
                 delta_string = base64.b64encode(table_delta.dumps()).decode("utf-8")
                 async with cluster.receiving:
                     try:
@@ -52,5 +54,8 @@ class ClusterLock:
                         os.rename(self.db_params["filename"], TINYDB_PARAMS["filename"])
                     except:
                         logger.error("<ClusterLock> failed to commit")
+            else:
+                if TINYDB_PARAMS["filename"] != self.db_params["filename"]:
+                    os.unlink(self.db_params["filename"])
 
         await cluster.release(self.lock_name)

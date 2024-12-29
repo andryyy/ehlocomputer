@@ -50,7 +50,7 @@ def cluster_task(task_name, init: list = []):
         @wraps(func)
         async def wrapper(self, *args, **kwargs):
             result = await func(self, *args, **kwargs)
-
+            return result
             task_request = "TASK {task_name} [{init_kwargs}, {task_kwargs}]".format(
                 task_name=task_name,
                 init_kwargs=json.dumps(

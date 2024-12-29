@@ -12,6 +12,7 @@ from quart import current_app, session
 from utils.datetimes import ntime_utc_now
 from utils.helpers import ensure_list, merge_deep
 from uuid import UUID
+from functools import reduce
 
 
 @validate_call
@@ -36,8 +37,7 @@ async def user_permitted_objects(user_id: UUID | None = None):
                     ot,
                     await search(
                         object_type=ot,
-                        q="",
-                        filter_details={"assigned_users": [user.id]}
+                        match_all={"assigned_users": [user.id]}
                         if not "system" in user.acl
                         else {},
                     ),
@@ -82,8 +82,8 @@ async def delete(
 
     if object_type == "domains":
         for o in delete_objects:
-            addresses = await search(object_type="addresses", q="")
-            if o.id in [address.assigned_domain for address in addresses]:
+            addresses = await search(object_type="addresses")
+            if o.id in [address.details.assigned_domain for address in addresses]:
                 raise ValueError("name", f"Domain {o.name} is not empty")
 
     async with TinyDB(**db_params) as db:
@@ -102,39 +102,57 @@ async def patch(
     db_params = evaluate_db_params()
     permitted_objects = await user_permitted_objects()
 
-    async with TinyDB(**db_params) as db:
-        if not "system" in permitted_objects["_meta"]["user_acl"]:
-            data.setdefault("details", {}).pop("assigned_users", None)
+    if not "system" in permitted_objects["_meta"]["user_acl"]:
+        data.setdefault("details", {}).pop("assigned_users", None)
 
-        for patch_object in patch_objects:
-            validated_data = objects_model.model_classes["patch"][
-                object_type
-            ].model_validate(merge_deep(patch_object.dict(), data))
+    for patch_object in patch_objects:
+        patched_object = objects_model.model_classes["patch"][
+            object_type
+        ].model_validate(merge_deep(patch_object.dict(), data))
 
-            if object_type == "addresses" and not validated_data.assigned_domain in [
-                d.id for d in permitted_objects["domains"]
-            ]:
+        conflict_queries = [Query().id != patch_object.id]
+        unique_fields = patched_object.details._unique_fields
+        if isinstance(unique_fields, tuple):
+            for f in unique_fields:
+                conflict_queries.append(
+                    (getattr(Query().details, f) == getattr(patched_object.details, f))
+                )
+        else:
+            conflict_queries.append(
+                getattr(Query().details, unique_fields)
+                == getattr(patched_object.details, unique_fields)
+            )
+
+        conflict_query = reduce(lambda q1, q2: q1 & q2, conflict_queries)
+
+        async with TinyDB(**db_params) as db:
+            if db.table(object_type).get(conflict_query):
+                if isinstance(unique_fields, tuple):
+                    unique_fields = unique_fields[0]
                 raise ValueError(
-                    "name",
-                    f"The provided domain name {ascii_domain} for object {validated_data.name} is unavailable",
+                    f"details.{unique_fields}", "The provided object exists"
                 )
 
-            if object_type == "addresses":
-                name_conflict = db.table(object_type).search(
-                    (Query().name == validated_data.name)
-                    & (Query().id != patch_object.id)
-                    & (Query().assigned_domain == validated_data.assigned_domain)
+        if (
+            object_type == "addresses"
+            and patched_object.details.assigned_domain
+            != patch_object.details.assigned_domain
+        ):  # only when assigned_domain changed
+            if any(
+                domain not in [d.id for d in permitted_objects["domains"]]
+                for domain in [
+                    patched_object.details.assigned_domain,
+                    patch_object.details.assigned_domain,
+                ]
+            ):  # disallow a change to a permitted domain if the current domain is not permitted
+                raise ValueError(
+                    "details.assigned_domain",
+                    f"Cannot assign selected domain for object {patch_object.details.local_part}",
                 )
-            else:
-                name_conflict = db.table(object_type).search(
-                    (Query().name == validated_data.name)
-                    & (Query().id != patch_object.id)
-                )
-            if name_conflict:
-                raise ValueError("name", "The provided object name exists")
 
+        async with TinyDB(**db_params) as db:
             db.table(object_type).update(
-                validated_data.dict(exclude_none=True),
+                patched_object.dict(exclude_none=True),
                 Query().id == patch_object.id,
             )
 
@@ -143,20 +161,23 @@ async def patch(
 
 async def search(
     object_type: Literal[*objects_model.model_classes["types"]],
-    q: constr(strip_whitespace=True, min_length=0) = Field(...),
-    filter_details: dict = {},
+    object_id: UUID | None = None,
+    match_all: dict = {},
+    match_any: dict = {},
 ):
     db_params = evaluate_db_params()
 
-    def search_q(s):
-        return q in s
+    def search_object_id(s):
+        return (object_id and str(object_id) == s) or not object_id
 
-    def search_details(s):
+    def filter_details(s, _any: bool = False):
         def match(key, value, current_data):
             if key in current_data:
                 if isinstance(value, list):
                     return any(item in current_data[key] for item in value)
-                return current_data[key] == value
+                if key.startswith("assigned_"):
+                    return value == current_data[key]
+                return value in current_data[key]
 
             for sub_key, sub_value in current_data.items():
                 if isinstance(sub_value, dict):
@@ -164,14 +185,16 @@ async def search(
                         return True
             return False
 
-        return all(match(k, v, s) for k, v in filter_details.items())
+        if _any:
+            return any(match(k, v, s) for k, v in match_any.items())
 
-    if filter_details:
-        query = ((Query().name.test(search_q)) | (Query().id.test(search_q))) & (
-            Query().details.test(search_details)
-        )
-    else:
-        query = (Query().name.test(search_q)) | (Query().id.test(search_q))
+        return all(match(k, v, s) for k, v in match_all.items())
+
+    query = Query().id.test(search_object_id)
+    if match_all:
+        query = query & Query().details.test(filter_details)
+    if match_any:
+        query = query & Query().details.test(filter_details, True)
 
     async with TinyDB(**db_params) as db:
         matches = db.table(object_type).search(query)
@@ -190,16 +213,32 @@ async def create(
 ):
     db_params = evaluate_db_params()
     permitted_objects = await user_permitted_objects()
-    data.setdefault("details", {}).setdefault("assigned_users", []).append(
-        permitted_objects["_meta"]["user_id"]
-    )
 
-    validated_data = (
-        objects_model.model_classes["add"][object_type].parse_obj(data).dict()
-    )
+    data.setdefault("details", {})["assigned_users"] = [
+        permitted_objects["_meta"]["user_id"]
+    ]
+
+    create_object = objects_model.model_classes["add"][object_type].parse_obj(data)
+
+    unique_fields = create_object.details._unique_fields
+    if isinstance(unique_fields, tuple):
+        queries = []
+        for f in unique_fields:
+            queries.append(
+                (getattr(Query().details, f) == getattr(create_object.details, f))
+            )
+        query = reduce(lambda q1, q2: q1 & q2, queries)
+    else:
+        query = getattr(Query().details, unique_fields) == getattr(
+            create_object.details, unique_fields
+        )
+
+        async with TinyDB(**db_params) as db:
+            if db.table(object_type).get(query):
+                raise ValueError(unique_fields, "The provided object exists")
 
     if object_type == "addresses":
-        if not validated_data["assigned_domain"] in [
+        if not create_object.details.assigned_domain in [
             domain.id for domain in permitted_objects["domains"]
         ]:
             raise ValueError("name", "The provided domain is unavailable")
@@ -209,15 +248,7 @@ async def create(
             raise ValueError("name", "You need system permission to create a domain")
 
     async with TinyDB(**db_params) as db:
-        if object_type == "addresses":
-            if db.table(object_type).get(
-                (Query().name == validated_data["name"])
-                & (Query().assigned_domain == validated_data["assigned_domain"])
-            ):
-                raise ValueError("name", "The provided address exists in this domain")
-        else:
-            if db.table(object_type).get(Query().name == validated_data["name"]):
-                raise ValueError("name", "The provided object name exists")
-        db.table(object_type).insert(validated_data)
+        insert_data = create_object.dict()
+        db.table(object_type).insert(insert_data)
 
-    return validated_data["id"]
+    return insert_data["id"]

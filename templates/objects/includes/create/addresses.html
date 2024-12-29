@@ -1,0 +1,23 @@
+{% if not domain_options or domain_options == [] %}
+  <p>No domain available</p>
+{% else %}
+  <form class="create-object" hx-trigger="submit throttle:200ms" hx-post="/objects/addresses">
+    <fieldset>
+      <label for="details.local_part">Address</label>
+      <input required autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false" type="text" id="details.local_part" name="details.local_part" value="" placeholder="fname.lname">
+      <small>Local part of the new address</small>
+    </fieldset>
+    <fieldset>
+      <label for="details.assigned_domain">Assigned domain</label>
+      <select autocomplete="off"
+        name="details.assigned_domain"
+        id="details.assigned_domain">
+        {% for option in domain_options %}
+        <option value="{{ option["value"] }}">{{ option["name"] }}</option>
+        {% endfor %}
+      </select>
+      <small>Assign address to this domain</small>
+    </fieldset>
+    <button data-loading-disable="" type="submit" _="install buttonCheckHtmxResponse">Create</button>
+  </form>
+{% endif %}

@@ -4,7 +4,7 @@
 {% set toggle_all_button = True if not toggle_all_button == False %}
 
 <form id="{{ request.view_args.get("object_type") }}-table-search"
-  hx-trigger="load once, keyup changed from:input[name=q] delay:100ms, submit throttle:100ms"
+  hx-trigger="load once, keyup changed from:input[name=q] delay:100ms, submit throttle:100ms, htmx:afterRequest[event.detail.successful==true] from:.create-object"
   hx-post="/objects/{{ request.view_args.get("object_type") }}/search"
   hx-target="#{{ request.view_args.get("object_type") }}-table-body">
   <input type="text" name="q"

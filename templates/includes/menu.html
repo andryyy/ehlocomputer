@@ -5,10 +5,10 @@
         {%- if "system" in session.get("acl", []) -%}
         _="def toggleSysMode()
           if #nav-system-mode-switch's checked is true
-            take @hidden from .nav-menu for .user-menu
+            remove @hidden from .system-menu
             add .system-mode-filter settle
           else
-            take @hidden from .nav-menu for .system-menu
+            add @hidden to .system-menu
             remove .system-mode-filter settle
           end
         init toggleSysMode() end
@@ -19,7 +19,6 @@
       <span aria-busy="true" data-loading></span>
     </li>
   </ul>
-
   <ul>
     {% if not session["login"] %}
     <li>
@@ -37,9 +36,9 @@
     </li>
     {% else %}
       {% if "system" in session.get("acl", []) or "user" in session.get("acl", []) %}
-      <li class="nav-menu">
+      <li>
         <details class="dropdown" hx-on:click="event.target.nodeName==='A'?this.open=false:null">
-          <summary>Objects</summary>
+          <summary role="button" class="button-azure">Ctrl</summary>
           <ul>
             <li>
               <a href="#" class="secondary" hx-get="/objects/domains">Domains</a>
@@ -53,39 +52,31 @@
             <li>
               <a href="#" class="secondary" hx-get="/objects/keypairs">Signing keys</a>
             </li>
-          </ul>
-        </details>
-      </li>
-      {% endif %}
-      {% if "system" in session.get("acl", []) %}
-      <li class="nav-menu system-menu">
-        <details class="dropdown" hx-on:click="event.target.nodeName==='A'?this.open=false:null">
-          <summary>System</summary>
-          <ul>
-            <li>
+            {% endif %}
+            {% if "system" in session.get("acl", []) %}
+            <li class="system-menu">
+              <hr>
+              <small>System</small>
+            </li>
+            <li class="system-menu">
               <a href="#" hx-get="/system/users">Users</a>
             </li>
-            <li>
+            <li class="system-menu">
               <a href="#" hx-get="/system/logs">Logs</a>
             </li>
-            <li>
+            <li class="system-menu">
               <a href="#" hx-get="/system/settings">Settings</a>
             </li>
-            <li>
-              <hr>
+            <li class="system-menu">
               <a href="#" hx-get="/system/status">Status</a>
             </li>
-            <li>
-              <hr>
-              <a href="#" hx-post="/logout" hx-swap="innerHTML">Logout</a>
-            </li>
+            {% endif %}
           </ul>
         </details>
       </li>
-      {% endif %}
     {% endif %}
     {% if session["login"] %}
-    <li class="nav-menu">
+    <li>
       <details class="dropdown" hx-on:click="event.target.nodeName==='A'?this.open=false:null">
         <summary>User</summary>
         <ul>

@@ -1,5 +1,3 @@
-import email_validator
-import json
 from models.forms.objects import (
     ObjectDomain,
     ObjectAddress,
@@ -22,89 +20,50 @@ from uuid import uuid4, UUID
 from utils.helpers import ensure_list, to_unique_sorted_str_list
 from utils.datetimes import utc_now_as_str
 
-email_validator.TEST_ENVIRONMENT = True
-validate_email = email_validator.validate_email
-
 
 class ObjectBase(BaseModel):
     id: str
-    name: constr(strip_whitespace=True, min_length=1) = Field(...)
     created: str
     updated: str
 
 
 class ObjectBaseDomain(ObjectBase):
-    name: constr(strip_whitespace=True, min_length=1) = Field(
-        default="",
-        json_schema_extra={
-            "title": "Domain name",
-            "description": "A valid domain name.",
-            "type": "text",
-            "input_extra": 'autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"',
-            "form_id": f"name-{str(uuid4())}",
-        },
-    )
-
     details: ObjectDomain
+
+    @computed_field
+    @property
+    def name(self) -> str:
+        return self.details.domain
 
 
 class ObjectBaseUser(ObjectBase):
-    name: constr(strip_whitespace=True, min_length=1) = Field(
-        default="",
-        json_schema_extra={
-            "title": "Mail user",
-            "description": "A username to identify to a server.",
-            "type": "text",
-            "input_extra": 'autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"',
-            "form_id": f"name-{str(uuid4())}",
-        },
-    )
     details: ObjectUser
+
+    @computed_field
+    @property
+    def name(self) -> str:
+        return self.details.username
 
 
 class ObjectBaseAddress(ObjectBase):
-    name: constr(strip_whitespace=True, min_length=1) = Field(
-        default="",
-        json_schema_extra={
-            "title": "Email address",
-            "description": "Must be a valid email address.",
-            "type": "text",
-            "input_extra": 'autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"',
-            "form_id": f"name-{str(uuid4())}",
-        },
-    )
-
-    assigned_domain: str = Field(
-        default="",
-        json_schema_extra={
-            "title": "Assigned domain",
-            "description": "Assign a domain for this address.",
-            "type": "domain",
-            "input_extra": 'autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"',
-            "form_id": f"domain-{str(uuid4())}",
-        },
-    )
-
     details: ObjectAddress
+
+    @computed_field
+    @property
+    def name(self) -> str:
+        return self.details.local_part
 
 
 class ObjectBaseKeyPair(ObjectBase):
-    name: constr(strip_whitespace=True, min_length=1) = Field(
-        default="",
-        json_schema_extra={
-            "title": "Display name",
-            "description": "A display name for a key pair.",
-            "type": "text",
-            "input_extra": 'autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"',
-            "form_id": f"name-{str(uuid4())}",
-        },
-    )
     details: ObjectKeyPair
+
+    @computed_field
+    @property
+    def name(self) -> str:
+        return self.details.name
 
 
 class ObjectAdd(BaseModel):
-    name: constr(strip_whitespace=True, min_length=1) = Field(...)
-
     @computed_field
     @property
     def id(self) -> str:
@@ -122,35 +81,10 @@ class ObjectAdd(BaseModel):
 
 
 class ObjectAddDomain(ObjectAdd):
-    @field_validator("name", mode="before")
-    def name_as_domain(cls, v):
-        try:
-            name = validate_email(f"name@{v}").ascii_domain
-        except:
-            raise PydanticCustomError(
-                "name_invalid",
-                "The provided name is not a valid domain name",
-                dict(name_invalid=v),
-            )
-        return name
-
     details: ObjectDomain
 
 
 class ObjectAddAddress(ObjectAdd):
-    @field_validator("name", mode="before")
-    def email_validator(cls, v):
-        try:
-            name = validate_email(f"{v}@example.org").ascii_local_part
-        except:
-            raise PydanticCustomError(
-                "name_invalid",
-                "The provided name is not a valid email address",
-                dict(name_invalid=v),
-            )
-        return name
-
-    assigned_domain: str
     details: ObjectAddress
 
 
@@ -191,7 +125,6 @@ class ObjectAddKeyPair(ObjectAdd):
 
 class ObjectPatch(BaseModel):
     model_config = ConfigDict(validate_assignment=True)
-    name: Annotated[constr(strip_whitespace=True), Field(min_length=1)]
 
     @computed_field
     @property
@@ -200,18 +133,6 @@ class ObjectPatch(BaseModel):
 
 
 class ObjectPatchDomain(ObjectPatch):
-    @field_validator("name", mode="before")
-    def name_as_domain(cls, v):
-        try:
-            name = validate_email(f"name@{v}").ascii_domain
-        except:
-            raise PydanticCustomError(
-                "name_invalid",
-                "The provided name is not a valid domain name",
-                dict(name_invalid=v),
-            )
-        return name
-
     details: ObjectDomain
 
 
@@ -220,19 +141,6 @@ class ObjectPatchUser(ObjectPatch):
 
 
 class ObjectPatchAddress(ObjectPatch):
-    @field_validator("name", mode="before")
-    def email_validator(cls, v):
-        try:
-            name = validate_email(f"{v}@example.org").ascii_local_part
-        except:
-            raise PydanticCustomError(
-                "name_invalid",
-                "The provided name is not a valid email address",
-                dict(name_invalid=v),
-            )
-        return name
-
-    assigned_domain: str
     details: ObjectAddress
 
 

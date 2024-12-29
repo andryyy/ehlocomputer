@@ -22,21 +22,11 @@ blueprint = Blueprint("objects", __name__, url_prefix="/objects")
 
 @blueprint.context_processor
 async def load_schemas():
-    schemas = {}
-    schemas.update(
-        {
+    return {
+        "schemas": {
             f"_{object_type}_schema": v.model_json_schema()
             for object_type, v in objects_model.model_classes["forms"].items()
-        }
-    )
-    schemas.update(
-        {
-            f"_{object_type}_base_schema": v.model_json_schema()
-            for object_type, v in objects_model.model_classes["base"].items()
-        }
-    )
-    return {
-        "schemas": schemas,
+        },
         # injects options for forms depending on route endpoint
         "user_options": [
             {"name": user.login, "value": user.id}
@@ -48,8 +38,7 @@ async def load_schemas():
             {"name": group.name, "value": group.id}
             for group in await _search_object(
                 object_type="emailusers",
-                q="",
-                filter_details={"assigned_users": [session["id"]]}
+                match_all={"assigned_users": [session["id"]]}
                 if not "system" in session["acl"]
                 else {},
             )
@@ -64,8 +53,7 @@ async def load_schemas():
             }
             for group in await _search_object(
                 object_type="keypairs",
-                q="",
-                filter_details={"assigned_users": [session["id"]]}
+                match_all={"assigned_users": [session["id"]]}
                 if not "system" in session["acl"]
                 else {},
             )
@@ -74,13 +62,12 @@ async def load_schemas():
         else [],
         "domain_options": [
             {
-                "name": domain.name,
+                "name": domain.details.domain,
                 "value": domain.id,
             }
             for domain in await _search_object(
                 object_type="domains",
-                q="",
-                filter_details={"assigned_users": [session["id"]]}
+                match_all={"assigned_users": [session["id"]]}
                 if not "system" in session["acl"]
                 else {},
             )
@@ -136,12 +123,18 @@ async def get_objects(object_type: str):
 
     if request.method == "POST":
         try:
+            match_any = {
+                "name": search_model.q,
+                "domain": search_model.q,
+                "local_part": search_model.q,
+                "username": search_model.q,
+            }
             matched_objects = [
                 m.dict()
                 for m in await _search_object(
                     object_type=object_type,
-                    q=search_model.q,
-                    filter_details={"assigned_users": [session["id"]]}
+                    match_any=match_any,
+                    match_all={"assigned_users": [session["id"]]}
                     if not "system" in session["acl"]
                     else {},
                 )

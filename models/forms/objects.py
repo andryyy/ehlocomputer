@@ -1,3 +1,5 @@
+import email_validator
+
 from config.timezones import TIMEZONES
 from pydantic import (
     AfterValidator,
@@ -10,8 +12,8 @@ from pydantic import (
     computed_field,
     model_validator,
     ConfigDict,
+    PrivateAttr,
 )
-import email_validator
 from pydantic_core import PydanticCustomError
 from typing import Annotated, Literal, Any
 from typing_extensions import Self
@@ -20,6 +22,49 @@ from uuid import uuid4
 
 email_validator.TEST_ENVIRONMENT = True
 validate_email = email_validator.validate_email
+
+
+async def assignable_users():
+    from tools.users import Users
+
+    print(await Users.search(q=""))
+
+
+def ascii_email(v):
+    try:
+        name = validate_email(v).ascii_email
+    except:
+        raise PydanticCustomError(
+            "name_invalid",
+            "The provided name is not a valid local part",
+            dict(name_invalid=v),
+        )
+    return name
+
+
+def ascii_domain(v):
+    try:
+        name = validate_email(f"name@{v}").ascii_domain
+    except:
+        raise PydanticCustomError(
+            "name_invalid",
+            "The provided name is not a valid domain name",
+            dict(name_invalid=v),
+        )
+    return name
+
+
+def ascii_local_part(v):
+    try:
+        name = validate_email(f"{v}@example.org").ascii_local_part
+    except:
+        raise PydanticCustomError(
+            "name_invalid",
+            "The provided name is not a valid local part",
+            dict(name_invalid=v),
+        )
+    return name
+
 
 POLICIES = [
     ("-- None --", "disallow_all"),
@@ -46,33 +91,33 @@ class ObjectDomain(BaseModel):
             )
         return self
 
-    @field_validator("bcc_inbound", mode="before")
+    @field_validator("bcc_inbound")
     def bcc_inbound_validator(cls, v):
         if v in [None, ""]:
             return ""
-        try:
-            email = validate_email(v).ascii_email
-        except:
-            raise PydanticCustomError(
-                "email_invalid",
-                "The provided email address is invalid",
-                dict(provided_email=v),
-            )
-        return email
+        return ascii_email(v)
 
-    @field_validator("bcc_outbound", mode="before")
+    @field_validator("bcc_outbound")
     def bcc_outbound_validator(cls, v):
         if v in [None, ""]:
             return ""
-        try:
-            email = validate_email(v).ascii_email
-        except:
-            raise PydanticCustomError(
-                "email_invalid",
-                "The provided email address is invalid",
-                dict(provided_email=v),
-            )
-        return email
+        return ascii_email(v)
+
+    @field_validator("domain")
+    def domain_validator(cls, v):
+        if v in [None, ""]:
+            return ""
+        return ascii_domain(v)
+
+    domain: str = Field(
+        json_schema_extra={
+            "title": "Domain name",
+            "description": "A unique domain name",
+            "type": "text",
+            "input_extra": 'autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"',
+            "form_id": f"domain-{str(uuid4())}",
+        },
+    )
 
     display_name: str = Field(
         default="",
@@ -262,8 +307,46 @@ class ObjectDomain(BaseModel):
         },
     )
 
+    @property
+    def _unique_fields(self):
+        return "domain"
+
 
 class ObjectAddress(BaseModel):
+    local_part: constr(strip_whitespace=True, min_length=1) = Field(
+        json_schema_extra={
+            "title": "Local part",
+            "description": "A local part as in <local_part>@example.org; must be unique in combination with its assigned domain",
+            "type": "text",
+            "input_extra": 'autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"',
+            "form_id": f"local-part-{str(uuid4())}",
+        },
+    )
+
+    assigned_domain: str = Field(
+        json_schema_extra={
+            "title": "Assigned domain",
+            "description": "Assign a domain for this address.",
+            "type": "domain",
+            "input_extra": 'autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"',
+            "form_id": f"domain-{str(uuid4())}",
+        },
+    )
+
+    assigned_emailusers: Annotated[
+        str | list,
+        AfterValidator(lambda x: to_unique_sorted_str_list(ensure_list(x))),
+    ] = Field(
+        default=[],
+        json_schema_extra={
+            "title": "Assigned email users",
+            "description": "Assign this mailbox to email users.",
+            "type": "emailusers:multi",
+            "input_extra": 'autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"',
+            "form_id": f"assigned-emailusers-{str(uuid4())}",
+        },
+    )
+
     display_name: str = Field(
         default="%DOMAIN_DISPLAY_NAME%",
         json_schema_extra={
@@ -290,20 +373,6 @@ class ObjectAddress(BaseModel):
         },
     )
 
-    assigned_emailusers: Annotated[
-        str | list,
-        AfterValidator(lambda x: to_unique_sorted_str_list(ensure_list(x))),
-    ] = Field(
-        default=[],
-        json_schema_extra={
-            "title": "Assigned email users",
-            "description": "Assign this mailbox to email users.",
-            "type": "emailusers:multi",
-            "input_extra": 'autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"',
-            "form_id": f"assigned-emailusers-{str(uuid4())}",
-        },
-    )
-
     assigned_users: Annotated[
         str | list,
         AfterValidator(lambda x: to_unique_sorted_str_list(ensure_list(x))),
@@ -317,8 +386,22 @@ class ObjectAddress(BaseModel):
         },
     )
 
+    @property
+    def _unique_fields(self):
+        return ("local_part", "assigned_domain")
+
 
 class ObjectUser(BaseModel):
+    username: constr(strip_whitespace=True, min_length=1) = Field(
+        json_schema_extra={
+            "title": "Username",
+            "description": "A unique username",
+            "type": "text",
+            "input_extra": 'autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"',
+            "form_id": f"login-{str(uuid4())}",
+        },
+    )
+
     display_name: str = Field(
         default="%MAILBOX_DISPLAY_NAME%",
         json_schema_extra={
@@ -358,8 +441,22 @@ class ObjectUser(BaseModel):
         },
     )
 
+    @property
+    def _unique_fields(self):
+        return "username"
+
 
 class ObjectKeyPair(BaseModel):
+    name: constr(strip_whitespace=True, min_length=1) = Field(
+        default="KeyPair",
+        json_schema_extra={
+            "title": "Name",
+            "description": "A human readable name",
+            "type": "text",
+            "input_extra": 'autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"',
+            "form_id": f"login-{str(uuid4())}",
+        },
+    )
     private_key_pem: str
     public_key_base64: str
     key_size: int
@@ -380,3 +477,7 @@ class ObjectKeyPair(BaseModel):
     @property
     def dns_formatted(self) -> str:
         return "v=DKIM1; p=" + self.public_key_base64
+
+    @property
+    def _unique_fields(self):
+        return "name"
