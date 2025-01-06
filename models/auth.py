@@ -1,7 +1,14 @@
 import random
 
 from config.defaults import ACCEPT_LANGUAGES
-from pydantic import Field, BaseModel, computed_field, AfterValidator
+from pydantic import (
+    Field,
+    BaseModel,
+    computed_field,
+    AfterValidator,
+    constr,
+    ConfigDict,
+)
 from typing import Annotated, Literal
 from utils.datetimes import ntime_utc_now, utc_now_as_str
 from webauthn.helpers.structs import AuthenticatorTransport
@@ -29,8 +36,8 @@ class AuthToken(BaseModel):
 class CredentialRead(BaseModel):
     id: Annotated[str, AfterValidator(lambda x: bytes.fromhex(x))] | bytes
     public_key: Annotated[str, AfterValidator(lambda x: bytes.fromhex(x))] | bytes
-    friendly_name: str | None
-    last_login: str | None = None
+    friendly_name: str
+    last_login: str
     sign_count: int
     transports: list[AuthenticatorTransport] | None = []
     active: bool
@@ -39,10 +46,12 @@ class CredentialRead(BaseModel):
 
 
 class CredentialPatch(BaseModel):
-    friendly_name: Annotated[str, Field(min_length=1)] | None = None
-    active: bool | None = None
-    last_login: str | None = None
-    sign_count: int | None = None
+    model_config = ConfigDict(validate_assignment=True)
+
+    friendly_name: constr(strip_whitespace=True, min_length=1)
+    active: bool
+    last_login: str
+    sign_count: int
 
     @computed_field
     @property
@@ -57,6 +66,7 @@ class AddCredential(BaseModel):
     friendly_name: str = "New passkey"
     transports: list[AuthenticatorTransport] | None = []
     active: bool = True
+    last_login: str = ""
 
     @computed_field
     @property

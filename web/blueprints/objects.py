@@ -4,7 +4,7 @@ from models.tables import TableSearchHelper
 from models import objects as objects_model
 from pydantic import ValidationError
 from quart import Blueprint, current_app as app, render_template, request, session
-from tools.users import Users
+from tools.users import search as search_users
 from tools.objects import (
     create as _create_object,
     search as _search_object,
@@ -30,7 +30,7 @@ async def load_schemas():
         # injects options for forms depending on route endpoint
         "user_options": [
             {"name": user.login, "value": user.id}
-            for user in await Users().search(name="")
+            for user in await search_users(name="")
         ]
         if request.endpoint == "objects.get_object"
         else [],
@@ -107,7 +107,7 @@ async def get_object(object_type: str, object_id: str):
         name, message = e.args
         return validation_error([{"loc": [name], "msg": message}])
 
-    return await render_template(f"objects/object.html", object=object_data.dict())
+    return await render_template(f"objects/object.html", object=object_data)
 
 
 @blueprint.route("/<object_type>")

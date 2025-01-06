@@ -1,7 +1,7 @@
 {#
 
 DATA FIELDS
-  - current_data: dict # Data to fill form with, if any
+  - current_data
   - schema: BaseModel.model_json_schema()
   - optional root_key to encapsulate a name in,
     i.e. a root_key "profile" for a field "email" becomes "profile.email"
@@ -17,7 +17,7 @@ DATA FIELDS
       <input {{ v.input_extra|safe }} id="{{ v.form_id }}"
         name="{% if root_key %}{{ root_key }}.{{ k }}{% else %}{{ k }}{% endif %}"
         type="{{ v.type }}"
-        value="{{ current_data.get(k, v.default) }}">
+        value="{{ current_data[k] or v.default }}">
       {% if v.description %}
       <small>{{ v.description|safe }}</small>
       {% endif %}
@@ -30,7 +30,7 @@ DATA FIELDS
       <input {{ v.input_extra|safe }} id="{{ v.form_id }}"
         name="{% if root_key %}{{ root_key }}.{{ k }}{% else %}{{ k }}{% endif %}"
         type="{{ v.type }}"
-        value="{{ current_data.get(k, v.default) }}">
+        value="{{ current_data[k] or v.default }}">
       {% if v.description %}
       <small>{{ v.description|safe }}</small>
       {% endif %}
@@ -48,7 +48,7 @@ DATA FIELDS
         name="{% if root_key %}{{ root_key }}.{{ k }}{% else %}{{ k }}{% endif %}"
         id="{{ v.form_id }}">
         {% for option in v.options %}
-        <option value="{{ option["value"] }}" {{ "selected" if option["value"] in current_data.get(k) or option["value"] == "" and not current_data.get(k) }}>{{ option["name"] }}</option>
+        <option value="{{ option["value"] }}" {{ "selected" if option["value"] in current_data[k] or option["value"] == "" and not current_data[k] }}>{{ option["name"] }}</option>
         {% endfor %}
       </select>
       {% if v.description %}
@@ -63,7 +63,7 @@ DATA FIELDS
       <input list="{{ v.form_id }}-datalist"
         name="{% if root_key %}{{ root_key }}.{{ k }}{% else %}{{ k }}{% endif %}"
         id="{{ v.form_id }}"
-        value="{{ current_data.get(k, v.default) }}" {{ v.input_extra|safe }}>
+        value="{{ current_data[k] or v.default }}" {{ v.input_extra|safe }}>
       <datalist
         id="{{ v.form_id }}-datalist">
         {% for option in v.options %}
@@ -90,7 +90,7 @@ DATA FIELDS
           name="{% if root_key %}{{ root_key }}.{{ k }}{% else %}{{ k }}{% endif %}"
           id="{{ v.form_id }}">
           {% for option in user_options %}
-          <option value="{{ option["value"] }}" {{ "selected" if option["value"] in current_data.get(k) }}>{{ option["name"] }}</option>
+          <option value="{{ option["value"] }}" {{ "selected" if option["value"] in current_data[k] }}>{{ option["name"] }}</option>
           {% endfor %}
         </select>
         {% if v.description %}
@@ -115,7 +115,7 @@ DATA FIELDS
           id="{{ v.form_id }}">
           <option value="">-- None --</option>
           {% for option in emailuser_options %}
-          <option value="{{ option["value"] }}" {{ "selected" if option["value"] in current_data.get(k) }}>{{ option["name"] }}</option>
+          <option value="{{ option["value"] }}" {{ "selected" if option["value"] in current_data[k] }}>{{ option["name"] }}</option>
           {% endfor %}
         </select>
         {% if v.description %}
@@ -125,7 +125,6 @@ DATA FIELDS
     {% endif %}
 
   {% elif v.type == "list:text" or v.type == "list:number" %}
-
     {% set readonly = True if "readonly" in v.input_extra else False %}
     <template id="list:item">
       <div>
@@ -138,7 +137,7 @@ DATA FIELDS
     </template>
     <fieldset id="{{ v.form_id }}" _="on click from .add-list-item in me halt the event then render #list:item then put the result at the end of me end">
       <legend>{{ v.title }} <a {{ "hidden" if readonly }} href="#" class="add-list-item">Add</a> {{ "🚫" if readonly }}</legend>
-      {% for list_value in current_data.get(k, v.default) %}
+      {% for list_value in current_data[k] or v.default %}
       <div>
         <input {{ v.input_extra|safe }}
           name="{% if root_key %}{{ root_key }}.{{ k }}{% else %}{{ k }}{% endif %}"
@@ -163,7 +162,7 @@ DATA FIELDS
           type="radio"
           value="{{ radio_value }}"
           name="{% if root_key %}{{ root_key }}.{{ k }}{% else %}{{ k }}{% endif %}"
-          {{ "checked" if current_data.get(k, v.default) == radio_value }} />
+          {{ "checked" if (current_data[k] or v.default) == radio_value }} />
         {{ radio_value|capitalize }}
       </label>
       {% endfor %}
@@ -183,9 +182,9 @@ DATA FIELDS
           name="{% if root_key %}{{ root_key }}.{{ k }}{% else %}{{ k }}{% endif %}"
           id="{{ v.form_id }}"
           _="on change or load get (@data-dns of <option:checked/> in me) as String put it into #dns-data-{{ v.form_id }} trigger validate on #dns-data-{{ v.form_id }} end">
-          <option data-dns="" value="" {{ "selected" if current_data.get(k) == "" }}>-- None --</option>
+          <option data-dns="" value="" {{ "selected" if current_data[k] == "" }}>-- None --</option>
           {% for option in keypair_options %}
-          <option data-dns="{{ option["dns_formatted"] }}" value="{{ option["value"] }}" {{ "selected" if option["value"] == current_data.get(k) }}>{{ option["name"] }}</option>
+          <option data-dns="{{ option["dns_formatted"] }}" value="{{ option["value"] }}" {{ "selected" if option["value"] == current_data[k].id }}>{{ option["name"] }}</option>
           {% endfor %}
         </select>
         {% if v.description %}
@@ -217,7 +216,7 @@ DATA FIELDS
           name="{% if root_key %}{{ root_key }}.{{ k }}{% else %}{{ k }}{% endif %}"
           id="{{ v.form_id }}">
           {% for option in domain_options %}
-          <option value="{{ option["value"] }}" {{ "selected" if option["value"] in current_data.get(k, []) }}>{{ option["name"] }}</option>
+          <option value="{{ option["value"] }}" {{ "selected" if option["value"] == current_data[k].id  }}>{{ option["name"] }}</option>
           {% endfor %}
         </select>
         {% if v.description %}

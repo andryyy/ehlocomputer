@@ -1,6 +1,13 @@
 from config.defaults import ACCESS_TOKEN_FORMAT
 from email_validator import validate_email
-from pydantic import AfterValidator, BeforeValidator, BaseModel, Field, field_validator
+from pydantic import (
+    AfterValidator,
+    BeforeValidator,
+    BaseModel,
+    Field,
+    field_validator,
+    ConfigDict,
+)
 from pydantic_core import PydanticCustomError
 from typing import Annotated, Literal
 from utils.helpers import ensure_list, to_unique_sorted_str_list
@@ -8,6 +15,8 @@ from uuid import uuid4
 
 
 class UserProfile(BaseModel):
+    model_config = ConfigDict(validate_assignment=True)
+
     @field_validator("email", mode="before")
     def email_validator(cls, v):
         if v in [None, ""]:

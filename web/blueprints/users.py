@@ -5,7 +5,13 @@ from models.tables import TableSearchHelper
 from models.forms.users import UserProfile
 from pydantic import ValidationError
 from quart import Blueprint, current_app as app, render_template, request
-from tools.users import Users
+from tools.users import (
+    search as search_users,
+    get as _get_user,
+    patch as _patch_user,
+    patch_credential as _patch_credential,
+    patch_profile as _patch_profile,
+)
 from utils import wrappers
 from utils.helpers import batch, ensure_list
 from web.helpers import render_or_json, trigger_notification, validation_error
@@ -25,7 +31,7 @@ def load_schemas():
 @wrappers.acl("system")
 async def get_user(user_id: str):
     try:
-        user = await Users.user(id=user_id).get()
+        user = await _get_user(user_id=user_id)
     except ValidationError as e:
         return validation_error(e.errors())
     except ValueError as e:
@@ -49,7 +55,7 @@ async def get_users():
         return validation_error(e.errors())
 
     if request.method == "POST":
-        matched_users = [m.dict() for m in await Users().search(name=search_model.q)]
+        matched_users = [m.dict() for m in await search_users(name=search_model.q)]
 
         user_pages = [
             m
@@ -89,13 +95,12 @@ async def get_users():
 @wrappers.acl("system")
 async def delete_user(user_id: str | None = None):
     if request.method == "POST":
-        user_id = request.form_parsed.get("id")
+        user_ids = request.form_parsed.get("id")
 
     try:
-        user_ids = ensure_list(user_id)
-        async with ClusterLock("main"):
-            for user_id in user_ids:
-                await Users.user(id=user_id).delete()
+        async with ClusterLock("users"):
+            for user_id in ensure_list(user_ids):
+                await _delete_user(user_id=user_id)
 
     except ValidationError as e:
         return validation_error(e.errors())
@@ -116,8 +121,9 @@ async def delete_user(user_id: str | None = None):
 @wrappers.acl("system")
 async def patch_user_credential(user_id: str, hex_id: str):
     try:
-        async with ClusterLock("main"):
-            await Users.user(id=user_id).patch_credential(
+        async with ClusterLock("users"):
+            await _patch_credential(
+                user_id=user_id,
                 hex_id=hex_id,
                 data=request.form_parsed,
             )
@@ -144,10 +150,10 @@ async def patch_user(user_id: str | None = None):
         if not user_id:
             user_id = request.form_parsed.get("id")
 
-        async with ClusterLock("main"):
-            await Users.user(id=user_id).patch(data=request.form_parsed)
-            await Users.user(id=user_id).patch_profile(
-                data=request.form_parsed.get("profile", {})
+        async with ClusterLock("users"):
+            await _patch_user(user_id=user_id, data=request.form_parsed)
+            await _patch_profile(
+                user_id=user_id, data=request.form_parsed.get("profile", {})
             )
 
     except ValidationError as e:

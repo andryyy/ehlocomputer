@@ -12,7 +12,8 @@ from pydantic import ValidationError
 from quart import Blueprint, current_app as app, render_template, request, session
 from tools.system import get_system_settings, list_application_log_files
 from utils import wrappers
-from utils.helpers import batch
+from utils.helpers import batch, expire_key
+from utils.datetimes import ntime_utc_now
 from web.helpers import trigger_notification, validation_error, ws_htmx
 
 blueprint = Blueprint("system", __name__, url_prefix="/system")
@@ -170,7 +171,7 @@ async def cluster_logs():
         return await render_template("system/logs.html")
 
 
-@blueprint.route("/logs/refresh-cluster-logs")
+@blueprint.route("/logs/refresh")
 @wrappers.acl("system")
 async def refresh_cluster_logs():
     await ws_htmx(
@@ -180,14 +181,25 @@ async def refresh_cluster_logs():
         "/system/logs",
     )
 
-    async with ClusterLock("main") as c:
-        await c.request_files("logs/application.log", defaults.CLUSTER_PEERS_THEM)
+    if not IN_MEMORY_DB.get("application_logs_refresh") or request.args.get("force"):
+        IN_MEMORY_DB["application_logs_refresh"] = ntime_utc_now()
+        app.add_background_task(
+            expire_key,
+            IN_MEMORY_DB,
+            "application_logs_refresh",
+            defaults.CLUSTER_LOGS_REFRESH_AFTER,
+        )
+        async with ClusterLock("main") as c:
+            await c.request_files("logs/application.log", defaults.CLUSTER_PEERS_THEM)
+
+    refresh_ago = round(ntime_utc_now() - IN_MEMORY_DB["application_logs_refresh"])
 
     await ws_htmx(
         session["login"],
         "beforeend",
         "<div hidden _=\"on load trigger notification(title: 'Task completed', level: 'success', message: 'Application logs were collected', duration: 2000) then "
-        + 'trigger clusterLogsReady on #system-logs-table-search"></div>',
+        + "trigger logsReady on #system-logs-table-search "
+        + f'then put {refresh_ago} into #system-logs-last-refresh"></div>',
         "/system/logs",
     )
     return "", 204

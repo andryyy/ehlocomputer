@@ -17,7 +17,7 @@ from quart import (
     abort,
     websocket,
 )
-from tools.users import Users
+from tools.users import get as get_user, what_id
 from web.helpers import session_clear, trigger_notification
 from typing import Literal
 
@@ -33,7 +33,7 @@ async def verify_session(acl: Literal[*defaults.USER_ACLS, "any"]) -> None:
 
     if session["id"] not in app.config["SESSION_VALIDATED"]:
         try:
-            user = await Users.user(id=session["id"]).get()
+            user = await get_user(user_id=session["id"])
             app.config["SESSION_VALIDATED"].update({session["id"]: user.acl})
         except:
             session_clear()
@@ -56,7 +56,8 @@ async def create_session_by_token(token):
         raise AuthException("Invalid token format")
 
     try:
-        user = await Users.user(login=token_user).get()
+        user_id = await what_id(login=token_user)
+        user = await get_user(user_id=user_id)
     except:
         session_clear()
         raise AuthException("User unknown")

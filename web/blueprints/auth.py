@@ -16,7 +16,13 @@ from utils import wrappers
 from utils.helpers import expire_key
 from utils.datetimes import utc_now_as_str
 from web.helpers import validation_error, trigger_notification, session_clear, ws_htmx
-from tools.users import Users
+from tools.users import (
+    get as get_user,
+    what_id,
+    patch_credential,
+    create as create_user,
+    create_credential,
+)
 from webauthn import (
     generate_registration_options,
     options_to_json,
@@ -127,7 +133,8 @@ async def login_request_start():
     session_clear()
 
     try:
-        user = await Users.user(login=request_data.login).get()
+        user_id = await what_id(login=request_data.login)
+        user = await get_user(user_id=user_id)
     except ValidationError as e:
         return validation_error([{"loc": ["login"], "msg": f"User is not available"}])
 
@@ -179,7 +186,8 @@ async def login_request_check(request_token: str):
 
     if token_status == "confirmed":
         try:
-            user = await Users.user(login=requested_login).get()
+            user_id = await what_id(login=requested_login)
+            user = await get_user(user_id=user_id)
         except ValidationError as e:
             return validation_error(
                 [{"loc": ["login"], "msg": f"User is not available"}]
@@ -255,7 +263,9 @@ async def login_token_verify():
                     }
                 ]
             )
-        user = await Users.user(login=token_login).get()
+
+        user_id = await what_id(login=token_login)
+        user = await get_user(user_id=user_id)
 
     except ValidationError as e:
         return validation_error(e.errors())
@@ -280,7 +290,9 @@ async def login_token_verify():
 @blueprint.route("/login/webauthn/options", methods=["POST"])
 async def login_webauthn_options():
     try:
-        user = await Users.user(login=request.form_parsed.get("login")).get()
+        user_id = await what_id(login=request.form_parsed.get("login"))
+        user = await get_user(user_id=user_id)
+
         if not user.credentials:
             raise ValidationError
     except ValidationError:
@@ -386,7 +398,8 @@ async def register_webauthn_options():
                 title="Registration failed",
                 message="Something went wrong",
             )
-        user = await Users.user(id=session["id"]).get()
+
+        user = await get_user(user_id=session["id"])
 
         exclude_credentials = [
             PublicKeyCredentialDescriptor(id=bytes.fromhex(c))
@@ -482,19 +495,19 @@ async def register_webauthn():
     try:
         async with ClusterLock("main"):
             if not appending_passkey:
-                await Users.create(uuid=user_id).user(data={"login": login})
+                user_id = await create_user(data={"login": login})
 
-            await Users.user(id=user_id).create_credential(
+            await create_credential(
+                user_id=user_id,
                 data={
                     "id": verification.credential_id,
                     "public_key": verification.credential_public_key,
                     "sign_count": verification.sign_count,
                     "transports": json_body.get("transports", []),
-                }
+                },
             )
 
     except Exception as e:
-        raise
         return trigger_notification(
             level="error",
             response_body="",
@@ -553,15 +566,15 @@ async def auth_login_verify():
 
         auth_challenge = b64decode(challenge)
 
-        user = await Users.user(login=login).get()
+        user_id = await what_id(login=login)
+        user = await get_user(user_id=user_id)
 
         credential = parse_authentication_credential_json(json_body)
 
-        matched_user_credential = [
-            v
-            for k, v in user.credentials.items()
-            if bytes.fromhex(k) == credential.raw_id
-        ]
+        matched_user_credential = None
+        for k, v in user.credentials.items():
+            if bytes.fromhex(k) == credential.raw_id:
+                matched_user_credential = v
 
         if not matched_user_credential:
             return trigger_notification(
@@ -572,8 +585,6 @@ async def auth_login_verify():
                 message="No such credential in user realm",
                 additional_triggers={"authRegFailed": "authenticate"},
             )
-
-        matched_user_credential = matched_user_credential.pop()
 
         verification = verify_authentication_response(
             credential=credential,
@@ -590,7 +601,9 @@ async def auth_login_verify():
             data["sign_count"] = verification.new_sign_count
 
         async with ClusterLock("main"):
-            await Users.user(login=login).patch_credential(
+            user_id = await what_id(login=login)
+            await patch_credential(
+                user_id=user_id,
                 hex_id=credential.raw_id.hex(),
                 data=data,
             )

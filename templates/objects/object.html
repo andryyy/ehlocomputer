@@ -31,15 +31,14 @@
     hx-get="/objects/{{ request.view_args.get("object_type") }}/{{ object.id }}">
 
     <form id="object-form" hx-trigger="submit throttle:200ms" hx-patch="/objects/{{ request.view_args.get("object_type") }}/{{ object.id }}">
-      {% if not domain_options | selectattr('value', 'equalto', object.details.assigned_domain) | list %}
-        {% set domain_options = False %}
+      {% if request.view_args.get("object_type") == "addresses" and not domain_options | selectattr('value', 'equalto', object.details.assigned_domain.id) | list %}
+        {% set domain_options = domain_options + [{"name": object.details.assigned_domain.name, "value": object.details.assigned_domain.id }] %}
       {% endif %}
 
       {% with
         schema=schemas["_" + request.view_args.get("object_type") + "_schema"],
         current_data=object.details,
-        root_key="details",
-        domain_options=domain_options
+        root_key="details"
       %}
         {% include "includes/form_builder.html" %}
       {% endwith %}

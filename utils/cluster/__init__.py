@@ -304,35 +304,38 @@ class Cluster:
                         )
 
                 elif cmd.startswith("UNLOCK"):
-                    _, _, lock_name = cmd.partition(" ")
-                    if lock_name == "":
-                        lock_name = "main"
+                    _, _, tables_str = cmd.partition(" ")
+                    tables = tables_str.split(",")
 
-                    self.locks[lock_name]["lock"].release()
-                    self.locks[lock_name]["ticket"] = None
+                    for t in tables:
+                        with suppress(RuntimeError):
+                            self.locks[t]["lock"].release()
+                        self.locks[t]["ticket"] = None
 
                     await self.send_command("ACK", [peer_info["bind"]], ticket=ticket)
 
                 elif cmd.startswith("LOCK"):
-                    _, _, lock_name = cmd.partition(" ")
-                    if lock_name == "":
-                        lock_name = "main"
-
-                    if not lock_name in self.locks:
-                        self.locks[lock_name] = {
-                            "lock": asyncio.Lock(),
-                            "ticket": None
-                        }
+                    _, _, tables_str = cmd.partition(" ")
+                    tables = tables_str.split(",")
 
                     try:
-                        await asyncio.wait_for(self.locks[lock_name]["lock"].acquire(), 0.45)
-                        self.locks[lock_name]["ticket"] = ticket
+                        for t in tables:
+                            if t not in self.locks:
+                                self.locks[t] = {
+                                    "lock": asyncio.Lock(),
+                                    "ticket": None,
+                                }
+
+                            await asyncio.wait_for(self.locks[t]["lock"].acquire(), 0.45)
+                            self.locks[t]["ticket"] = ticket
 
                     except TimeoutError:
-                        if ntime_utc_now() - float(self.locks[lock_name]["ticket"]) > 25.0:
-                            with suppress(RuntimeError):
-                                self.locks[lock_name]["lock"].release()
-                                self.locks[lock_name]["ticket"] = None
+                        for t in tables:
+                            if ntime_utc_now() - float(self.locks[t]["ticket"]) > 20.0:
+                                with suppress(RuntimeError):
+                                    self.locks[t]["lock"].release()
+                                self.locks[t]["ticket"] = None
+
                         await self.send_command(
                             "ACK BUSY", [peer_info["bind"]], ticket=ticket
                         )
@@ -413,11 +416,8 @@ class Cluster:
 
         return ticket, successful_receivers
 
-    async def release(self, lock_name: str = "") -> str:
+    async def release(self, tables: list = ["main"]) -> str:
         errors = []
-
-        if lock_name == "":
-            lock_name = "main"
 
         CONTEXT_TRANSACTION.reset(self._context_token)
 
@@ -425,7 +425,7 @@ class Cluster:
             async with self.receiving:
                 try:
                     ticket, receivers = await self.send_command(
-                        f"UNLOCK {lock_name}", [self.master_node]
+                        f"UNLOCK {','.join(tables)}", [self.master_node]
                     )
                     ret, responses = await self._await_receivers(
                         ticket, receivers, raise_on_error=True
@@ -433,9 +433,11 @@ class Cluster:
                 except IncompleteClusterResponses:
                     errors.append("master_not_reachable")
 
-        with suppress(RuntimeError):
-            self.locks[lock_name]["lock"].release()
-            self.locks[lock_name]["ticket"] = None
+
+        for t in tables:
+            with suppress(RuntimeError):
+                self.locks[t]["lock"].release()
+            self.locks[t]["ticket"] = None
 
         if "remote_transaction_failed" in errors:
             logger.error(
@@ -448,20 +450,24 @@ class Cluster:
                 await self._await_receivers(ticket, receivers, raise_on_error=False)
             raise DistLockCancelled("Master re-election")
 
-    async def acquire_lock(self, lock_name: str = "") -> str:
+    async def acquire_lock(self, tables: list = ["main"]) -> str:
         try:
-            if lock_name == "":
-                lock_name = "main"
-            if not lock_name in self.locks:
-                self.locks[lock_name] = {
-                    "lock": asyncio.Lock(),
-                    "ticket": None,
-                }
+            ticket = str(ntime_utc_now())
+            for t in tables:
+                if t not in self.locks:
+                    self.locks[t] = {
+                        "lock": asyncio.Lock(),
+                        "ticket": None,
+                    }
 
-            await asyncio.wait_for(self.locks[lock_name]["lock"].acquire(), 3.0)
-            self.locks[lock_name]["ticket"] = str(ntime_utc_now())
+                await asyncio.wait_for(self.locks[t]["lock"].acquire(), 3.0)
+                self.locks[t]["ticket"] = ticket
 
         except TimeoutError:
+            for t in tables:
+                with suppress(RuntimeError):
+                    self.locks[t]["lock"].release()
+
             raise DistLockCancelled("Unable to acquire local lock")
 
         errors = []
@@ -472,7 +478,7 @@ class Cluster:
                         raise IncompleteClusterResponses
 
                     ticket, receivers = await self.send_command(
-                        f"LOCK {lock_name}", [self.master_node]
+                        f"LOCK {','.join(tables)}", [self.master_node]
                     )
                     result, responses = await self._await_receivers(
                         ticket, receivers, raise_on_error=True
@@ -485,15 +491,21 @@ class Cluster:
                     errors.append("master_not_reachable")
 
         if "master_busy" in errors:
-            self.locks[lock_name]["lock"].release()
-            return await self.acquire_lock(lock_name)
+            for t in tables:
+                with suppress(RuntimeError):
+                    self.locks[t]["lock"].release()
+            return await self.acquire_lock(tables)
 
         if "lock_cancelled" in errors:
-            self.locks[lock_name]["lock"].release()
+            for t in tables:
+                with suppress(RuntimeError):
+                    self.locks[t]["lock"].release()
             errors.append("master_not_reachable")
 
         if "master_not_reachable" in errors:
-            self.locks[lock_name]["lock"].release()
+            for t in tables:
+                with suppress(RuntimeError):
+                    self.locks[t]["lock"].release()
             async with self.receiving:
                 ticket, receivers = await self.send_command("STATUS", "*")
                 await self._await_receivers(ticket, receivers, raise_on_error=False)

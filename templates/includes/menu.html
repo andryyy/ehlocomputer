@@ -38,7 +38,7 @@
       {% if "system" in session.get("acl", []) or "user" in session.get("acl", []) %}
       <li>
         <details class="dropdown" hx-on:click="event.target.nodeName==='A'?this.open=false:null">
-          <summary role="button" class="button-azure">Ctrl</summary>
+          <summary>Ctrl</summary>
           <ul>
             <li>
               <a href="#" class="secondary" hx-get="/objects/domains">Domains</a>

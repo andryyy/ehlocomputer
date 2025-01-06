@@ -5,7 +5,7 @@ from config.logs import logger
 from copy import deepcopy
 from pydantic import constr, validate_call
 from quart import current_app as app, render_template, session, websocket
-from tools.users import Users
+from tools.users import search as search_users
 from typing import Literal
 
 
@@ -26,7 +26,7 @@ def parse_form_to_dict(key, value):
 async def ws_htmx(channel, strategy: str, data, if_path: str = ""):
     if channel in defaults.USER_ACLS:
         matched_users = [
-            m.login for m in await Users().search(name="") if channel in m.acl
+            m.login for m in await search_users(name="") if channel in m.acl
         ]
         if matched_users:
             for user in matched_users:

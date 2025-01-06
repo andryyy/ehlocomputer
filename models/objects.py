@@ -10,7 +10,6 @@ from pydantic import (
     BaseModel,
     computed_field,
     AfterValidator,
-    constr,
     model_validator,
     field_validator,
     ConfigDict,
@@ -22,7 +21,7 @@ from utils.datetimes import utc_now_as_str
 
 
 class ObjectBase(BaseModel):
-    id: str
+    id: Annotated[str, AfterValidator(lambda v: str(UUID(v)))]
     created: str
     updated: str
 

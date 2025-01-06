@@ -10,7 +10,12 @@ from quart import (
     session,
     websocket,
 )
-from tools.users import Users
+from tools.users import (
+    get as _get_user,
+    patch_credential as _patch_credential,
+    patch_profile as _patch_profile,
+    delete_credential as _delete_credential,
+)
 from utils import wrappers
 from utils.datetimes import utc_now_as_str
 from web.helpers import trigger_notification, validation_error, session_clear
@@ -31,7 +36,7 @@ def load_schemas():
 @wrappers.acl("any")
 async def user_profile_get():
     try:
-        user = await Users.user(id=session["id"]).get()
+        user = await _get_user(user_id=session["id"])
     except ValidationError:
         session_clear()
         return redirect(url_for("root.root"))
@@ -53,10 +58,10 @@ async def user_profile_get():
 @wrappers.acl("any")
 async def user_profile_patch():
     try:
-        async with ClusterLock("main"):
-            await Users.user(id=session["id"]).patch_profile(data=request.form_parsed)
+        async with ClusterLock("users"):
+            await _patch_profile(user_id=session["id"], data=request.form_parsed)
 
-        user = await Users.user(id=session["id"]).get()
+        user = await _get_user(user_id=session["id"])
 
     except ValidationError as e:
         return validation_error(e.errors())
@@ -80,9 +85,11 @@ async def user_profile_patch():
 @wrappers.acl("any")
 async def patch_credential(credential_hex_id: str):
     try:
-        async with ClusterLock("main"):
-            await Users.user(id=session["id"]).patch_credential(
-                hex_id=credential_hex_id, data=request.form_parsed
+        async with ClusterLock("credentials"):
+            await _patch_credential(
+                user_id=session["id"],
+                hex_id=credential_hex_id,
+                data=request.form_parsed,
             )
     except ValidationError as e:
         return validation_error(e.errors())
@@ -100,10 +107,8 @@ async def patch_credential(credential_hex_id: str):
 @wrappers.acl("any")
 async def delete_credential(credential_hex_id: str):
     try:
-        async with ClusterLock("main"):
-            await Users.user(id=session["id"]).delete_credential(
-                hex_id=credential_hex_id
-            )
+        async with ClusterLock(["credentials", "users"]):
+            await _delete_credential(user_id=session["id"], hex_id=credential_hex_id)
     except ValidationError as e:
         return validation_error(e.errors())
 

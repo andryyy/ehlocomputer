@@ -16,53 +16,6 @@ from typing import Annotated, Literal
 from uuid import UUID, uuid4
 
 
-class _Users_attr(BaseModel):
-    login: Annotated[
-        str | list[str] | None,
-        AfterValidator(lambda v: ensure_list(v) or None),
-    ] = None
-    id: Annotated[
-        str | list[str] | None,
-        AfterValidator(lambda v: ensure_list(v) or None),
-    ] = None
-
-    @model_validator(mode="after")
-    def post_init(self):
-        if (self.id and self.login) or not (self.id or self.login):
-            raise PydanticCustomError(
-                "attr",
-                "Either login or id must be defined",
-                dict(provided_attr=None),
-            )
-        try:
-            if isinstance(self.id, list):
-                if len(self.id) == 1:
-                    self.id = str(UUID(self.id.pop()))
-                else:
-                    self.id = [str(UUID(uid)) for uid in self.id]
-            elif isinstance(self.id, str):
-                self.id = str(UUID(self.id))
-        except:
-            raise PydanticCustomError(
-                "id",
-                "One or more IDs cannot be intepreted as UUID values",
-                dict(provided_id=self.id),
-            )
-        if isinstance(self.login, list) and len(self.login) == 1:
-            self.login = self.login.pop()
-
-        return self
-
-    @computed_field
-    @property
-    def matched_attr(self) -> str:
-        if self.id:
-            return "id"
-        if self.login:
-            return "login"
-        return None
-
-
 class User(BaseModel):
     id: Annotated[str, AfterValidator(lambda v: str(UUID(v)))]
     login: str

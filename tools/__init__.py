@@ -27,21 +27,17 @@ CONTEXT_TRANSACTION = contextvars.ContextVar("context_transaction", default=None
 
 def evaluate_db_params(ticket: str | None = None):
     db_params = copy(TINYDB_PARAMS)
+    transaction_file = (
+        f"database/main.{ticket}"
+        if ticket
+        else f"database/main.{CONTEXT_TRANSACTION.get() or ''}".rstrip(".")
+    )
 
-    if ticket:
-        transaction_file = f"database/main.{ticket}"
-    elif CONTEXT_TRANSACTION.get():
-        transaction_file = f"database/main.{CONTEXT_TRANSACTION.get()}"
-    else:
-        transaction_file = "database/main"
-
-    if transaction_file != "database/main":
-        assert is_path_within_cwd(transaction_file)
+    if transaction_file != "database/main" and is_path_within_cwd(transaction_file):
         if not os.path.exists(transaction_file):
-            shutil.copy(f"database/main", transaction_file)
+            shutil.copy("database/main", transaction_file)
 
     db_params["filename"] = transaction_file
-
     return db_params
 
 

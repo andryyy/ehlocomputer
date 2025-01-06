@@ -24,12 +24,6 @@ email_validator.TEST_ENVIRONMENT = True
 validate_email = email_validator.validate_email
 
 
-async def assignable_users():
-    from tools.users import Users
-
-    print(await Users.search(q=""))
-
-
 def ascii_email(v):
     try:
         name = validate_email(v).ascii_email
@@ -242,7 +236,7 @@ class ObjectDomain(BaseModel):
         },
     )
 
-    assigned_dkim_keypair: str = Field(
+    assigned_dkim_keypair: BaseModel | str = Field(
         default="",
         json_schema_extra={
             "title": "DKIM key pair",
@@ -253,7 +247,7 @@ class ObjectDomain(BaseModel):
         },
     )
 
-    assigned_arc_keypair: str = Field(
+    assigned_arc_keypair: BaseModel | str = Field(
         default="",
         json_schema_extra={
             "title": "ARC key pair",
@@ -323,7 +317,7 @@ class ObjectAddress(BaseModel):
         },
     )
 
-    assigned_domain: str = Field(
+    assigned_domain: BaseModel | str = Field(
         json_schema_extra={
             "title": "Assigned domain",
             "description": "Assign a domain for this address.",
@@ -334,7 +328,7 @@ class ObjectAddress(BaseModel):
     )
 
     assigned_emailusers: Annotated[
-        str | list,
+        str | BaseModel | list[str | BaseModel],
         AfterValidator(lambda x: to_unique_sorted_str_list(ensure_list(x))),
     ] = Field(
         default=[],
