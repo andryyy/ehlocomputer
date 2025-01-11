@@ -35,8 +35,8 @@ async def load_schemas():
         if request.endpoint == "objects.get_object"
         else [],
         "emailuser_options": [
-            {"name": group.name, "value": group.id}
-            for group in await _search_object(
+            {"name": o.name, "value": o.id}
+            for o in await _search_object(
                 object_type="emailusers",
                 match_all={"assigned_users": [session["id"]]}
                 if not "system" in session["acl"]
@@ -46,12 +46,8 @@ async def load_schemas():
         if request.endpoint == "objects.get_object"
         else [],
         "keypair_options": [
-            {
-                "name": group.name,
-                "value": group.id,
-                "dns_formatted": group.details.dns_formatted,
-            }
-            for group in await _search_object(
+            {"name": o.name, "value": o.id, "dns_formatted": o.details.dns_formatted}
+            for o in await _search_object(
                 object_type="keypairs",
                 match_all={"assigned_users": [session["id"]]}
                 if not "system" in session["acl"]
@@ -61,11 +57,8 @@ async def load_schemas():
         if request.endpoint == "objects.get_object"
         else [],
         "domain_options": [
-            {
-                "name": domain.details.domain,
-                "value": domain.id,
-            }
-            for domain in await _search_object(
+            {"name": o.name, "value": o.id}
+            for o in await _search_object(
                 object_type="domains",
                 match_all={"assigned_users": [session["id"]]}
                 if not "system" in session["acl"]
@@ -124,21 +117,19 @@ async def get_objects(object_type: str):
     if request.method == "POST":
         try:
             match_any = {
-                "name": search_model.q,
+                "key_name": search_model.q,
                 "domain": search_model.q,
                 "local_part": search_model.q,
                 "username": search_model.q,
             }
-            matched_objects = [
-                m.dict()
-                for m in await _search_object(
-                    object_type=object_type,
-                    match_any=match_any,
-                    match_all={"assigned_users": [session["id"]]}
-                    if not "system" in session["acl"]
-                    else {},
-                )
-            ]
+            matched_objects = await _search_object(
+                object_type=object_type,
+                match_any=match_any,
+                fully_resolve=True,
+                match_all={"assigned_users": [session["id"]]}
+                if not "system" in session["acl"]
+                else {},
+            )
         except ValidationError as e:
             return validation_error(e.errors())
 
@@ -147,7 +138,7 @@ async def get_objects(object_type: str):
             for m in batch(
                 sorted(
                     matched_objects,
-                    key=lambda x: x.get(sort_attr, "id"),
+                    key=lambda x: getattr(x, sort_attr),
                     reverse=sort_reverse,
                 ),
                 page_size,

@@ -13,7 +13,7 @@
 
 {% block body %}
 
-<article>
+<article hx-trigger="htmx:afterRequest[event.detail.successful==true] from:#profile-form" hx-select="#profile-form" hx-get="/profile/" hx-target="#profile-form">
   <h6>Profile data</h6>
   <form hx-trigger="submit throttle:1s" hx-patch="/profile/edit" id="profile-form">
 
@@ -24,12 +24,7 @@
       {% include "includes/form_builder.html" %}
     {% endwith %}
 
-    <div class="flex flex-space-between">
-      <button data-loading-disable
-        type="submit" _="install buttonCheckHtmxResponse">
-          Save changes
-      </button>
-    </div>
+    <button data-loading-disable type="submit">Save changes</button>
 
   </form>
 

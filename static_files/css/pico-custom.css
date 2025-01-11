@@ -3376,4 +3376,9 @@ textarea.dns-data {
   font-family: monospace;
 }
 
+fieldset.keypair {
+  border: 1px solid var(--pico-form-element-border-color);
+  padding: var(--pico-spacing);
+}
+
 /*# sourceMappingURL=pico-custom.css.map */

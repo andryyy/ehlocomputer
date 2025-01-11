@@ -59,7 +59,7 @@ class ObjectBaseKeyPair(ObjectBase):
     @computed_field
     @property
     def name(self) -> str:
-        return self.details.name
+        return self.details.key_name
 
 
 class ObjectAdd(BaseModel):
@@ -101,13 +101,15 @@ class ObjectAddKeyPair(ObjectAdd):
             if k != "assigned_users"
         ):
             data["details"] = cls.generate_rsa(
-                2048, data["details"].get("assigned_users", [])
+                2048,
+                data["details"].get("assigned_users", []),
+                data["details"].get("key_name", "KeyPair"),
             )
         return data
 
     @classmethod
     def generate_rsa(
-        cls, key_size: int = 2048, assigned_users: list = []
+        cls, key_size: int = 2048, assigned_users: list = [], key_name: str = "KeyPair"
     ) -> "ObjectKeyPair":
         from utils.dkim import generate_rsa_dkim
 
@@ -117,6 +119,7 @@ class ObjectAddKeyPair(ObjectAdd):
             public_key_base64=pub,
             key_size=key_size,
             assigned_users=assigned_users,
+            key_name=key_name,
         ).dict()
 
     details: ObjectKeyPair

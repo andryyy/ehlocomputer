@@ -2,10 +2,22 @@ import asyncio
 import re
 import os
 
-from pydantic import ValidationError, validate_call
+from pydantic import ValidationError, validate_call, BaseModel
 from typing import Any, Literal
 from copy import deepcopy
 from uuid import UUID
+
+
+def merge_models(original: BaseModel, override: BaseModel) -> BaseModel:
+    # Convert both models to dictionaries
+    original_data = original.model_dump(mode="json")
+    override_data = override.model_dump(mode="json")
+
+    # Merge with override taking priority
+    merged_data = {**original_data, **override_data}
+
+    # Return a revalidated model using the original model's class
+    return original.__class__(**merged_data)
 
 
 def merge_deep(dict1: dict, dict2: dict):
@@ -65,11 +77,6 @@ def to_unique_sorted_str_list(l: list[str | UUID]) -> list:
 def to_unique_list(l: list[Any]) -> list:
     _l = [x for x in set(l) if x]
     return sorted(_l)
-
-
-@validate_call
-def flatten(l: list[list]):
-    return [i for sub_list in l for i in sub_list]
 
 
 @validate_call

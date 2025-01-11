@@ -328,7 +328,7 @@ class ObjectAddress(BaseModel):
     )
 
     assigned_emailusers: Annotated[
-        str | BaseModel | list[str | BaseModel],
+        str | BaseModel | None | list[BaseModel | str | None],
         AfterValidator(lambda x: to_unique_sorted_str_list(ensure_list(x))),
     ] = Field(
         default=[],
@@ -441,14 +441,14 @@ class ObjectUser(BaseModel):
 
 
 class ObjectKeyPair(BaseModel):
-    name: constr(strip_whitespace=True, min_length=1) = Field(
+    key_name: constr(strip_whitespace=True, min_length=1) = Field(
         default="KeyPair",
         json_schema_extra={
             "title": "Name",
             "description": "A human readable name",
             "type": "text",
             "input_extra": 'autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"',
-            "form_id": f"login-{str(uuid4())}",
+            "form_id": f"keyname-{str(uuid4())}",
         },
     )
     private_key_pem: str
@@ -467,11 +467,11 @@ class ObjectKeyPair(BaseModel):
         },
     )
 
+    @property
+    def _unique_fields(self):
+        return "key_name"
+
     @computed_field
     @property
     def dns_formatted(self) -> str:
         return "v=DKIM1; p=" + self.public_key_base64
-
-    @property
-    def _unique_fields(self):
-        return "name"

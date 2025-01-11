@@ -9,6 +9,7 @@ from pydantic import (
     ConfigDict,
 )
 from pydantic_core import PydanticCustomError
+from pydantic import TypeAdapter, ValidationError
 from typing import Annotated, Literal
 from utils.helpers import ensure_list, to_unique_sorted_str_list
 from uuid import uuid4
@@ -31,6 +32,23 @@ class UserProfile(BaseModel):
             )
         return email
 
+    @field_validator("access_tokens", mode="before")
+    def access_tokens_validator(cls, v):
+        if v == [""]:
+            return []
+        for s in v:
+            if s != "":
+                try:
+                    TypeAdapter(ACCESS_TOKEN_FORMAT).validate_python(s)
+                except ValidationError as e:
+                    raise PydanticCustomError(
+                        "access_tokens",
+                        f"The provided token {s} is invalid",
+                        dict(access_token=s),
+                    )
+
+        return to_unique_sorted_str_list(ensure_list(v))
+
     email: str = Field(
         default="",
         json_schema_extra={
@@ -42,10 +60,7 @@ class UserProfile(BaseModel):
         },
     )
 
-    access_tokens: Annotated[
-        ACCESS_TOKEN_FORMAT | list[ACCESS_TOKEN_FORMAT],
-        AfterValidator(lambda x: to_unique_sorted_str_list(ensure_list(x))),
-    ] = Field(
+    access_tokens: list = Field(
         default=[],
         json_schema_extra={
             "title": "Access tokens",

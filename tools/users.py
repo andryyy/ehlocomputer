@@ -124,7 +124,7 @@ async def patch(user_id: UUID, data: dict):
         ]
 
         db.table("users").update(
-            validated_data.dict(exclude_none=True),
+            patch_user.dict(exclude_none=True),
             Query().id == str(user_id),
         )
         db.table("credentials").remove(Query().id.one_of(orphaned_credentials))
@@ -175,7 +175,7 @@ async def patch_credential(
 
 
 @validate_call
-async def search(self, name: constr(strip_whitespace=True, min_length=0) = Field(...)):
+async def search(name: constr(strip_whitespace=True, min_length=0) = Field(...)):
     db_params = evaluate_db_params()
 
     def search_name(s):
@@ -197,7 +197,7 @@ async def search(self, name: constr(strip_whitespace=True, min_length=0) = Field
 
 @validate_call
 async def search_credential(
-    self, q: constr(strip_whitespace=True, min_length=0) = Field(...)
+    q: constr(strip_whitespace=True, min_length=0) = Field(...)
 ):
     db_params = evaluate_db_params()
 

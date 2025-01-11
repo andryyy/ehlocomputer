@@ -11,6 +11,7 @@ DATA FIELDS
 {% for k, v in schema.properties.items() if k not in without %}
 
   {% if v.type in ["text", "email", "number"] %}
+
     {% set readonly = True if "readonly" in v.input_extra else False %}
     <fieldset>
       <label for="{{ v.form_id }}">{{ v.title }} {{ "🚫" if readonly }}</label>
@@ -24,6 +25,7 @@ DATA FIELDS
     </fieldset>
 
   {% elif v.type in ["date", "datetime-local"] %}
+
     {% set readonly = True if "readonly" in v.input_extra else False %}
     <fieldset>
       <label for="{{ v.form_id }}">{{ v.title }} {{ "🚫" if readonly }}</label>
@@ -113,9 +115,8 @@ DATA FIELDS
           {% endif %}
           name="{% if root_key %}{{ root_key }}.{{ k }}{% else %}{{ k }}{% endif %}"
           id="{{ v.form_id }}">
-          <option value="">-- None --</option>
           {% for option in emailuser_options %}
-          <option value="{{ option["value"] }}" {{ "selected" if option["value"] in current_data[k] }}>{{ option["name"] }}</option>
+          <option value="{{ option["value"] }}" {{ "selected" if option["value"] in current_data[k]|map(attribute="id")|list }}>{{ option["name"] }}</option>
           {% endfor %}
         </select>
         {% if v.description %}
@@ -125,6 +126,7 @@ DATA FIELDS
     {% endif %}
 
   {% elif v.type == "list:text" or v.type == "list:number" %}
+
     {% set readonly = True if "readonly" in v.input_extra else False %}
     <template id="list:item">
       <div>
@@ -132,7 +134,7 @@ DATA FIELDS
           name="{% if root_key %}{{ root_key }}.{{ k }}{% else %}{{ k }}{% endif %}"
           type="{{ "text" if v.type == "list:text" else "number" }}"
           placeholder="New element">
-        <small><a href="#" _="on click halt the event then remove closest <div/> end">Remove</a></small>
+        <small><a href="#" hx-on:click="event.preventDefault();this.closest('div').remove()">Remove</a></small>
       </div>
     </template>
     <fieldset id="{{ v.form_id }}" _="on click from .add-list-item in me halt the event then render #list:item then put the result at the end of me end">
@@ -143,9 +145,10 @@ DATA FIELDS
           name="{% if root_key %}{{ root_key }}.{{ k }}{% else %}{{ k }}{% endif %}"
           type="{{ "text" if v.type == "list:text" else "number" }}"
           value="{{ list_value }}">
-        <small {{ "hidden" if readonly }}><a href="#" _="on click halt the event then remove closest <div/> end">Remove</a></small>
+        <small {{ "hidden" if readonly }}><a href="#" hx-on:click="event.preventDefault();this.closest('div').remove()">Remove</a></small>
       </div>
       {% endfor %}
+      <input name="{% if root_key %}{{ root_key }}.{{ k }}{% else %}{{ k }}{% endif %}" type="hidden" value="">
     </fieldset>
     {% if v.description %}
     <small>{{ v.description|safe }}</small>
@@ -162,7 +165,7 @@ DATA FIELDS
           type="radio"
           value="{{ radio_value }}"
           name="{% if root_key %}{{ root_key }}.{{ k }}{% else %}{{ k }}{% endif %}"
-          {{ "checked" if (current_data[k] or v.default) == radio_value }} />
+          {{ "checked" if (current_data[k] != None and current_data[k] == radio_value) or (current_data[k] == None and v.default == radio_value) }} />
         {{ radio_value|capitalize }}
       </label>
       {% endfor %}
@@ -176,7 +179,7 @@ DATA FIELDS
     {% if not keypair_options or keypair_options == [] %}
       <p>No key pairs available</p>
     {% else %}
-      <fieldset>
+      <fieldset class="keypair">
         <label for="{{ v.form_id }}">{{ v.title }}</label>
         <select {{ v.input_extra|safe }}
           name="{% if root_key %}{{ root_key }}.{{ k }}{% else %}{{ k }}{% endif %}"

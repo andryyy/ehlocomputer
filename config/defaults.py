@@ -14,9 +14,6 @@ LOG_LEVEL = "DEBUG"
 LOG_FILE_RETENTION = 3
 LOG_FILE_ROTATION = "3 days"
 PRESERVE_SESSION_KEYS = []
-ACCESS_TOKEN_FORMAT = constr(
-    min_length=16,
-)
 UTCNOW_FORMAT = "%Y-%m-%dT%H:%M:%S%z"
 NODENAME = "debian-4gb-nbg1-2"
 HYPERCORN_BIND = "162.55.49.111:443"
@@ -35,3 +32,6 @@ CLUSTER_PEERS_TIMEOUT = 1.5
 CLUSTER_PEER_MAX_FAILURES = 3
 PREFERED_MASTER_PEER = "162.55.49.111"
 CLUSTER_LOGS_REFRESH_AFTER = 120  # force refresh of remote logs after n seconds
+ACCESS_TOKEN_FORMAT = constr(
+    min_length=16,
+)

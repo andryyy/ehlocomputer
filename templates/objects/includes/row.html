@@ -2,7 +2,7 @@
   <td>
     <input type="checkbox" class="multiselect" name="id" value="{{ object.id }}" autocomplete="off">
     <a href="#" hx-target="#body-main" hx-push-url="true" hx-get="/objects/{{ request.view_args.get("object_type") }}/{{ object.id }}">
-        {{- object.name -}}
+        {{- object.name -}}{%- if object.details.assigned_domain -%}@{{- object.details.assigned_domain.name -}}{%- endif %}
     </div>
   </td>
   <td class="created-modified">
