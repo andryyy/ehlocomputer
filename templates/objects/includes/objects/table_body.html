@@ -1,4 +1,4 @@
 {% include "objects/includes/objects/table_navigation.html" %}
 {% for object in data.objects %}
-  {% include "objects/includes/objects/row.html" %}
+  {% include "objects/includes/objects/row/" ~ request.view_args.get("object_type") ~ ".html" %}
 {% endfor %}

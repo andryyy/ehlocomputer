@@ -1,4 +1,5 @@
 import asyncio
+import base64
 import fileinput
 import json
 import os
@@ -6,9 +7,8 @@ import random
 import re
 import socket
 import ssl
-import zlib
-import base64
 import sys
+import zlib
 
 from config import defaults
 from config.database import *
@@ -16,10 +16,10 @@ from config.logs import logger
 from contextlib import closing, suppress
 from deepdiff import Delta
 from enum import Enum
+from hashlib import sha256
 from tools import CONTEXT_TRANSACTION, evaluate_db_params
-from utils.crypto import sha256_filedigest
 from utils.datetimes import ntime_utc_now
-from utils.helpers import ensure_list, read_n_to_last_line, is_path_within_cwd
+from utils.helpers import ensure_list, is_path_within_cwd, read_n_to_last_line
 from uuid import uuid4
 
 
@@ -252,7 +252,8 @@ class Cluster:
                 # A task starting with "R" indicates a resync
                 elif cmd.startswith("APPLY"):
                     _, _, payload = cmd.partition(" ")
-                    table, delta_payload = payload.split(" ")
+                    table_w_hash, delta_payload = payload.split(" ")
+                    table, table_hash = table_w_hash.split("@")
                     table_delta = Delta(base64.b64decode(delta_payload), safe_to_import="tinydb.table.Document")
                     db_params = evaluate_db_params(ticket)
                     async with TinyDB(**db_params) as db:
@@ -263,17 +264,28 @@ class Cluster:
                         else:
                             try:
                                 table_data = db.table(table).all()
-                                db.table(table).truncate()
-                                db.table(table).insert_multiple(table_data + table_delta)
-                                await self.send_command("ACK", [peer_info["bind"]], ticket=ticket)
+                                local_table_hash = sha256(
+                                    json.dumps(table_data, sort_keys=True).encode(
+                                        "utf-8"
+                                    )
+                                ).hexdigest()
+
+                                if local_table_hash != table_hash:
+                                    await self.send_command(
+                                        "ACK CRIT:TABLE_HASH_MISMATCH", [peer_info["bind"]], ticket=ticket
+                                    )
+                                else:
+                                    db.table(table).truncate()
+                                    db.table(table).insert_multiple(table_data + table_delta)
+                                    await self.send_command("ACK", [peer_info["bind"]], ticket=ticket)
                             except Exception as e:
                                 logger.error(f"<connection_handler> {type(e)}: {e}")
-                                await self.send_command("CRIT:CANNOT_APPLY", [peer_info["bind"]], ticket=ticket)
+                                await self.send_command("ACK CRIT:CANNOT_APPLY", [peer_info["bind"]], ticket=ticket)
 
                 elif cmd == "COMMIT":
                     db_params = evaluate_db_params(ticket)
                     if not os.path.isfile(db_params["filename"]):
-                        await self.send_command("CRIT:NOTHING_TO_COMMIT", [peer_info["bind"]], ticket=ticket)
+                        await self.send_command("ACK CRIT:NOTHING_TO_COMMIT", [peer_info["bind"]], ticket=ticket)
                     else:
                         async with TinyDB(**db_params) as db:  # acquires tinydbs lock
                             os.rename(db_params["filename"], TINYDB_PARAMS["filename"])
@@ -438,11 +450,6 @@ class Cluster:
             with suppress(RuntimeError):
                 self.locks[t]["lock"].release()
             self.locks[t]["ticket"] = None
-
-        if "remote_transaction_failed" in errors:
-            logger.error(
-                f"<tasks> a task failed to replicate, not committing transaction"
-            )
 
         if "master_not_reachable" in errors:
             async with self.receiving:

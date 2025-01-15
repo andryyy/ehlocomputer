@@ -34,9 +34,6 @@ class AsyncCacheManager:
                     continue
                 self.mappings.update({data.name: data.id})
 
-    def clear_cache(self):
-        self.cache.clear()
-
     def cached_function(self, func):
         @wraps(func)
         async def wrapper(*args, **kwargs):
@@ -148,7 +145,7 @@ async def get(
 
         object_data.append(o_parsed)
 
-    cache_manager.clear_cache()
+    cache_manager.cache.clear()
 
     if len(object_data) == 1:
         return object_data.pop()

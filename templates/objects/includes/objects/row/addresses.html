@@ -2,21 +2,18 @@
   <td>
     <input type="checkbox" class="multiselect" name="id" value="{{ object.id }}" autocomplete="off">
     <a href="#" hx-target="#body-main" hx-push-url="true" hx-get="/objects/{{ request.view_args.get("object_type") }}/{{ object.id }}">
-      {% if request.view_args.get("object_type") == "addresses" %}
-        {{- object.details.display_name }}
+      {% set name = object.details.display_name|replace("%DOMAIN_DISPLAY_NAME%", object.details.assigned_domain.details.display_name) %}
+      {% if name %}
+        {{ name }}
       {% else %}
-        {{- object.name }}
+        {{ object.name }}
       {% endif %}
     </a>
-
-    {% if request.view_args.get("object_type") == "addresses" %}
-      &#60;{{ object.details.local_part ~ "@" -}}
-      <a class="secondary" href="#" hx-target="#body-main" hx-push-url="true" hx-get="/objects/domains/{{ object.details.assigned_domain.id }}">
-        {{- object.details.assigned_domain.name -}}
-      </a>
-      {{- "&#62;"|safe -}}
-    {% endif %}
-
+    &#60;{{ object.details.local_part ~ "@" -}}
+    <a class="secondary" href="#" hx-target="#body-main" hx-push-url="true" hx-get="/objects/domains/{{ object.details.assigned_domain.id }}">
+      {{- object.details.assigned_domain.name -}}
+    </a>
+    {{- "&#62;"|safe -}}
   </td>
   <td class="created-modified">
     <small _="init js return new Date('{{ object.created }}').toLocaleString() end then put result into me">{{ object.created }}</small>
@@ -25,3 +22,4 @@
     {% endif %}
   </td>
 </tr>
+

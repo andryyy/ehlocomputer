@@ -4,6 +4,7 @@ import os
 import time
 
 from config import defaults
+from config.cluster import ClusterHTTPException
 from contextlib import suppress
 from quart import Quart, request
 from utils.cluster import Cluster
@@ -14,7 +15,8 @@ from web.blueprints import profile
 from web.blueprints import root
 from web.blueprints import system
 from web.blueprints import users
-from web.helpers import parse_form_to_dict
+from web.helpers import parse_form_to_dict, trigger_notification
+from werkzeug.exceptions import HTTPException
 
 app = Quart(
     __name__,
@@ -36,6 +38,17 @@ app.config["TEMPLATES_AUTO_RELOAD"] = defaults.TEMPLATES_AUTO_RELOAD
 app.config["SERVER_NAME"] = defaults.HOSTNAME
 app.config["SESSION_VALIDATED"] = dict()
 app.config["WS_CONNECTIONS"] = dict()
+
+
+@app.errorhandler(ClusterHTTPException)
+async def handle_cluster_error(error):
+    return trigger_notification(
+        level="error",
+        response_body="",
+        response_code=204,
+        title="Cluster error",
+        message=f"🤖 Computer failed, oh no... ({error})",
+    )
 
 
 @app.before_request

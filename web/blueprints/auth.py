@@ -609,7 +609,6 @@ async def auth_login_verify():
             )
 
     except Exception as e:
-        raise
         return trigger_notification(
             level="error",
             response_body="",
