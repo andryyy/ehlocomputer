@@ -14,13 +14,7 @@
 @use "colors" as *;
 @use "sass:map";
 @use "settings" as *;
-
-
-
-small {
-  font-size: 0.875rem;
-  color: var(--pico-muted-color);
-}
+@use "sass:math"; // Import the math module for division
 
 :root {
   --pico-font-family-sans-serif: "Go", system-ui, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, var(--pico-font-family-emoji);
@@ -29,6 +23,11 @@ small {
   --pico-border-radius: 0;
   --pico-font-size: 12pt;
   --pico-line-height: 1.4;
+}
+
+small {
+  font-size: 0.875rem;
+  color: var(--pico-muted-color);
 }
 
 mark {
@@ -229,10 +228,10 @@ dialog article {
   white-space: break-spaces;
 }
 
-.split-grid.grid > article {
+.split-grid.grid > article:first-child {
   grid-column: span 1;
 }
-.split-grid.grid > article:last-child {
+.split-grid.grid > article {
   grid-column: span 3;
 }
 
@@ -243,21 +242,6 @@ dialog article {
   bottom: var(--pico-form-element-spacing-vertical);
   padding: var(--pico-form-element-spacing-vertical) var(--pico-form-element-spacing-horizontal);
   margin: var(--pico-form-element-spacing-vertical) var(--pico-form-element-spacing-horizontal);
-}
-
-@each $color-key, $color-var in $colors {
-  $_color: map.get($color-var, 550);
-
-  #{'.color-' + $color-key} {
-    color: $_color !important;
-    text-decoration-color: $_color !important;
-  }
-
-  :is(button, [type="submit"], [type="button"], [role="button"])#{'.button-' + $color-key}, [type="reset"]#{'.button-' + $color-key} {
-    color: #{$slate-50};
-    border-color: $_color;
-    background-color: $_color;
-  }
 }
 
 nav details.dropdown {
@@ -276,14 +260,16 @@ nav details.dropdown {
 }
 @media (max-width: 1024px) {
   .split-grid.grid {
-    grid-column-gap: 0;
-    grid-row-gap: 0;
+    grid-column-gap: 2;
+    grid-row-gap: 2;
   }
   .split-grid.grid > article {
-    margin-bottom: .5rem;
-    padding: calc(var(--pico-spacing)/4);
+    padding: 0;
     background-color: transparent;
     box-shadow: none;
+  }
+  th, td {
+    --pico-spacing: 0.75rem;
   }
 }
 
@@ -296,4 +282,85 @@ textarea.dns-data {
 fieldset.keypair {
   border: 1px solid var(--pico-form-element-border-color);
   padding: var(--pico-spacing);
+}
+
+
+///////////////////////////////////////
+// Generators for colors and breakpoints
+///////////////////////////////////////
+
+@function get-luminance($color) {
+  $red: math.div(red($color), 255);
+  $green: math.div(green($color), 255);
+  $blue: math.div(blue($color), 255);
+
+  @return ($red * 0.2126) + ($green * 0.7152) + ($blue * 0.0722);
+}
+
+@function get-contrast-ratio($color1, $color2) {
+  $l1: get-luminance($color1) + 0.05;
+  $l2: get-luminance($color2) + 0.05;
+
+  @if $l1 > $l2 {
+    @return math.div($l1, $l2);
+  } @else {
+    @return math.div($l2, $l1);
+  }
+}
+
+@function get-contrast-color($color) {
+  $dark-color: $grey-900;
+  $light-color: $slate-100;
+  $contrast-with-dark: get-contrast-ratio($color, $dark-color);
+  $contrast-with-light: get-contrast-ratio($color, $light-color);
+
+  @if $contrast-with-light >= 1.0 {
+    @return $light-color;
+  } @else {
+    @return $dark-color;
+  }
+}
+
+@each $color-key, $color-var in $colors {
+  @each $shade, $value in $color-var {
+    .color-#{"#{$color-key}"}-#{$shade} {
+      color: $value !important;
+    }
+    :is(button, [type="submit"], [type="button"], [role="button"]).button-#{"#{$color-key}"}-#{$shade},
+    [type="reset"].button-#{"#{$color-key}"}-#{$shade} {
+      color: get-contrast-color($value);
+      border-color: $value;
+      background-color: $value;
+    }
+    :is(a).color-#{"#{$color-key}"}-#{$shade} {
+      text-decoration-color: $value !important;
+    }
+  }
+
+  @if map-has-key($color-var, 500) {
+    .color-#{"#{$color-key}"} {
+      @extend .color-#{"#{$color-key}"}-500;
+    }
+    :is(button, [type="submit"], [type="button"], [role="button"]).button-#{"#{$color-key}"},
+    [type="reset"].button-#{"#{$color-key}"} {
+      @extend .button-#{"#{$color-key}"}-500;
+    }
+  }
+}
+
+@each $size, $data in $breakpoints {
+  $breakpoint: map-get($data, breakpoint);
+  @media (max-width: $breakpoint) {
+    .hide-below-#{$size} {
+      display: none;
+    }
+    .show-below-#{$size} {
+      display: block;
+    }
+  }
+  @media (min-width: $breakpoint + 1px) {
+    .show-below-#{$size} {
+      display: none;
+    }
+  }
 }

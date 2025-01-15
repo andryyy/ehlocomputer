@@ -12,6 +12,7 @@ from pydantic import (
     AfterValidator,
     model_validator,
     field_validator,
+    constr,
     ConfigDict,
 )
 from typing import Annotated, Literal, Any
@@ -146,8 +147,22 @@ class ObjectPatchAddress(ObjectPatch):
     details: ObjectAddress
 
 
+class _ObjectPatchKeyPairHelper(ObjectPatch):
+    key_name: constr(strip_whitespace=True, min_length=1) = Field(
+        default="KeyPair",
+    )
+    assigned_users: Annotated[
+        str | list,
+        AfterValidator(lambda x: to_unique_sorted_str_list(ensure_list(x))),
+    ]
+
+    @property
+    def _unique_fields(self):
+        return "key_name"
+
+
 class ObjectPatchKeyPair(ObjectPatch):
-    details: ObjectKeyPair
+    details: _ObjectPatchKeyPairHelper
 
 
 model_classes = {

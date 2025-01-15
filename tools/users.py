@@ -158,8 +158,8 @@ async def patch_credential(
     user_id: UUID, hex_id: constr(pattern=r"^[0-9a-fA-F]+$", min_length=2), data: dict
 ):
     db_params = evaluate_db_params()
-
     user = await get(user_id=user_id)
+
     if hex_id not in user.credentials:
         raise ValueError(
             "hex_id",

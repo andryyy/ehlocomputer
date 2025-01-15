@@ -60,13 +60,13 @@
       {% endif %}
 
       {% if limited_permission_objects %}
-          <p>This object contains assignments with <b><span class="color-cyan">limited permissions</span></b>:</p>
-          <ul>
-          {% for k, v in limited_permission_objects.items() %}
-            <li>Object type "{{ k }}": <b>{{ v|join(", ") if k == "emailusers" else v }}</b></li>
-          {% endfor %}
-          </ul>
-          <hr>
+        <p>This object contains assignments with <b><span class="color-cyan">limited permissions</span></b>:</p>
+        <ul>
+        {% for k, v in limited_permission_objects.items() %}
+          <li>Object type "{{ k }}": <b>{{ v|join(", ") if k == "emailusers" else v }}</b></li>
+        {% endfor %}
+        </ul>
+        <hr>
       {% endif %}
 
       {% with

@@ -15,8 +15,19 @@
 
 <h4>Manage {{ request.view_args.get("object_type") }}</h4>
 
-<div class="grid split-grid">
+<details class="show-below-lg">
+  <summary role="button" class="contrast">➕ Create a new object</summary>
   <article>
+    <hgroup>
+      <h5>New object</h5>
+      <p>Create an object by defining a unique name.</p>
+    </hgroup>
+    {% include "objects/includes/create/" ~ request.view_args.get("object_type") ~ ".html" %}
+  </article>
+</details>
+
+<div class="grid split-grid">
+  <article class="hide-below-lg">
     <hgroup>
       <h5>New object</h5>
       <p>Create an object by defining a unique name.</p>
@@ -25,7 +36,7 @@
   </article>
 
   <article id="{{ request.view_args.get("object_type") }}-full-table">
-    {% include "objects/includes/table.html" %}
+    {% include "objects/includes/objects/table.html" %}
   </article>
 </div>
 

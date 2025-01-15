@@ -120,6 +120,7 @@ async def get_objects(object_type: str):
                 "key_name": search_model.q,
                 "domain": search_model.q,
                 "local_part": search_model.q,
+                "assigned_domain": search_model.q,
                 "username": search_model.q,
             }
             matched_objects = await _search_object(
@@ -153,7 +154,7 @@ async def get_objects(object_type: str):
         objects = object_pages[page - 1] if page else object_pages
 
         return await render_template(
-            "objects/includes/table_body.html",
+            "objects/includes/objects/table_body.html",
             data={
                 "objects": objects,
                 "page_size": page_size,

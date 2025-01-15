@@ -1,6 +1,8 @@
 import asyncio
 import models.objects as objects_model
 import re
+import hashlib
+import pickle
 
 from config import defaults
 from config.logs import logger
@@ -12,7 +14,58 @@ from quart import current_app, session
 from utils.datetimes import ntime_utc_now
 from utils.helpers import ensure_list, merge_models
 from uuid import UUID
-from functools import reduce
+from functools import reduce, wraps
+
+
+class AsyncCacheManager:
+    def __init__(self):
+        self.cache = {}
+        self.mappings = {}
+
+    def update_cached_mappings(self):
+        for data in self.cache.values():
+            if isinstance(data, list):
+                for d in data:
+                    if not isinstance(d, object):
+                        continue
+                    self.mappings.update({d.name: d.id})
+            else:
+                if not isinstance(data, object) or not data:
+                    continue
+                self.mappings.update({data.name: data.id})
+
+    def clear_cache(self):
+        self.cache.clear()
+
+    def cached_function(self, func):
+        @wraps(func)
+        async def wrapper(*args, **kwargs):
+            args = tuple(tuple(arg) if isinstance(arg, list) else arg for arg in args)
+            kwargs = {
+                k: tuple(v) if isinstance(v, list) else v for k, v in kwargs.items()
+            }
+            cache_key = self._make_cache_key(args, kwargs)
+            if cache_key in self.cache:
+                return self.cache[cache_key]
+            result = await func(*args, **kwargs)
+            if result:
+                self.cache[cache_key] = result
+                self.update_cached_mappings()
+            return result
+
+        return wrapper
+
+    def _make_cache_key(self, args, kwargs):
+        if current_app and session.get("id"):
+            prefix = session["id"].encode()  # Convert to bytes
+        else:
+            prefix = b"anonymous"  # Byte string for consistency
+
+        key = prefix + b":" + pickle.dumps((args, kwargs))
+        return hashlib.sha256(key).hexdigest()
+
+
+cache_manager = AsyncCacheManager()
 
 
 @validate_call
@@ -50,6 +103,7 @@ async def user_permitted_objects(user_id: UUID | None = None):
     return permissions
 
 
+@cache_manager.cached_function
 @validate_call
 async def get(
     object_type: Literal[*objects_model.model_classes["types"]],
@@ -70,7 +124,7 @@ async def get(
 
     object_data = []
     for o in found_objects:
-        o_parsed = objects_model.model_classes["base"][object_type].parse_obj(o)
+        o_parsed = objects_model.model_classes["base"][object_type].model_validate(o)
         for k, v in o_parsed.details.model_dump(mode="json").items():
             if k == "assigned_domain":
                 domain_data = await get(
@@ -93,6 +147,8 @@ async def get(
                     o_parsed.details.assigned_emailusers.append(emailuser_data)
 
         object_data.append(o_parsed)
+
+    cache_manager.clear_cache()
 
     if len(object_data) == 1:
         return object_data.pop()
@@ -135,8 +191,13 @@ async def patch(
                 "assigned_users", to_patch.details.assigned_users
             )
 
-        patch_data = objects_model.model_classes["patch"][object_type].parse_obj(data)
-        patched_object = merge_models(to_patch, patch_data)
+        patch_data = objects_model.model_classes["patch"][object_type].model_validate(
+            data
+        )
+
+        patched_object = merge_models(
+            to_patch, patch_data
+        )  # returns updated to_patch model
 
         conflict_queries = [Query().id != to_patch.id]
         unique_fields = patched_object.details._unique_fields
@@ -256,7 +317,9 @@ async def patch(
 
         async with TinyDB(**db_params) as db:
             db.table(object_type).update(
-                patched_object.dict(exclude_none=True),
+                patched_object.dict(
+                    exclude_none=True, exclude={"name", "id", "created"}
+                ),
                 Query().id == to_patch.id,
             )
 
@@ -274,7 +337,7 @@ async def create(
         permitted_objects["_meta"]["user_id"]
     ]
 
-    create_object = objects_model.model_classes["add"][object_type].parse_obj(data)
+    create_object = objects_model.model_classes["add"][object_type].model_validate(data)
 
     unique_fields = create_object.details._unique_fields
     if isinstance(unique_fields, tuple):
@@ -327,10 +390,16 @@ async def search(
     def filter_details(s, _any: bool = False):
         def match(key, value, current_data):
             if key in current_data:
+                if key.startswith("assigned_") and key != "assigned_users":
+                    _value = [value]
+                    for m in [*cache_manager.mappings]:
+                        if value in m:
+                            _value.append(cache_manager.mappings[m])
+                    value = _value
+
                 if isinstance(value, list):
                     return any(item in current_data[key] for item in value)
-                if key.startswith("assigned_"):
-                    return value == current_data[key]
+
                 return value in current_data[key]
 
             for sub_key, sub_value in current_data.items():
@@ -366,6 +435,6 @@ async def search(
         _parsed = []
         for o in matches:
             _parsed.append(
-                objects_model.model_classes["base"][object_type].parse_obj(o)
+                objects_model.model_classes["base"][object_type].model_validate(o)
             )
         return _parsed

@@ -99,19 +99,7 @@ class ObjectDomain(BaseModel):
 
     @field_validator("domain")
     def domain_validator(cls, v):
-        if v in [None, ""]:
-            return ""
         return ascii_domain(v)
-
-    domain: str = Field(
-        json_schema_extra={
-            "title": "Domain name",
-            "description": "A unique domain name",
-            "type": "text",
-            "input_extra": 'autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"',
-            "form_id": f"domain-{str(uuid4())}",
-        },
-    )
 
     display_name: str = Field(
         default="",
@@ -121,6 +109,16 @@ class ObjectDomain(BaseModel):
             "type": "text",
             "input_extra": 'autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"',
             "form_id": f"mailbox-{str(uuid4())}",
+        },
+    )
+
+    domain: str = Field(
+        json_schema_extra={
+            "title": "Domain name",
+            "description": "A unique domain name",
+            "type": "text",
+            "input_extra": 'autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"',
+            "form_id": f"domain-{str(uuid4())}",
         },
     )
 
@@ -441,6 +439,9 @@ class ObjectUser(BaseModel):
 
 
 class ObjectKeyPair(BaseModel):
+    private_key_pem: str
+    public_key_base64: str
+    key_size: int
     key_name: constr(strip_whitespace=True, min_length=1) = Field(
         default="KeyPair",
         json_schema_extra={
@@ -451,9 +452,6 @@ class ObjectKeyPair(BaseModel):
             "form_id": f"keyname-{str(uuid4())}",
         },
     )
-    private_key_pem: str
-    public_key_base64: str
-    key_size: int
     assigned_users: Annotated[
         str | list,
         AfterValidator(lambda x: to_unique_sorted_str_list(ensure_list(x))),
@@ -474,4 +472,6 @@ class ObjectKeyPair(BaseModel):
     @computed_field
     @property
     def dns_formatted(self) -> str:
-        return "v=DKIM1; p=" + self.public_key_base64
+        return (
+            "v=DKIM1; p=" + self.public_key_base64 if self.public_key_base64 else None
+        )
