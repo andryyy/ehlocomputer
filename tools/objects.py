@@ -16,53 +16,8 @@ from utils.helpers import ensure_list, merge_models
 from uuid import UUID
 from functools import reduce, wraps
 
-
-class AsyncCacheManager:
-    def __init__(self):
-        self.cache = {}
-        self.mappings = {}
-
-    def update_cached_mappings(self):
-        for data in self.cache.values():
-            if isinstance(data, list):
-                for d in data:
-                    if not isinstance(d, object):
-                        continue
-                    self.mappings.update({d.name: d.id})
-            else:
-                if not isinstance(data, object) or not data:
-                    continue
-                self.mappings.update({data.name: data.id})
-
-    def cached_function(self, func):
-        @wraps(func)
-        async def wrapper(*args, **kwargs):
-            args = tuple(tuple(arg) if isinstance(arg, list) else arg for arg in args)
-            kwargs = {
-                k: tuple(v) if isinstance(v, list) else v for k, v in kwargs.items()
-            }
-            cache_key = self._make_cache_key(args, kwargs)
-            if cache_key in self.cache:
-                return self.cache[cache_key]
-            result = await func(*args, **kwargs)
-            if result:
-                self.cache[cache_key] = result
-                self.update_cached_mappings()
-            return result
-
-        return wrapper
-
-    def _make_cache_key(self, args, kwargs):
-        if current_app and session.get("id"):
-            prefix = session["id"].encode()  # Convert to bytes
-        else:
-            prefix = b"anonymous"  # Byte string for consistency
-
-        key = prefix + b":" + pickle.dumps((args, kwargs))
-        return hashlib.sha256(key).hexdigest()
-
-
-cache_manager = AsyncCacheManager()
+IN_MEMORY_DB["object_mappings"] = dict()
+IN_MEMORY_DB["objects_cache"] = dict()
 
 
 @validate_call
@@ -100,16 +55,23 @@ async def user_permitted_objects(user_id: UUID | None = None):
     return permissions
 
 
-@cache_manager.cached_function
 @validate_call
 async def get(
     object_type: Literal[*objects_model.model_classes["types"]],
     object_id: UUID | list[UUID],
     permission_validation=True,
+    _is_recursing=False,
 ):
     get_objects = objects_model.ObjectIdList(object_id=object_id).object_id
     permitted_objects = await user_permitted_objects()
     db_params = evaluate_db_params()
+
+    if current_app and session.get("id"):
+        cache_user = session["id"]
+    else:
+        cache_user = "anonymous"
+
+    IN_MEMORY_DB["objects_cache"][cache_user] = dict()
 
     if permission_validation == True:
         get_objects = [
@@ -124,28 +86,55 @@ async def get(
         o_parsed = objects_model.model_classes["base"][object_type].model_validate(o)
         for k, v in o_parsed.details.model_dump(mode="json").items():
             if k == "assigned_domain":
-                domain_data = await get(
-                    object_type="domains", object_id=v, permission_validation=False
-                )
-                o_parsed.details.assigned_domain = domain_data
+                if not v in IN_MEMORY_DB["objects_cache"][cache_user]:
+                    IN_MEMORY_DB["objects_cache"][cache_user][v] = await get(
+                        object_type="domains",
+                        object_id=v,
+                        permission_validation=False,
+                        _is_recursing=True,
+                    )
+                    IN_MEMORY_DB["object_mappings"][
+                        IN_MEMORY_DB["objects_cache"][cache_user][v].name
+                    ] = IN_MEMORY_DB["objects_cache"][cache_user][v].id
+
+                o_parsed.details.assigned_domain = IN_MEMORY_DB["objects_cache"][
+                    cache_user
+                ][v]
             elif k in ["assigned_arc_keypair", "assigned_dkim_keypair"] and v:
-                keypair_data = await get(
-                    object_type="keypairs", object_id=v, permission_validation=False
+                if not v in IN_MEMORY_DB["objects_cache"][cache_user]:
+                    IN_MEMORY_DB["objects_cache"][cache_user][v] = await get(
+                        object_type="keypairs",
+                        object_id=v,
+                        permission_validation=False,
+                        _is_recursing=True,
+                    )
+                    IN_MEMORY_DB["object_mappings"][
+                        IN_MEMORY_DB["objects_cache"][cache_user][v].name
+                    ] = IN_MEMORY_DB["objects_cache"][cache_user][v].id
+                setattr(
+                    o_parsed.details, k, IN_MEMORY_DB["objects_cache"][cache_user][v]
                 )
-                setattr(o_parsed.details, k, keypair_data)
             elif k == "assigned_emailusers" and v:
                 o_parsed.details.assigned_emailusers = []
                 for u in ensure_list(v):
-                    emailuser_data = await get(
-                        object_type="emailusers",
-                        object_id=v,
-                        permission_validation=False,
+                    if not u in IN_MEMORY_DB["objects_cache"][cache_user]:
+                        IN_MEMORY_DB["objects_cache"][cache_user][u] = await get(
+                            object_type="emailusers",
+                            object_id=u,
+                            permission_validation=False,
+                            _is_recursing=True,
+                        )
+                        IN_MEMORY_DB["object_mappings"][
+                            IN_MEMORY_DB["objects_cache"][cache_user][u].name
+                        ] = IN_MEMORY_DB["objects_cache"][cache_user][u].id
+                    o_parsed.details.assigned_emailusers.append(
+                        IN_MEMORY_DB["objects_cache"][cache_user][u]
                     )
-                    o_parsed.details.assigned_emailusers.append(emailuser_data)
 
         object_data.append(o_parsed)
 
-    cache_manager.cache.clear()
+    if _is_recursing == False:
+        IN_MEMORY_DB["objects_cache"][cache_user].clear()
 
     if len(object_data) == 1:
         return object_data.pop()
@@ -389,9 +378,9 @@ async def search(
             if key in current_data:
                 if key.startswith("assigned_") and key != "assigned_users":
                     _value = [value]
-                    for m in [*cache_manager.mappings]:
+                    for m in [*IN_MEMORY_DB["object_mappings"]]:
                         if value in m:
-                            _value.append(cache_manager.mappings[m])
+                            _value.append(IN_MEMORY_DB["object_mappings"][m])
                     value = _value
 
                 if isinstance(value, list):
