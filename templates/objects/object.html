@@ -18,7 +18,10 @@
   <article>
     <hgroup>
       <h5 id="object-name">{{ object.name }}</h5>
-      <p>Modify the object details here.<br></p>
+      <p>Modify the object details here.<br>
+        <br><small>A value marked with a ⚠️ symbol cannot be removed from the object's parameter assignment.</small>
+        <br><small>A parameter marked with a 🔒 symbol requires system permission.</small>
+      </p>
     </hgroup>
   </article>
 
@@ -31,46 +34,9 @@
     hx-get="/objects/{{ request.view_args.get("object_type") }}/{{ object.id }}">
 
     <form id="object-form" hx-trigger="submit throttle:200ms" hx-patch="/objects/{{ request.view_args.get("object_type") }}/{{ object.id }}">
-      {% set limited_permission_objects = {} %}
-
-      {% if object.details.assigned_domain and not domain_options|selectattr('value', 'equalto', object.details.assigned_domain.id) | list %}
-        {% set domain_options = domain_options + [{"name": object.details.assigned_domain.name, "value": object.details.assigned_domain.id }] %}
-        {% set _ = limited_permission_objects.update({"domains": object.details.assigned_domain.name}) %}
-      {% endif %}
-
-      {% set _ = limited_permission_objects.update({"emailusers": []}) %}
-
-      {% for u in object.details.assigned_emailusers if u.id not in emailuser_options|map(attribute="value")|list and object.details.assigned_emailusers %}
-          {% set _ = emailuser_options.append({'name': u.name, 'value': u.id}) %}
-          {% set _ = limited_permission_objects.emailusers.append(u.name) %}
-      {% endfor %}
-
-      {% if limited_permission_objects["emailusers"] == [] %}
-        {% set _ = limited_permission_objects.pop("emailusers", None) %}
-      {% endif %}
-
-      {% if object.details.assigned_dkim_keypair and not keypair_options|selectattr('value', 'equalto', object.details.assigned_dkim_keypair.id) | list %}
-        {% set keypair_options = keypair_options + [{"name": object.details.assigned_dkim_keypair.name, "value": object.details.assigned_dkim_keypair.id }] %}
-        {% set _ = limited_permission_objects.update({"keypairs": object.details.assigned_dkim_keypair.name}) %}
-      {% endif %}
-
-      {% if object.details.assigned_arc_keypair and not keypair_options|selectattr('value', 'equalto', object.details.assigned_arc_keypair.id) | list %}
-        {% set keypair_options = keypair_options + [{"name": object.details.assigned_arc_keypair.name, "value": object.details.assigned_arc_keypair.id }] %}
-        {% set _ = limited_permission_objects.update({"keypairs": object.details.assigned_arc_keypair.name}) %}
-      {% endif %}
-
-      {% if limited_permission_objects %}
-        <p>This object contains assignments with <b><span class="color-cyan">limited permissions</span></b>:</p>
-        <ul>
-        {% for k, v in limited_permission_objects.items() %}
-          <li>Object type "{{ k }}": <b>{{ v|join(", ") if k == "emailusers" else v }}</b></li>
-        {% endfor %}
-        </ul>
-        <hr>
-      {% endif %}
-
       {% with
-        schema=schemas["_" + request.view_args.get("object_type") + "_schema"],
+        schema=schemas[request.view_args.object_type],
+        system_fields=system_fields[request.view_args.object_type],
         current_data=object.details,
         root_key="details"
       %}

@@ -15,59 +15,31 @@ from tools.objects import (
 from utils import wrappers
 from utils.helpers import batch, ensure_list
 from uuid import uuid4
-from web.helpers import trigger_notification, validation_error
+from web.helpers import trigger_notification, validation_error, render_or_json
 
 blueprint = Blueprint("objects", __name__, url_prefix="/objects")
 
 
 @blueprint.context_processor
-async def load_schemas():
-    return {
-        "schemas": {
-            f"_{object_type}_schema": v.model_json_schema()
-            for object_type, v in objects_model.model_classes["forms"].items()
-        },
-        # injects options for forms depending on route endpoint
-        "user_options": [
-            {"name": user.login, "value": user.id}
-            for user in await search_users(name="")
-        ]
-        if request.endpoint == "objects.get_object"
-        else [],
-        "emailuser_options": [
-            {"name": o.name, "value": o.id}
-            for o in await _search_object(
-                object_type="emailusers",
-                match_all={"assigned_users": [session["id"]]}
-                if not "system" in session["acl"]
-                else {},
-            )
-        ]
-        if request.endpoint == "objects.get_object"
-        else [],
-        "keypair_options": [
-            {"name": o.name, "value": o.id, "dns_formatted": o.details.dns_formatted}
-            for o in await _search_object(
-                object_type="keypairs",
-                match_all={"assigned_users": [session["id"]]}
-                if not "system" in session["acl"]
-                else {},
-            )
-        ]
-        if request.endpoint == "objects.get_object"
-        else [],
-        "domain_options": [
-            {"name": o.name, "value": o.id}
-            for o in await _search_object(
-                object_type="domains",
-                match_all={"assigned_users": [session["id"]]}
-                if not "system" in session["acl"]
-                else {},
-            )
-        ]
-        if request.endpoint in ["objects.get_object", "objects.get_objects"]
-        else [],
+async def load_context():
+    context = dict()
+    context["system_fields"] = {
+        object_type: system_fields
+        for object_type, system_fields in objects_model.model_classes[
+            "system_fields"
+        ].items()
     }
+    context["unique_fields"] = {
+        object_type: unique_fields
+        for object_type, unique_fields in objects_model.model_classes[
+            "unique_fields"
+        ].items()
+    }
+    context["schemas"] = {
+        object_type: v.model_json_schema()
+        for object_type, v in objects_model.model_classes["forms"].items()
+    }
+    return context
 
 
 @blueprint.before_request
@@ -88,11 +60,54 @@ async def objects_before_request():
 
 @blueprint.route("/<object_type>/<object_id>")
 @wrappers.acl("user")
+@wrappers.formoptions(["emailusers", "domains", "keypairs", "users"])
 async def get_object(object_type: str, object_id: str):
     try:
         object_data = await _get_object(object_id=object_id, object_type=object_type)
+
         if not object_data:
             return (f"<h1>Object not found</h1><p>Object is unknown</p>", 404)
+
+        """
+        Inject form options not provided by user permission.
+        A user will not be able to access detailed information about objects
+        with inherited permission nor will they be able to remove assignments.
+        """
+        if object_type == "addresses":
+            object_domain = {
+                "name": object_data.details.assigned_domain.name,
+                "value": object_data.details.assigned_domain.id,
+            }
+            if object_domain not in request.form_options["domains"]:
+                object_domain["name"] = f"{object_data.details.assigned_domain.name} ⚠️"
+                request.form_options["domains"].append(object_domain)
+
+            for object_emailuser in object_data.details.assigned_emailusers:
+                u = {
+                    "name": object_emailuser.name,
+                    "value": object_emailuser.id,
+                }
+                if u not in request.form_options["emailusers"]:
+                    u["name"] = f"{object_emailuser.name} ⚠️"
+                    request.form_options["emailusers"].append(u)
+
+        elif object_type == "domains":
+            object_keypair_injections = []
+            for attr in ["assigned_dkim_keypair", "assigned_arc_keypair"]:
+                object_keypair_details = getattr(object_data.details, attr)
+                if hasattr(object_keypair_details, "id"):
+                    object_keypair = {
+                        "name": object_keypair_details.name,
+                        "value": object_keypair_details.id,
+                    }
+                    if (
+                        object_keypair not in request.form_options["keypairs"]
+                        and object_keypair not in object_keypair_injections
+                    ):
+                        object_keypair_injections.append(object_keypair)
+            for keypair in object_keypair_injections:
+                keypair["name"] = keypair["name"] + " ⚠️"
+                request.form_options["keypairs"].append(keypair)
 
     except ValidationError as e:
         return validation_error(e.errors())
@@ -100,15 +115,25 @@ async def get_object(object_type: str, object_id: str):
         name, message = e.args
         return validation_error([{"loc": [name], "msg": message}])
 
-    return await render_template(f"objects/object.html", object=object_data)
+    return await render_or_json(
+        "objects/object.html", request.headers, object=object_data
+    )
 
 
 @blueprint.route("/<object_type>")
 @blueprint.route("/<object_type>/search", methods=["POST"])
 @wrappers.acl("user")
+@wrappers.formoptions(["domains"])
 async def get_objects(object_type: str):
     try:
-        search_model, page, page_size, sort_attr, sort_reverse = TableSearchHelper(
+        (
+            search_model,
+            page,
+            page_size,
+            sort_attr,
+            sort_reverse,
+            filters,
+        ) = TableSearchHelper(
             request.form_parsed, object_type, default_sort_attr="name"
         )
     except ValidationError as e:
@@ -120,16 +145,18 @@ async def get_objects(object_type: str):
                 "key_name": search_model.q,
                 "domain": search_model.q,
                 "local_part": search_model.q,
-                "assigned_domain": search_model.q,
                 "username": search_model.q,
             }
+            match_all = (
+                {"assigned_users": [session["id"]]}
+                if not "system" in session["acl"]
+                else {}
+            )
             matched_objects = await _search_object(
                 object_type=object_type,
                 match_any=match_any,
                 fully_resolve=True,
-                match_all={"assigned_users": [session["id"]]}
-                if not "system" in session["acl"]
-                else {},
+                match_all=filters | match_all,
             )
         except ValidationError as e:
             return validation_error(e.errors())

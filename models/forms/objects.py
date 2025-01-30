@@ -10,9 +10,6 @@ from pydantic import (
     conint,
     constr,
     computed_field,
-    model_validator,
-    ConfigDict,
-    PrivateAttr,
 )
 from pydantic_core import PydanticCustomError
 from typing import Annotated, Literal, Any
@@ -72,8 +69,7 @@ POLICY_DESC = [p[1] for p in POLICIES]
 
 
 class ObjectDomain(BaseModel):
-    @model_validator(mode="after")
-    def post_init(self) -> Self:
+    def model_post_init(self, __context):
         if (
             self.dkim_selector == self.arc_selector
             and self.assigned_dkim_keypair != self.assigned_arc_keypair
@@ -83,7 +79,6 @@ class ObjectDomain(BaseModel):
                 "ARC and DKIM selectors cannot be the same while using different keys",
                 dict(),
             )
-        return self
 
     @field_validator("bcc_inbound")
     def bcc_inbound_validator(cls, v):
@@ -169,7 +164,7 @@ class ObjectDomain(BaseModel):
     ratelimit_unit: Literal["day", "hour", "minute"] = Field(
         default="hour",
         json_schema_extra={
-            "title": "Policy weight",
+            "title": "Ratelimit unit",
             "description": "Policy override options.",
             "type": "select",
             "options": [
@@ -299,10 +294,6 @@ class ObjectDomain(BaseModel):
         },
     )
 
-    @property
-    def _unique_fields(self):
-        return "domain"
-
 
 class ObjectAddress(BaseModel):
     local_part: constr(strip_whitespace=True, min_length=1) = Field(
@@ -378,10 +369,6 @@ class ObjectAddress(BaseModel):
         },
     )
 
-    @property
-    def _unique_fields(self):
-        return ("local_part", "assigned_domain")
-
 
 class ObjectUser(BaseModel):
     username: constr(strip_whitespace=True, min_length=1) = Field(
@@ -433,10 +420,6 @@ class ObjectUser(BaseModel):
         },
     )
 
-    @property
-    def _unique_fields(self):
-        return "username"
-
 
 class ObjectKeyPair(BaseModel):
     private_key_pem: str
@@ -464,10 +447,6 @@ class ObjectKeyPair(BaseModel):
             "form_id": f"assigned-users-{str(uuid4())}",
         },
     )
-
-    @property
-    def _unique_fields(self):
-        return "key_name"
 
     @computed_field
     @property

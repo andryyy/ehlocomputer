@@ -20,11 +20,13 @@ blueprint = Blueprint("system", __name__, url_prefix="/system")
 
 
 @blueprint.context_processor
-def load_system_defaults():
-    schemas = {
-        f"_{schema_type}_schema": v.model_json_schema()
-        for schema_type, v in system_model.model_classes["forms"].items()
+def load_context():
+    context = dict()
+
+    context["schemas"] = {
+        "system_settings": system_model.SystemSettings.model_json_schema()
     }
+
     if cluster.master_node != defaults.CLUSTER_PEERS_ME:
         try:
             current_master = cluster.connections[cluster.master_node]["meta"]["name"]
@@ -32,8 +34,9 @@ def load_system_defaults():
             current_master = "Starting..."
     else:
         current_master = defaults.NODENAME
+    context["current_master"] = current_master
 
-    return {"schemas": schemas, "current_master": current_master}
+    return context
 
 
 @blueprint.route("/cluster/reset-failed-peer", methods=["POST"])
@@ -110,7 +113,14 @@ async def settings():
 @wrappers.acl("system")
 async def cluster_logs():
     try:
-        search_model, page, page_size, sort_attr, sort_reverse = TableSearchHelper(
+        (
+            search_model,
+            page,
+            page_size,
+            sort_attr,
+            sort_reverse,
+            filters,
+        ) = TableSearchHelper(
             request.form_parsed, "system_logs", default_sort_attr="record.time.repr"
         )
     except ValidationError as e:

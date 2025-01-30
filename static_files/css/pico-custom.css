@@ -2991,9 +2991,14 @@ table td a[role=button] {
   color: var(--pico-color);
 }
 
-.table-navigation button.sorting {
+.table-navigation button.sorting, button.filters {
   font-size: 0.875rem;
   border: 0;
+}
+
+.table-navigation button.filters {
+  font-size: 0.825rem;
+  --pico-border-radius: .25rem;
 }
 
 .table-navigation .paging.disabled {
@@ -3062,6 +3067,7 @@ table td a[role=button] {
   display: flex;
   gap: var(--pico-spacing);
   align-items: center;
+  margin-block: var(--pico-spacing);
 }
 
 .flex label {
@@ -3156,6 +3162,10 @@ textarea.dns-data {
   border: 0;
   background: transparent;
   font-family: monospace;
+}
+
+fieldset.system-field label:before {
+  content: "🔒 ";
 }
 
 fieldset.keypair {
@@ -3335,7 +3345,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-red-400,
 [type=reset].button-red-400 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #f06048;
   background-color: #f06048;
 }
@@ -3350,7 +3360,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-red-350,
 [type=reset].button-red-350 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #f17961;
   background-color: #f17961;
 }
@@ -3365,7 +3375,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-red-300,
 [type=reset].button-red-300 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #f38f79;
   background-color: #f38f79;
 }
@@ -3380,7 +3390,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-red-250,
 [type=reset].button-red-250 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #f5a390;
   background-color: #f5a390;
 }
@@ -3395,7 +3405,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-red-200,
 [type=reset].button-red-200 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #f5b7a8;
   background-color: #f5b7a8;
 }
@@ -3410,7 +3420,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-red-150,
 [type=reset].button-red-150 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #f6cabf;
   background-color: #f6cabf;
 }
@@ -3425,7 +3435,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-red-100,
 [type=reset].button-red-100 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #f8dcd6;
   background-color: #f8dcd6;
 }
@@ -3440,7 +3450,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-red-50,
 [type=reset].button-red-50 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #faeeeb;
   background-color: #faeeeb;
 }
@@ -3636,7 +3646,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-pink-400,
 [type=reset].button-pink-400 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #f6547e;
   background-color: #f6547e;
 }
@@ -3651,7 +3661,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-pink-350,
 [type=reset].button-pink-350 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #f7708e;
   background-color: #f7708e;
 }
@@ -3666,7 +3676,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-pink-300,
 [type=reset].button-pink-300 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #f8889e;
   background-color: #f8889e;
 }
@@ -3681,7 +3691,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-pink-250,
 [type=reset].button-pink-250 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #f99eae;
   background-color: #f99eae;
 }
@@ -3696,7 +3706,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-pink-200,
 [type=reset].button-pink-200 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #f9b4be;
   background-color: #f9b4be;
 }
@@ -3711,7 +3721,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-pink-150,
 [type=reset].button-pink-150 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #f9c8ce;
   background-color: #f9c8ce;
 }
@@ -3726,7 +3736,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-pink-100,
 [type=reset].button-pink-100 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #f9dbdf;
   background-color: #f9dbdf;
 }
@@ -3741,7 +3751,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-pink-50,
 [type=reset].button-pink-50 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #fbedef;
   background-color: #fbedef;
 }
@@ -3937,7 +3947,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-fuchsia-400,
 [type=reset].button-fuchsia-400 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #f748b7;
   background-color: #f748b7;
 }
@@ -3952,7 +3962,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-fuchsia-350,
 [type=reset].button-fuchsia-350 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #f869bf;
   background-color: #f869bf;
 }
@@ -3967,7 +3977,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-fuchsia-300,
 [type=reset].button-fuchsia-300 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #f983c7;
   background-color: #f983c7;
 }
@@ -3982,7 +3992,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-fuchsia-250,
 [type=reset].button-fuchsia-250 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #fa9acf;
   background-color: #fa9acf;
 }
@@ -3997,7 +4007,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-fuchsia-200,
 [type=reset].button-fuchsia-200 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #f9b1d8;
   background-color: #f9b1d8;
 }
@@ -4012,7 +4022,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-fuchsia-150,
 [type=reset].button-fuchsia-150 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #f9c6e1;
   background-color: #f9c6e1;
 }
@@ -4027,7 +4037,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-fuchsia-100,
 [type=reset].button-fuchsia-100 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #f9daea;
   background-color: #f9daea;
 }
@@ -4042,7 +4052,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-fuchsia-50,
 [type=reset].button-fuchsia-50 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #fbedf4;
   background-color: #fbedf4;
 }
@@ -4223,7 +4233,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-purple-450,
 [type=reset].button-purple-450 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #c652dc;
   background-color: #c652dc;
 }
@@ -4238,7 +4248,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-purple-400,
 [type=reset].button-purple-400 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #cd68e0;
   background-color: #cd68e0;
 }
@@ -4253,7 +4263,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-purple-350,
 [type=reset].button-purple-350 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #d47de4;
   background-color: #d47de4;
 }
@@ -4268,7 +4278,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-purple-300,
 [type=reset].button-purple-300 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #db90e8;
   background-color: #db90e8;
 }
@@ -4283,7 +4293,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-purple-250,
 [type=reset].button-purple-250 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #e2a3eb;
   background-color: #e2a3eb;
 }
@@ -4298,7 +4308,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-purple-200,
 [type=reset].button-purple-200 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #e7b6ee;
   background-color: #e7b6ee;
 }
@@ -4313,7 +4323,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-purple-150,
 [type=reset].button-purple-150 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #edc9f1;
   background-color: #edc9f1;
 }
@@ -4328,7 +4338,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-purple-100,
 [type=reset].button-purple-100 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #f2dcf4;
   background-color: #f2dcf4;
 }
@@ -4343,7 +4353,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-purple-50,
 [type=reset].button-purple-50 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #f8eef9;
   background-color: #f8eef9;
 }
@@ -4509,7 +4519,7 @@ fieldset.keypair {
 :is(button, [type=submit], [type=button], [role=button]).button-violet-500, .button-violet:is(button, [type=submit], [type=button], [role=button]),
 [type=reset].button-violet-500,
 [type=reset].button-violet {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #9062ca;
   background-color: #9062ca;
 }
@@ -4524,7 +4534,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-violet-450,
 [type=reset].button-violet-450 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #9b71cf;
   background-color: #9b71cf;
 }
@@ -4539,7 +4549,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-violet-400,
 [type=reset].button-violet-400 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #a780d4;
   background-color: #a780d4;
 }
@@ -4554,7 +4564,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-violet-350,
 [type=reset].button-violet-350 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #b290d9;
   background-color: #b290d9;
 }
@@ -4569,7 +4579,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-violet-300,
 [type=reset].button-violet-300 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #bd9fdf;
   background-color: #bd9fdf;
 }
@@ -4584,7 +4594,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-violet-250,
 [type=reset].button-violet-250 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #c9afe4;
   background-color: #c9afe4;
 }
@@ -4599,7 +4609,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-violet-200,
 [type=reset].button-violet-200 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #d3bfe8;
   background-color: #d3bfe8;
 }
@@ -4614,7 +4624,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-violet-150,
 [type=reset].button-violet-150 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #decfed;
   background-color: #decfed;
 }
@@ -4629,7 +4639,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-violet-100,
 [type=reset].button-violet-100 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #e8dff2;
   background-color: #e8dff2;
 }
@@ -4644,7 +4654,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-violet-50,
 [type=reset].button-violet-50 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #f3eff7;
   background-color: #f3eff7;
 }
@@ -4810,7 +4820,7 @@ fieldset.keypair {
 :is(button, [type=submit], [type=button], [role=button]).button-indigo-500, .button-indigo:is(button, [type=submit], [type=button], [role=button]),
 [type=reset].button-indigo-500,
 [type=reset].button-indigo {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #7569da;
   background-color: #7569da;
 }
@@ -4825,7 +4835,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-indigo-450,
 [type=reset].button-indigo-450 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #8577dd;
   background-color: #8577dd;
 }
@@ -4840,7 +4850,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-indigo-400,
 [type=reset].button-indigo-400 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #9486e1;
   background-color: #9486e1;
 }
@@ -4855,7 +4865,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-indigo-350,
 [type=reset].button-indigo-350 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #a294e5;
   background-color: #a294e5;
 }
@@ -4870,7 +4880,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-indigo-300,
 [type=reset].button-indigo-300 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #b0a3e8;
   background-color: #b0a3e8;
 }
@@ -4885,7 +4895,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-indigo-250,
 [type=reset].button-indigo-250 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #bdb2ec;
   background-color: #bdb2ec;
 }
@@ -4900,7 +4910,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-indigo-200,
 [type=reset].button-indigo-200 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #cac1ee;
   background-color: #cac1ee;
 }
@@ -4915,7 +4925,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-indigo-150,
 [type=reset].button-indigo-150 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #d8d0f1;
   background-color: #d8d0f1;
 }
@@ -4930,7 +4940,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-indigo-100,
 [type=reset].button-indigo-100 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #e5e0f4;
   background-color: #e5e0f4;
 }
@@ -4945,7 +4955,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-indigo-50,
 [type=reset].button-indigo-50 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #f2f0f9;
   background-color: #f2f0f9;
 }
@@ -5126,7 +5136,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-blue-450,
 [type=reset].button-blue-450 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #5c7ef8;
   background-color: #5c7ef8;
 }
@@ -5141,7 +5151,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-blue-400,
 [type=reset].button-blue-400 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #748bf8;
   background-color: #748bf8;
 }
@@ -5156,7 +5166,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-blue-350,
 [type=reset].button-blue-350 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #8999f9;
   background-color: #8999f9;
 }
@@ -5171,7 +5181,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-blue-300,
 [type=reset].button-blue-300 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #9ca7fa;
   background-color: #9ca7fa;
 }
@@ -5186,7 +5196,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-blue-250,
 [type=reset].button-blue-250 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #aeb5fb;
   background-color: #aeb5fb;
 }
@@ -5201,7 +5211,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-blue-200,
 [type=reset].button-blue-200 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #bfc3fa;
   background-color: #bfc3fa;
 }
@@ -5216,7 +5226,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-blue-150,
 [type=reset].button-blue-150 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #d0d2fa;
   background-color: #d0d2fa;
 }
@@ -5231,7 +5241,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-blue-100,
 [type=reset].button-blue-100 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #e0e1fa;
   background-color: #e0e1fa;
 }
@@ -5246,7 +5256,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-blue-50,
 [type=reset].button-blue-50 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #f0f0fb;
   background-color: #f0f0fb;
 }
@@ -5427,7 +5437,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-azure-450,
 [type=reset].button-azure-450 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #018cd4;
   background-color: #018cd4;
 }
@@ -5442,7 +5452,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-azure-400,
 [type=reset].button-azure-400 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #029ae8;
   background-color: #029ae8;
 }
@@ -5457,7 +5467,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-azure-350,
 [type=reset].button-azure-350 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #01aaff;
   background-color: #01aaff;
 }
@@ -5472,7 +5482,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-azure-300,
 [type=reset].button-azure-300 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #51b4ff;
   background-color: #51b4ff;
 }
@@ -5487,7 +5497,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-azure-250,
 [type=reset].button-azure-250 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #79c0ff;
   background-color: #79c0ff;
 }
@@ -5502,7 +5512,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-azure-200,
 [type=reset].button-azure-200 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #9bccfd;
   background-color: #9bccfd;
 }
@@ -5517,7 +5527,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-azure-150,
 [type=reset].button-azure-150 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #b7d9fc;
   background-color: #b7d9fc;
 }
@@ -5532,7 +5542,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-azure-100,
 [type=reset].button-azure-100 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #d1e5fb;
   background-color: #d1e5fb;
 }
@@ -5547,7 +5557,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-azure-50,
 [type=reset].button-azure-50 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #e9f2fc;
   background-color: #e9f2fc;
 }
@@ -5728,7 +5738,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-cyan-450,
 [type=reset].button-cyan-450 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #059494;
   background-color: #059494;
 }
@@ -5743,7 +5753,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-cyan-400,
 [type=reset].button-cyan-400 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #05a2a2;
   background-color: #05a2a2;
 }
@@ -5758,7 +5768,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-cyan-350,
 [type=reset].button-cyan-350 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #0ab1b1;
   background-color: #0ab1b1;
 }
@@ -5773,7 +5783,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-cyan-300,
 [type=reset].button-cyan-300 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #0ac2c2;
   background-color: #0ac2c2;
 }
@@ -5788,7 +5798,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-cyan-250,
 [type=reset].button-cyan-250 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #0ccece;
   background-color: #0ccece;
 }
@@ -5803,7 +5813,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-cyan-200,
 [type=reset].button-cyan-200 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #25dddd;
   background-color: #25dddd;
 }
@@ -5818,7 +5828,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-cyan-150,
 [type=reset].button-cyan-150 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #3deceb;
   background-color: #3deceb;
 }
@@ -5833,7 +5843,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-cyan-100,
 [type=reset].button-cyan-100 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #58faf9;
   background-color: #58faf9;
 }
@@ -5848,7 +5858,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-cyan-50,
 [type=reset].button-cyan-50 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #c3fcfa;
   background-color: #c3fcfa;
 }
@@ -6029,7 +6039,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-jade-450,
 [type=reset].button-jade-450 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #029764;
   background-color: #029764;
 }
@@ -6044,7 +6054,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-jade-400,
 [type=reset].button-jade-400 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #00a66e;
   background-color: #00a66e;
 }
@@ -6059,7 +6069,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-jade-350,
 [type=reset].button-jade-350 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #00b478;
   background-color: #00b478;
 }
@@ -6074,7 +6084,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-jade-300,
 [type=reset].button-jade-300 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #00c482;
   background-color: #00c482;
 }
@@ -6089,7 +6099,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-jade-250,
 [type=reset].button-jade-250 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #00cc88;
   background-color: #00cc88;
 }
@@ -6104,7 +6114,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-jade-200,
 [type=reset].button-jade-200 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #21e299;
   background-color: #21e299;
 }
@@ -6119,7 +6129,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-jade-150,
 [type=reset].button-jade-150 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #39f1a6;
   background-color: #39f1a6;
 }
@@ -6134,7 +6144,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-jade-100,
 [type=reset].button-jade-100 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #70fcba;
   background-color: #70fcba;
 }
@@ -6149,7 +6159,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-jade-50,
 [type=reset].button-jade-50 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #cbfce1;
   background-color: #cbfce1;
 }
@@ -6330,7 +6340,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-green-450,
 [type=reset].button-green-450 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #409614;
   background-color: #409614;
 }
@@ -6345,7 +6355,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-green-400,
 [type=reset].button-green-400 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #47a417;
   background-color: #47a417;
 }
@@ -6360,7 +6370,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-green-350,
 [type=reset].button-green-350 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #4eb31b;
   background-color: #4eb31b;
 }
@@ -6375,7 +6385,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-green-300,
 [type=reset].button-green-300 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #55c21e;
   background-color: #55c21e;
 }
@@ -6390,7 +6400,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-green-250,
 [type=reset].button-green-250 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #5dd121;
   background-color: #5dd121;
 }
@@ -6405,7 +6415,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-green-200,
 [type=reset].button-green-200 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #62d926;
   background-color: #62d926;
 }
@@ -6420,7 +6430,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-green-150,
 [type=reset].button-green-150 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #77ef3d;
   background-color: #77ef3d;
 }
@@ -6435,7 +6445,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-green-100,
 [type=reset].button-green-100 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #95fb62;
   background-color: #95fb62;
 }
@@ -6450,7 +6460,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-green-50,
 [type=reset].button-green-50 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #d7fbc1;
   background-color: #d7fbc1;
 }
@@ -6631,7 +6641,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-lime-450,
 [type=reset].button-lime-450 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #6c8f00;
   background-color: #6c8f00;
 }
@@ -6646,7 +6656,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-lime-400,
 [type=reset].button-lime-400 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #779c00;
   background-color: #779c00;
 }
@@ -6661,7 +6671,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-lime-350,
 [type=reset].button-lime-350 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #82ab00;
   background-color: #82ab00;
 }
@@ -6676,7 +6686,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-lime-300,
 [type=reset].button-lime-300 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #8eb901;
   background-color: #8eb901;
 }
@@ -6691,7 +6701,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-lime-250,
 [type=reset].button-lime-250 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #99c801;
   background-color: #99c801;
 }
@@ -6706,7 +6716,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-lime-200,
 [type=reset].button-lime-200 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #a5d601;
   background-color: #a5d601;
 }
@@ -6721,7 +6731,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-lime-150,
 [type=reset].button-lime-150 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #b2e51a;
   background-color: #b2e51a;
 }
@@ -6736,7 +6746,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-lime-100,
 [type=reset].button-lime-100 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #c1f335;
   background-color: #c1f335;
 }
@@ -6751,7 +6761,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-lime-50,
 [type=reset].button-lime-50 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #defc85;
   background-color: #defc85;
 }
@@ -6766,7 +6776,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-lime-main,
 [type=reset].button-lime-main {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #a5d601;
   background-color: #a5d601;
 }
@@ -6917,7 +6927,7 @@ fieldset.keypair {
 :is(button, [type=submit], [type=button], [role=button]).button-yellow-500, .button-yellow:is(button, [type=submit], [type=button], [role=button]),
 [type=reset].button-yellow-500,
 [type=reset].button-yellow {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #827800;
   background-color: #827800;
 }
@@ -6932,7 +6942,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-yellow-450,
 [type=reset].button-yellow-450 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #908501;
   background-color: #908501;
 }
@@ -6947,7 +6957,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-yellow-400,
 [type=reset].button-yellow-400 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #9e9200;
   background-color: #9e9200;
 }
@@ -6962,7 +6972,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-yellow-350,
 [type=reset].button-yellow-350 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #ad9f00;
   background-color: #ad9f00;
 }
@@ -6977,7 +6987,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-yellow-300,
 [type=reset].button-yellow-300 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #bbac00;
   background-color: #bbac00;
 }
@@ -6992,7 +7002,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-yellow-250,
 [type=reset].button-yellow-250 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #caba01;
   background-color: #caba01;
 }
@@ -7007,7 +7017,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-yellow-200,
 [type=reset].button-yellow-200 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #d9c800;
   background-color: #d9c800;
 }
@@ -7022,7 +7032,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-yellow-150,
 [type=reset].button-yellow-150 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #e8d600;
   background-color: #e8d600;
 }
@@ -7037,7 +7047,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-yellow-100,
 [type=reset].button-yellow-100 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #f2df0d;
   background-color: #f2df0d;
 }
@@ -7052,7 +7062,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-yellow-50,
 [type=reset].button-yellow-50 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #fdf1b4;
   background-color: #fdf1b4;
 }
@@ -7067,7 +7077,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-yellow-main,
 [type=reset].button-yellow-main {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #f2df0d;
   background-color: #f2df0d;
 }
@@ -7233,7 +7243,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-amber-450,
 [type=reset].button-amber-450 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #a77c00;
   background-color: #a77c00;
 }
@@ -7248,7 +7258,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-amber-400,
 [type=reset].button-amber-400 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #b78800;
   background-color: #b78800;
 }
@@ -7263,7 +7273,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-amber-350,
 [type=reset].button-amber-350 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #c79400;
   background-color: #c79400;
 }
@@ -7278,7 +7288,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-amber-300,
 [type=reset].button-amber-300 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #d8a100;
   background-color: #d8a100;
 }
@@ -7293,7 +7303,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-amber-250,
 [type=reset].button-amber-250 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #e8ae01;
   background-color: #e8ae01;
 }
@@ -7308,7 +7318,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-amber-200,
 [type=reset].button-amber-200 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #ffbf00;
   background-color: #ffbf00;
 }
@@ -7323,7 +7333,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-amber-150,
 [type=reset].button-amber-150 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #fecc63;
   background-color: #fecc63;
 }
@@ -7338,7 +7348,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-amber-100,
 [type=reset].button-amber-100 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #fddea6;
   background-color: #fddea6;
 }
@@ -7353,7 +7363,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-amber-50,
 [type=reset].button-amber-50 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #fcefd9;
   background-color: #fcefd9;
 }
@@ -7368,7 +7378,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-amber-main,
 [type=reset].button-amber-main {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #ffbf00;
   background-color: #ffbf00;
 }
@@ -7534,7 +7544,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-pumpkin-450,
 [type=reset].button-pumpkin-450 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #bf6e00;
   background-color: #bf6e00;
 }
@@ -7549,7 +7559,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-pumpkin-400,
 [type=reset].button-pumpkin-400 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #d27a01;
   background-color: #d27a01;
 }
@@ -7564,7 +7574,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-pumpkin-350,
 [type=reset].button-pumpkin-350 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #e48500;
   background-color: #e48500;
 }
@@ -7579,7 +7589,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-pumpkin-300,
 [type=reset].button-pumpkin-300 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #ff9500;
   background-color: #ff9500;
 }
@@ -7594,7 +7604,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-pumpkin-250,
 [type=reset].button-pumpkin-250 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #ffa23a;
   background-color: #ffa23a;
 }
@@ -7609,7 +7619,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-pumpkin-200,
 [type=reset].button-pumpkin-200 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #feb670;
   background-color: #feb670;
 }
@@ -7624,7 +7634,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-pumpkin-150,
 [type=reset].button-pumpkin-150 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #fcca9b;
   background-color: #fcca9b;
 }
@@ -7639,7 +7649,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-pumpkin-100,
 [type=reset].button-pumpkin-100 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #fcdcc1;
   background-color: #fcdcc1;
 }
@@ -7654,7 +7664,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-pumpkin-50,
 [type=reset].button-pumpkin-50 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #fceee3;
   background-color: #fceee3;
 }
@@ -7669,7 +7679,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-pumpkin-main,
 [type=reset].button-pumpkin-main {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #ff9500;
   background-color: #ff9500;
 }
@@ -7850,7 +7860,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-orange-400,
 [type=reset].button-orange-400 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #f45d2c;
   background-color: #f45d2c;
 }
@@ -7865,7 +7875,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-orange-350,
 [type=reset].button-orange-350 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #f56b3d;
   background-color: #f56b3d;
 }
@@ -7880,7 +7890,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-orange-300,
 [type=reset].button-orange-300 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #f68e68;
   background-color: #f68e68;
 }
@@ -7895,7 +7905,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-orange-250,
 [type=reset].button-orange-250 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #f8a283;
   background-color: #f8a283;
 }
@@ -7910,7 +7920,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-orange-200,
 [type=reset].button-orange-200 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #f8b79f;
   background-color: #f8b79f;
 }
@@ -7925,7 +7935,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-orange-150,
 [type=reset].button-orange-150 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #f8cab9;
   background-color: #f8cab9;
 }
@@ -7940,7 +7950,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-orange-100,
 [type=reset].button-orange-100 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #f9dcd2;
   background-color: #f9dcd2;
 }
@@ -7955,7 +7965,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-orange-50,
 [type=reset].button-orange-50 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #faeeea;
   background-color: #faeeea;
 }
@@ -8121,7 +8131,7 @@ fieldset.keypair {
 :is(button, [type=submit], [type=button], [role=button]).button-sand-500, .button-sand:is(button, [type=submit], [type=button], [role=button]),
 [type=reset].button-sand-500,
 [type=reset].button-sand {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #7b776b;
   background-color: #7b776b;
 }
@@ -8136,7 +8146,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-sand-450,
 [type=reset].button-sand-450 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #888377;
   background-color: #888377;
 }
@@ -8151,7 +8161,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-sand-400,
 [type=reset].button-sand-400 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #959082;
   background-color: #959082;
 }
@@ -8166,7 +8176,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-sand-350,
 [type=reset].button-sand-350 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #a39e8f;
   background-color: #a39e8f;
 }
@@ -8181,7 +8191,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-sand-300,
 [type=reset].button-sand-300 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #b0ab9b;
   background-color: #b0ab9b;
 }
@@ -8196,7 +8206,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-sand-250,
 [type=reset].button-sand-250 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #beb8a7;
   background-color: #beb8a7;
 }
@@ -8211,7 +8221,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-sand-200,
 [type=reset].button-sand-200 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #ccc6b4;
   background-color: #ccc6b4;
 }
@@ -8226,7 +8236,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-sand-150,
 [type=reset].button-sand-150 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #dad4c2;
   background-color: #dad4c2;
 }
@@ -8241,7 +8251,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-sand-100,
 [type=reset].button-sand-100 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #e8e2d2;
   background-color: #e8e2d2;
 }
@@ -8256,7 +8266,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-sand-50,
 [type=reset].button-sand-50 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #f2f0ec;
   background-color: #f2f0ec;
 }
@@ -8271,7 +8281,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-sand-main,
 [type=reset].button-sand-main {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #ccc6b4;
   background-color: #ccc6b4;
 }
@@ -8422,7 +8432,7 @@ fieldset.keypair {
 :is(button, [type=submit], [type=button], [role=button]).button-grey-500, .button-grey:is(button, [type=submit], [type=button], [role=button]),
 [type=reset].button-grey-500,
 [type=reset].button-grey {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #777777;
   background-color: #777777;
 }
@@ -8437,7 +8447,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-grey-450,
 [type=reset].button-grey-450 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #808080;
   background-color: #808080;
 }
@@ -8452,7 +8462,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-grey-400,
 [type=reset].button-grey-400 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #919191;
   background-color: #919191;
 }
@@ -8467,7 +8477,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-grey-350,
 [type=reset].button-grey-350 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #9e9e9e;
   background-color: #9e9e9e;
 }
@@ -8482,7 +8492,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-grey-300,
 [type=reset].button-grey-300 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #ababab;
   background-color: #ababab;
 }
@@ -8497,7 +8507,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-grey-250,
 [type=reset].button-grey-250 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #b9b9b9;
   background-color: #b9b9b9;
 }
@@ -8512,7 +8522,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-grey-200,
 [type=reset].button-grey-200 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #c6c6c6;
   background-color: #c6c6c6;
 }
@@ -8527,7 +8537,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-grey-150,
 [type=reset].button-grey-150 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #d4d4d4;
   background-color: #d4d4d4;
 }
@@ -8542,7 +8552,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-grey-100,
 [type=reset].button-grey-100 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #e2e2e2;
   background-color: #e2e2e2;
 }
@@ -8557,7 +8567,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-grey-50,
 [type=reset].button-grey-50 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #f1f1f1;
   background-color: #f1f1f1;
 }
@@ -8572,7 +8582,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-grey-main,
 [type=reset].button-grey-main {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #ababab;
   background-color: #ababab;
 }
@@ -8723,7 +8733,7 @@ fieldset.keypair {
 :is(button, [type=submit], [type=button], [role=button]).button-zinc-500, .button-zinc:is(button, [type=submit], [type=button], [role=button]),
 [type=reset].button-zinc-500,
 [type=reset].button-zinc {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #6f7887;
   background-color: #6f7887;
 }
@@ -8738,7 +8748,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-zinc-450,
 [type=reset].button-zinc-450 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #7b8495;
   background-color: #7b8495;
 }
@@ -8753,7 +8763,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-zinc-400,
 [type=reset].button-zinc-400 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #8891a4;
   background-color: #8891a4;
 }
@@ -8768,7 +8778,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-zinc-350,
 [type=reset].button-zinc-350 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #969eaf;
   background-color: #969eaf;
 }
@@ -8783,7 +8793,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-zinc-300,
 [type=reset].button-zinc-300 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #a4acba;
   background-color: #a4acba;
 }
@@ -8798,7 +8808,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-zinc-250,
 [type=reset].button-zinc-250 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #b3b9c5;
   background-color: #b3b9c5;
 }
@@ -8813,7 +8823,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-zinc-200,
 [type=reset].button-zinc-200 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #c2c7d0;
   background-color: #c2c7d0;
 }
@@ -8828,7 +8838,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-zinc-150,
 [type=reset].button-zinc-150 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #d1d5db;
   background-color: #d1d5db;
 }
@@ -8843,7 +8853,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-zinc-100,
 [type=reset].button-zinc-100 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #e0e3e7;
   background-color: #e0e3e7;
 }
@@ -8858,7 +8868,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-zinc-50,
 [type=reset].button-zinc-50 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #f0f1f3;
   background-color: #f0f1f3;
 }
@@ -9024,7 +9034,7 @@ fieldset.keypair {
 :is(button, [type=submit], [type=button], [role=button]).button-slate-500, .button-slate:is(button, [type=submit], [type=button], [role=button]),
 [type=reset].button-slate-500,
 [type=reset].button-slate {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #687899;
   background-color: #687899;
 }
@@ -9039,7 +9049,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-slate-450,
 [type=reset].button-slate-450 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #7385a9;
   background-color: #7385a9;
 }
@@ -9054,7 +9064,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-slate-400,
 [type=reset].button-slate-400 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #8191b5;
   background-color: #8191b5;
 }
@@ -9069,7 +9079,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-slate-350,
 [type=reset].button-slate-350 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #909ebe;
   background-color: #909ebe;
 }
@@ -9084,7 +9094,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-slate-300,
 [type=reset].button-slate-300 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #a0acc7;
   background-color: #a0acc7;
 }
@@ -9099,7 +9109,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-slate-250,
 [type=reset].button-slate-250 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #b0b9d0;
   background-color: #b0b9d0;
 }
@@ -9114,7 +9124,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-slate-200,
 [type=reset].button-slate-200 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #bfc7d9;
   background-color: #bfc7d9;
 }
@@ -9129,7 +9139,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-slate-150,
 [type=reset].button-slate-150 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #cfd5e2;
   background-color: #cfd5e2;
 }
@@ -9144,7 +9154,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-slate-100,
 [type=reset].button-slate-100 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #dfe3eb;
   background-color: #dfe3eb;
 }
@@ -9159,7 +9169,7 @@ fieldset.keypair {
 
 :is(button, [type=submit], [type=button], [role=button]).button-slate-50,
 [type=reset].button-slate-50 {
-  color: #dfe3eb;
+  color: #1b1b1b;
   border-color: #eff1f4;
   background-color: #eff1f4;
 }

@@ -3,6 +3,11 @@ def postJson(url, dataObject)
   return result
 end
 
+def getJsonUrlAsObject(url)
+  fetch `${url}` with method:'GET', headers:{content-type:'application/json'}
+  return result as Object
+end
+
 def setCheckboxes(el, option)
   repeat for e in (<input[type='checkbox'].multiselect/> in el)
     if option == 'all'

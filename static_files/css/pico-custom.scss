@@ -127,9 +127,13 @@ table td a[role="button"] {
   padding: var(--pico-form-element-spacing-vertical) var(--pico-form-element-spacing-horizontal);
   color: var(--pico-color);
 }
-.table-navigation button.sorting {
-  font-size: 0.875rem;
+.table-navigation button.sorting, button.filters {
+  font-size: .875rem;
   border: 0;
+}
+.table-navigation button.filters {
+  font-size: .825rem; // on top of .875rem
+  --pico-border-radius: .25rem;
 }
 .table-navigation .paging.disabled {
   opacity: .5;
@@ -190,6 +194,7 @@ table td a[role="button"] {
   display: flex;
   gap: var(--pico-spacing);
   align-items: center;
+  margin-block: var(--pico-spacing);
 }
 .flex label {
   display: inline;
@@ -279,6 +284,10 @@ textarea.dns-data {
   font-family: monospace;
 }
 
+fieldset.system-field label:before {
+  content:"\1f512\0020";
+}
+
 fieldset.keypair {
   border: 1px solid var(--pico-form-element-border-color);
   padding: var(--pico-spacing);
@@ -298,8 +307,8 @@ fieldset.keypair {
 }
 
 @function get-contrast-ratio($color1, $color2) {
-  $l1: get-luminance($color1) + 0.05;
-  $l2: get-luminance($color2) + 0.05;
+  $l1: get-luminance($color1);
+  $l2: get-luminance($color2);
 
   @if $l1 > $l2 {
     @return math.div($l1, $l2);
@@ -314,7 +323,7 @@ fieldset.keypair {
   $contrast-with-dark: get-contrast-ratio($color, $dark-color);
   $contrast-with-light: get-contrast-ratio($color, $light-color);
 
-  @if $contrast-with-light >= 1.0 {
+  @if $contrast-with-light >= 2.0 {
     @return $light-color;
   } @else {
     @return $dark-color;

@@ -1,19 +1,19 @@
 {#
 
 DATA FIELDS
-  - current_data
-  - schema: BaseModel.model_json_schema()
-  - optional root_key to encapsulate a name in,
-    i.e. a root_key "profile" for a field "email" becomes "profile.email"
+  current_data: dict
+  schema: BaseModel.model_json_schema()
+  system_fields: Optional[list]         # An optional list of fields to disable when "system"
+                                        # is not part of a user's ACL
+  root_key: Optional[str]               # A string to encapsulate a name in,
+                                        # i.e. a root_key "profile" for a field "email" becomes "profile.email"
 
 #}
 
 {% for k, v in schema.properties.items() if k not in without %}
-
   {% if v.type in ["text", "email", "number"] %}
-
     {% set readonly = True if "readonly" in v.input_extra else False %}
-    <fieldset>
+    <fieldset {% if k in system_fields and not "system" in session["acl"] %}class="system-field" disabled{% endif %}>
       <label for="{{ v.form_id }}">{{ v.title }} {{ "🚫" if readonly }}</label>
       <input {{ v.input_extra|safe }} id="{{ v.form_id }}"
         name="{% if root_key %}{{ root_key }}.{{ k }}{% else %}{{ k }}{% endif %}"
@@ -27,7 +27,7 @@ DATA FIELDS
   {% elif v.type in ["date", "datetime-local"] %}
 
     {% set readonly = True if "readonly" in v.input_extra else False %}
-    <fieldset>
+    <fieldset {% if k in system_fields and not "system" in session["acl"] %}class="system-field" disabled{% endif %}>
       <label for="{{ v.form_id }}">{{ v.title }} {{ "🚫" if readonly }}</label>
       <input {{ v.input_extra|safe }} id="{{ v.form_id }}"
         name="{% if root_key %}{{ root_key }}.{{ k }}{% else %}{{ k }}{% endif %}"
@@ -40,7 +40,7 @@ DATA FIELDS
 
   {% elif v.type == "select:multi" or v.type == "select" %}
 
-    <fieldset>
+    <fieldset {% if k in system_fields and not "system" in session["acl"] %}class="system-field" disabled{% endif %}>
       <label for="{{ v.form_id }}">{{ v.title }}</label>
       <select {{ v.input_extra|safe }}
         {% if v.type == "select:multi" %}
@@ -60,7 +60,7 @@ DATA FIELDS
 
   {% elif v.type == "datalist" %}
 
-    <fieldset>
+    <fieldset {% if k in system_fields and not "system" in session["acl"] %}class="system-field" disabled{% endif %}>
       <label for="{{ v.form_id }}">{{ v.title }}</label>
       <input list="{{ v.form_id }}-datalist"
         name="{% if root_key %}{{ root_key }}.{{ k }}{% else %}{{ k }}{% endif %}"
@@ -79,10 +79,10 @@ DATA FIELDS
 
   {% elif (v.type == "users:multi" or v.type == "users") and "system" in session["acl"] %}
 
-    {% if not user_options or user_options == [] %}
+    {% if not request.form_options.users or request.form_options.users == [] %}
       <p>No users found</p>
     {% else %}
-      <fieldset>
+      <fieldset {% if k in system_fields and not "system" in session["acl"] %}class="system-field" disabled{% endif %}>
         <label for="{{ v.form_id }}">{{ v.title }}</label>
         <select {{ v.input_extra|safe }}
           {% if v.type == "users:multi" %}
@@ -91,7 +91,7 @@ DATA FIELDS
           {% endif %}
           name="{% if root_key %}{{ root_key }}.{{ k }}{% else %}{{ k }}{% endif %}"
           id="{{ v.form_id }}">
-          {% for option in user_options %}
+          {% for option in request.form_options.users %}
           <option value="{{ option["value"] }}" {{ "selected" if option["value"] in current_data[k] }}>{{ option["name"] }}</option>
           {% endfor %}
         </select>
@@ -102,11 +102,11 @@ DATA FIELDS
     {% endif %}
 
   {% elif v.type == "emailusers:multi" or v.type == "emailusers" %}
-    {% if emailuser_options == [] %}
+    {% if request.form_options.emailusers == [] %}
       <label for="{{ v.form_id }}">{{ v.title }}</label>
       <p><mark>No email users available</mark></p>
     {% else %}
-      <fieldset>
+      <fieldset {% if k in system_fields and not "system" in session["acl"] %}class="system-field" disabled{% endif %}>
         <label for="{{ v.form_id }}">{{ v.title }}</label>
         <select {{ v.input_extra|safe }}
           {% if v.type == "emailusers:multi" %}
@@ -115,7 +115,7 @@ DATA FIELDS
           {% endif %}
           name="{% if root_key %}{{ root_key }}.{{ k }}{% else %}{{ k }}{% endif %}"
           id="{{ v.form_id }}">
-          {% for option in emailuser_options %}
+          {% for option in request.form_options.emailusers %}
           <option value="{{ option["value"] }}" {{ "selected" if option["value"] in current_data[k]|map(attribute="id")|list }}>{{ option["name"] }}</option>
           {% endfor %}
         </select>
@@ -148,7 +148,6 @@ DATA FIELDS
         <small {{ "hidden" if readonly }}><a href="#" hx-on:click="event.preventDefault();this.closest('div').remove()">Remove</a></small>
       </div>
       {% endfor %}
-      <input name="{% if root_key %}{{ root_key }}.{{ k }}{% else %}{{ k }}{% endif %}" type="hidden" value="">
     </fieldset>
     {% if v.description %}
     <small>{{ v.description|safe }}</small>
@@ -156,7 +155,7 @@ DATA FIELDS
 
   {% elif v.type == "radio" %}
 
-    <fieldset>
+    <fieldset {% if k in system_fields and not "system" in session["acl"] %}class="system-field" disabled{% endif %}>
       <legend for="{{ v.form_id }}">{{ v.title }}</legend>
       {% for radio_value in v.enum %}
       <label>
@@ -176,25 +175,42 @@ DATA FIELDS
 
   {% elif v.type == "keypair" %}
 
-    {% if not keypair_options or keypair_options == [] %}
+    {% if not request.form_options.keypairs or request.form_options.keypairs == [] %}
       <p>No key pairs available</p>
     {% else %}
-      <fieldset class="keypair">
+      <fieldset {% if k in system_fields and not "system" in session["acl"] %}class="system-field" disabled{% endif %} class="keypair">
         <label for="{{ v.form_id }}">{{ v.title }}</label>
         <select {{ v.input_extra|safe }}
           name="{% if root_key %}{{ root_key }}.{{ k }}{% else %}{{ k }}{% endif %}"
           id="{{ v.form_id }}"
-          _="on change or load get (@data-dns of <option:checked/> in me) as String put it into #dns-data-{{ v.form_id }} trigger validate on #dns-data-{{ v.form_id }} end">
-          <option data-dns="" value="" {{ "selected" if current_data[k] == "" }}>-- None --</option>
-          {% for option in keypair_options %}
-          <option data-dns="{{ option["dns_formatted"] }}" value="{{ option["value"] }}" {{ "selected" if option["value"] == current_data[k].id }}>{{ option["name"] }}</option>
+          _="
+          on change or load
+            set keypairId to (value of <option:checked/> in me) as String
+            put '' into #dns-data-{{ v.form_id }}
+            if keypairId
+              add @disabled to me
+              put '⌛' into #dns-data-{{ v.form_id }}
+              getJsonUrlAsObject('/objects/keypairs/' + keypairId)
+              put result.details.dns_formatted into #dns-data-{{ v.form_id }}
+            end
+          catch e
+            put '⛔' into #dns-data-{{ v.form_id }}
+          finally
+            remove @disabled from me
+            trigger validate on #dns-data-{{ v.form_id }}
+        end">
+          <option value="" {{ "selected" if current_data[k] == "" }}>-- None --</option>
+
+          {% for option in request.form_options.keypairs %}
+          <option value="{{ option["value"] }}" {{ "selected" if option["value"] == current_data[k].id }}>{{ option["name"] }}</option>
           {% endfor %}
+
         </select>
         {% if v.description %}
         <small>{{ v.description|safe }}</small>
-        <div hidden>
-          <small><i>The required DNS TXT record's value for your convenience.</i></small>
-          <textarea class="dns-data" rows="8" readonly id="dns-data-{{ v.form_id }}" _="
+        <div>
+          <small><i>The required DNS TXT record's value for your convenience</i> (<span class="color-blue-200 pointer" _="on click trigger change on previous <option:checked/>">force reload</span>)</small>
+          <textarea rows="8" class="dns-data" readonly id="dns-data-{{ v.form_id }}" _="
             on validate add @hidden to closest <div/> if my value is empty else remove @hidden from closest <div/> end end
             on click call my.setSelectionRange(0, -1) end">
           {{- "" -}}
@@ -206,19 +222,16 @@ DATA FIELDS
 
   {% elif v.type == "domain" %}
 
-    {% if domain_options == [] %}
+    {% if request.form_options.domains == [] %}
       <label for="{{ v.form_id }}">{{ v.title }}</label>
       <p><mark>No domain available</mark></p>
-    {% elif domain_options == False %}
-      <label for="{{ v.form_id }}">{{ v.title }}</label>
-      <p><mark>Cannot change domain of object</mark></p>
     {% else %}
-      <fieldset>
+      <fieldset {% if k in system_fields and not "system" in session["acl"] %}class="system-field" disabled{% endif %}>
         <label for="{{ v.form_id }}">{{ v.title }}</label>
         <select {{ v.input_extra|safe }}
           name="{% if root_key %}{{ root_key }}.{{ k }}{% else %}{{ k }}{% endif %}"
           id="{{ v.form_id }}">
-          {% for option in domain_options %}
+          {% for option in request.form_options.domains %}
           <option value="{{ option["value"] }}" {{ "selected" if option["value"] == current_data[k].id  }}>{{ option["name"] }}</option>
           {% endfor %}
         </select>

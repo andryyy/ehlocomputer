@@ -1,10 +1,10 @@
-from models.forms.system import SystemSettingsForm
+from models.forms.system import SystemSettings
 from pydantic import BaseModel, computed_field
 from utils.datetimes import utc_now_as_str
 
 
 class SystemSettingsBase(BaseModel):
-    settings: SystemSettingsForm = SystemSettingsForm()
+    settings: SystemSettings = SystemSettings()
 
 
 class UpdateSystemSettings(SystemSettingsBase):
@@ -12,10 +12,3 @@ class UpdateSystemSettings(SystemSettingsBase):
     @property
     def updated(self) -> str:
         return utc_now_as_str()
-
-
-model_classes = {
-    "forms": {
-        "settings": SystemSettingsForm,
-    },
-}

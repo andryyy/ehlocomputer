@@ -1,4 +1,5 @@
 from config.cluster import ClusterLock
+from models.users import UserProfile
 from pydantic import ValidationError, validate_call
 from quart import (
     Blueprint,
@@ -24,12 +25,10 @@ blueprint = Blueprint("profile", __name__, url_prefix="/profile")
 
 
 @blueprint.context_processor
-def load_schemas():
-    from models.users import UserProfile
-
-    return {
-        "_user_profile_schema": UserProfile.model_json_schema(),
-    }
+def load_context():
+    context = dict()
+    context["schemas"] = {"user_profile": UserProfile.model_json_schema()}
+    return context
 
 
 @blueprint.route("/")

@@ -3,7 +3,7 @@ import json
 from config import defaults
 from config.logs import logger
 from copy import deepcopy
-from pydantic import constr, validate_call
+from pydantic import constr, validate_call, BaseModel
 from quart import current_app as app, render_template, session, websocket
 from tools.users import search as search_users
 from typing import Literal
@@ -39,7 +39,18 @@ async def ws_htmx(channel, strategy: str, data, if_path: str = ""):
 
 async def render_or_json(tpl, headers, **context):
     if "application/json" in headers.get("Content-Type", ""):
-        return next(filter(lambda x: x, context.values()))
+
+        def convert_to_dict(value):
+            return (
+                value.model_dump(mode="json") if isinstance(value, BaseModel) else value
+            )
+
+        converted_context = {
+            key: convert_to_dict(value) for key, value in context.items()
+        }
+
+        return next(filter(lambda x: x, converted_context.values()), dict())
+
     return await render_template(tpl, **context)
 
 

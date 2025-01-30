@@ -1,0 +1,18 @@
+<fieldset>
+  <small>
+  {% for option in request.form_options.domains %}
+  <button
+    type="submit"
+    name="filters"
+    form="{{ request.view_args.get("object_type") }}-table-search"
+    {% if filters["assigned_domain"] == option["value"] %}
+      value=""
+    {% else %}
+      value="assigned_domain:{{ option["value"] }}"
+    {% endif %}
+    class="filters {{ "button-pink-300" if filters["assigned_domain"] == option["value"] else "outline primary" }}">
+  {{ option["name"] }}
+  </button>
+  {% endfor %}
+  </small>
+</fieldset>

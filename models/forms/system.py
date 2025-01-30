@@ -13,11 +13,9 @@ from uuid import uuid4
 from config import defaults
 
 
-class SystemSettingsForm(BaseModel):
+class SystemSettings(BaseModel):
     @field_validator("ACCEPT_LANGUAGES", mode="before")
     def languages(cls, v):
-        if v in [None, ""]:
-            return ["en"]
         for lang in v:
             if lang not in ["en", "de"]:
                 raise PydanticCustomError(

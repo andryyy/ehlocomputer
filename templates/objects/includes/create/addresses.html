@@ -1,4 +1,4 @@
-{% if not domain_options or domain_options == [] %}
+{% if not request.form_options.domains or request.form_options.domains == [] %}
   <p>No domain available</p>
 {% else %}
   <form class="create-object" hx-trigger="submit throttle:200ms" hx-post="/objects/addresses">
@@ -12,7 +12,7 @@
       <select autocomplete="off"
         name="details.assigned_domain"
         id="details.assigned_domain">
-        {% for option in domain_options %}
+        {% for option in request.form_options.domains %}
         <option value="{{ option["value"] }}">{{ option["name"] }}</option>
         {% endfor %}
       </select>

@@ -21,6 +21,21 @@ IN_MEMORY_DB["objects_cache"] = dict()
 
 
 @validate_call
+def cache_buster(object_id: UUID | list[UUID]):
+    object_ids = ensure_list(object_id)
+    for object_id in object_ids:
+        object_id = str(object_id)
+        for cache_user in IN_MEMORY_DB["objects_cache"]:
+            cached_keys = list(IN_MEMORY_DB["objects_cache"][cache_user].keys())
+            if object_id in cached_keys:
+                mapping_name = IN_MEMORY_DB["objects_cache"][cache_user][object_id].name
+                if mapping_name in IN_MEMORY_DB["object_mappings"]:
+                    del IN_MEMORY_DB["object_mappings"][mapping_name]
+                if object_id in IN_MEMORY_DB["objects_cache"][cache_user]:
+                    del IN_MEMORY_DB["objects_cache"][cache_user][object_id]
+
+
+@validate_call
 async def user_permitted_objects(user_id: UUID | None = None):
     from tools.users import get as get_user
 
@@ -60,7 +75,6 @@ async def get(
     object_type: Literal[*objects_model.model_classes["types"]],
     object_id: UUID | list[UUID],
     permission_validation=True,
-    _is_recursing=False,
 ):
     get_objects = objects_model.ObjectIdList(object_id=object_id).object_id
     permitted_objects = await user_permitted_objects()
@@ -71,7 +85,8 @@ async def get(
     else:
         cache_user = "anonymous"
 
-    IN_MEMORY_DB["objects_cache"][cache_user] = dict()
+    if not cache_user in IN_MEMORY_DB["objects_cache"]:
+        IN_MEMORY_DB["objects_cache"][cache_user] = dict()
 
     if permission_validation == True:
         get_objects = [
@@ -91,7 +106,6 @@ async def get(
                         object_type="domains",
                         object_id=v,
                         permission_validation=False,
-                        _is_recursing=True,
                     )
                     IN_MEMORY_DB["object_mappings"][
                         IN_MEMORY_DB["objects_cache"][cache_user][v].name
@@ -106,7 +120,6 @@ async def get(
                         object_type="keypairs",
                         object_id=v,
                         permission_validation=False,
-                        _is_recursing=True,
                     )
                     IN_MEMORY_DB["object_mappings"][
                         IN_MEMORY_DB["objects_cache"][cache_user][v].name
@@ -122,7 +135,6 @@ async def get(
                             object_type="emailusers",
                             object_id=u,
                             permission_validation=False,
-                            _is_recursing=True,
                         )
                         IN_MEMORY_DB["object_mappings"][
                             IN_MEMORY_DB["objects_cache"][cache_user][u].name
@@ -132,9 +144,6 @@ async def get(
                     )
 
         object_data.append(o_parsed)
-
-    if _is_recursing == False:
-        IN_MEMORY_DB["objects_cache"][cache_user].clear()
 
     if len(object_data) == 1:
         return object_data.pop()
@@ -156,6 +165,7 @@ async def delete(
                 raise ValueError("name", f"Domain {o.name} is not empty")
 
     async with TinyDB(**db_params) as db:
+        cache_buster([o.id for o in delete_objects])
         return db.table(object_type).remove(
             Query().id.one_of([o.id for o in delete_objects])
         )
@@ -173,9 +183,10 @@ async def patch(
 
     for to_patch in to_patch_objects:
         if not "system" in permitted_objects["_meta"]["user_acl"]:
-            data.setdefault("details", {}).setdefault(
-                "assigned_users", to_patch.details.assigned_users
-            )
+            if not "details" in data:
+                data["details"] = dict()
+            for f in objects_model.model_classes["system_fields"][object_type]:
+                data["details"][f] = getattr(to_patch.details, f)
 
         patch_data = objects_model.model_classes["patch"][object_type].model_validate(
             data
@@ -185,120 +196,138 @@ async def patch(
             to_patch, patch_data
         )  # returns updated to_patch model
 
-        conflict_queries = [Query().id != to_patch.id]
-        unique_fields = patched_object.details._unique_fields
-
-        if isinstance(unique_fields, tuple):
-            for f in unique_fields:
-                conflict_queries.append(
-                    (getattr(Query().details, f) == getattr(patched_object.details, f))
-                )
-        else:
-            conflict_queries.append(
-                getattr(Query().details, unique_fields)
-                == getattr(patched_object.details, unique_fields)
+        conflicts = await search(
+            object_type=object_type,
+            match_all={
+                f: getattr(patched_object.details, f)
+                for f in objects_model.model_classes["unique_fields"][object_type]
+            },
+            fully_resolve=False,
+        )
+        if [o.id for o in conflicts if o.id != patched_object.id]:
+            raise ValueError(
+                f"details.{objects_model.model_classes['unique_fields'][object_type][0]}",
+                "The provided object exists",
             )
 
-        conflict_query = reduce(lambda q1, q2: q1 & q2, conflict_queries)
-
-        async with TinyDB(**db_params) as db:
-            if db.table(object_type).get(conflict_query):
-                if isinstance(unique_fields, tuple):
-                    unique_fields = unique_fields[0]
-                raise ValueError(
-                    f"details.{unique_fields}", "The provided object exists"
+        if object_type == "domains":
+            if "system" in permitted_objects["_meta"]["user_acl"]:
+                addresses_in_domain = await search(
+                    object_type="addresses",
+                    match_all={"assigned_domain": patched_object.id},
+                    fully_resolve=False,
                 )
+                if (
+                    patched_object.details.n_mailboxes
+                    and len(addresses_in_domain) > patched_object.details.n_mailboxes
+                ):
+                    raise ValueError(
+                        f"details.n_mailboxes",
+                        f"Cannot reduce allowed mailboxes below {len(addresses_in_domain)}",
+                    )
 
-        if (
-            object_type == "domains"
-            and not "system" in permitted_objects["_meta"]["user_acl"]
-        ):
-            for attr in ["assigned_dkim_keypair", "assigned_arc_keypair"]:
-                # keypairs default to "", verify
-                if attr not in data.get("details", {}):
-                    continue
+            else:
+                for attr in ["assigned_dkim_keypair", "assigned_arc_keypair"]:
+                    # keypairs default to "", verify
+                    if attr not in data.get("details", {}):
+                        continue
 
-                patched_obj_keypair = getattr(patched_object.details, attr)
-                patched_obj_keypair_id = (
-                    patched_obj_keypair.id
-                    if hasattr(patched_obj_keypair, "id")
-                    else patched_obj_keypair
-                )
+                    patched_obj_keypair = getattr(patched_object.details, attr)
+                    patched_obj_keypair_id = (
+                        patched_obj_keypair.id
+                        if hasattr(patched_obj_keypair, "id")
+                        else patched_obj_keypair
+                    )
 
-                to_patch_obj_keypair = getattr(to_patch.details, attr)
-                to_patch_obj_keypair_id = (
-                    to_patch_obj_keypair.id
-                    if hasattr(to_patch_obj_keypair, "id")
-                    else to_patch_obj_keypair
-                )
+                    to_patch_obj_keypair = getattr(to_patch.details, attr)
+                    to_patch_obj_keypair_id = (
+                        to_patch_obj_keypair.id
+                        if hasattr(to_patch_obj_keypair, "id")
+                        else to_patch_obj_keypair
+                    )
 
-                if patched_obj_keypair_id != to_patch_obj_keypair_id:
-                    if any(
-                        keypair not in [k.id for k in permitted_objects["keypairs"]]
-                        for keypair in [
-                            patched_obj_keypair_id,
-                            to_patch_obj_keypair_id,
-                        ]
-                    ):
-                        if patched_obj_keypair_id:
-                            non_permitted_keypair = await get(
-                                object_type="keypairs",
-                                object_id=patched_obj_keypair_id,
-                                permission_validation=False,
-                            )
-                        if not patched_obj_keypair_id:
+                    if patched_obj_keypair_id != to_patch_obj_keypair_id:
+                        if to_patch_obj_keypair_id not in [
+                            k.id for k in permitted_objects["keypairs"]
+                        ]:
                             raise ValueError(
                                 f"details.{attr}",
-                                f"Cannot unassign non-permitted keypair from object {to_patch.details.domain}",
+                                f"Cannot unassign a non-permitted keypair",
                             )
+                        if patched_obj_keypair_id not in [
+                            k.id for k in permitted_objects["keypairs"]
+                        ]:
+                            raise ValueError(
+                                f"details.{attr}",
+                                f"Cannot assign non-permitted keypair",
+                            )
+        if object_type == "addresses":
+            if not "system" in permitted_objects["_meta"]["user_acl"]:
+                if (
+                    patched_object.details.assigned_domain
+                    != to_patch.details.assigned_domain.id
+                ):  # only when assigned_domain changed
+                    if any(
+                        domain not in [d.id for d in permitted_objects["domains"]]
+                        for domain in [
+                            patched_object.details.assigned_domain,
+                            to_patch.details.assigned_domain.id,
+                        ]
+                    ):  # disallow a change to a permitted domain if the current domain is not permitted
                         raise ValueError(
-                            f"details.{attr}",
-                            f"Cannot assign non-permitted keypair {non_permitted_keypair.name} to object {to_patch.details.domain}",
+                            "details.assigned_domain",
+                            f"Cannot assign selected domain for object {to_patch.details.local_part}",
                         )
-        if (
-            object_type == "addresses"
-            and not "system" in permitted_objects["_meta"]["user_acl"]
-        ):
+
+                if set(patched_object.details.assigned_emailusers) != set(
+                    [u.id for u in to_patch.details.assigned_emailusers]
+                ):  # only when assigned_emailusers changed
+                    non_permitted_users = set()
+
+                    for emailuser in [
+                        *patched_object.details.assigned_emailusers,
+                        *[u.id for u in to_patch.details.assigned_emailusers],
+                    ]:
+                        if emailuser and emailuser not in [
+                            u.id for u in permitted_objects["emailusers"]
+                        ]:
+                            _ = await get(
+                                object_type="emailusers",
+                                object_id=emailuser,
+                                permission_validation=False,
+                            )
+                            non_permitted_users.add(_.name if _ else "<unknown>")
+
+                    if non_permitted_users:
+                        # disallow a change to a permitted domain if the current domain is not permitted
+                        raise ValueError(
+                            "details.assigned_emailusers",
+                            f"You are not allow to change email user assignments for {', '.join(non_permitted_users)} of address {to_patch.details.local_part}",
+                        )
             if (
                 patched_object.details.assigned_domain
                 != to_patch.details.assigned_domain.id
-            ):  # only when assigned_domain changed
-                if any(
-                    domain not in [d.id for d in permitted_objects["domains"]]
-                    for domain in [
-                        patched_object.details.assigned_domain,
-                        to_patch.details.assigned_domain.id,
-                    ]
-                ):  # disallow a change to a permitted domain if the current domain is not permitted
+            ):
+                addresses_in_new_domain_now = await search(
+                    object_type="addresses",
+                    match_all={
+                        "assigned_domain": patched_object.details.assigned_domain
+                    },
+                    fully_resolve=False,
+                )
+                new_domain_data = await get(
+                    object_type="domains",
+                    object_id=patched_object.details.assigned_domain,
+                    permission_validation=True,
+                )
+                if (
+                    new_domain_data.details.n_mailboxes
+                    and new_domain_data.details.n_mailboxes
+                    < (len(addresses_in_new_domain_now) + 1)
+                ):
                     raise ValueError(
-                        "details.assigned_domain",
-                        f"Cannot assign selected domain for object {to_patch.details.local_part}",
-                    )
-
-            if set(patched_object.details.assigned_emailusers) != set(
-                [u.id for u in to_patch.details.assigned_emailusers]
-            ):  # only when assigned_emailusers changed
-                non_permitted_users = set()
-
-                for emailuser in [
-                    *patched_object.details.assigned_emailusers,
-                    *[u.id for u in to_patch.details.assigned_emailusers],
-                ]:
-                    if emailuser and emailuser not in [
-                        u.id for u in permitted_objects["emailusers"]
-                    ]:
-                        _ = await get(
-                            object_type="emailusers",
-                            object_id=emailuser,
-                            permission_validation=False,
-                        )
-                        non_permitted_users.add(_.name if _ else "<unknown>")
-
-                if non_permitted_users:
-                    # disallow a change to a permitted domain if the current domain is not permitted
-                    raise ValueError(
-                        "details.assigned_emailusers",
-                        f"You are not allow to change email user assignments for {', '.join(non_permitted_users)} of address {to_patch.details.local_part}",
+                        f"details.assigned_domain",
+                        "The domain's mailbox limit is reached",
                     )
 
         async with TinyDB(**db_params) as db:
@@ -308,6 +337,7 @@ async def patch(
                 ),
                 Query().id == to_patch.id,
             )
+            cache_buster([o.id for o in to_patch_objects])
 
     return [o.id for o in to_patch_objects]
 
@@ -319,30 +349,31 @@ async def create(
     db_params = evaluate_db_params()
     permitted_objects = await user_permitted_objects()
 
-    data.setdefault("details", {})["assigned_users"] = [
-        permitted_objects["_meta"]["user_id"]
-    ]
+    if not "details" in data:
+        data["details"] = dict()
+
+    data["details"]["assigned_users"] = permitted_objects["_meta"]["user_id"]
+
+    if current_app and session.get("id"):
+        cache_user = session["id"]
+    else:
+        cache_user = "anonymous"
 
     create_object = objects_model.model_classes["add"][object_type].model_validate(data)
 
-    unique_fields = create_object.details._unique_fields
-    if isinstance(unique_fields, tuple):
-        queries = []
-        for f in unique_fields:
-            queries.append(
-                (getattr(Query().details, f) == getattr(create_object.details, f))
-            )
-        query = reduce(lambda q1, q2: q1 & q2, queries)
-    else:
-        query = getattr(Query().details, unique_fields) == getattr(
-            create_object.details, unique_fields
+    conflicts = await search(
+        object_type=object_type,
+        match_all={
+            f: getattr(create_object.details, f)
+            for f in objects_model.model_classes["unique_fields"][object_type]
+        },
+        fully_resolve=False,
+    )
+    if [o.id for o in conflicts]:
+        raise ValueError(
+            f"details.{objects_model.model_classes['unique_fields'][object_type][0]}",
+            "The provided object exists",
         )
-
-    async with TinyDB(**db_params) as db:
-        if db.table(object_type).get(query):
-            if isinstance(unique_fields, tuple):
-                unique_fields = unique_fields[0]
-            raise ValueError(f"details.{unique_fields}", "The provided object exists")
 
     if object_type == "addresses":
         if not create_object.details.assigned_domain in [
@@ -357,6 +388,12 @@ async def create(
     async with TinyDB(**db_params) as db:
         insert_data = create_object.dict()
         db.table(object_type).insert(insert_data)
+
+    await get(
+        object_type=object_type,
+        object_id=insert_data["id"],
+        permission_validation=True,
+    )
 
     return insert_data["id"]
 

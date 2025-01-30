@@ -93,6 +93,10 @@ class ObjectAddUser(ObjectAdd):
 
 
 class ObjectAddKeyPair(ObjectAdd):
+    def model_post_init(self, __context):
+        print(self)
+        print(__context)
+
     @model_validator(mode="before")
     @classmethod
     def pre_init(cls, data: Any) -> Any:
@@ -147,7 +151,7 @@ class ObjectPatchAddress(ObjectPatch):
     details: ObjectAddress
 
 
-class _ObjectPatchKeyPairHelper(ObjectPatch):
+class _KeyPairHelper(ObjectPatch):
     key_name: constr(strip_whitespace=True, min_length=1) = Field(
         default="KeyPair",
     )
@@ -156,13 +160,9 @@ class _ObjectPatchKeyPairHelper(ObjectPatch):
         AfterValidator(lambda x: to_unique_sorted_str_list(ensure_list(x))),
     ]
 
-    @property
-    def _unique_fields(self):
-        return "key_name"
-
 
 class ObjectPatchKeyPair(ObjectPatch):
-    details: _ObjectPatchKeyPairHelper
+    details: _KeyPairHelper
 
 
 model_classes = {
@@ -190,6 +190,18 @@ model_classes = {
         "addresses": ObjectBaseAddress,
         "emailusers": ObjectBaseUser,
         "keypairs": ObjectBaseKeyPair,
+    },
+    "unique_fields": {
+        "domains": ["domain"],
+        "addresses": ["local_part", "assigned_domain"],
+        "emailusers": ["username"],
+        "keypairs": ["key_name"],
+    },
+    "system_fields": {
+        "domains": ["assigned_users", "n_mailboxes"],
+        "addresses": ["assigned_users"],
+        "emailusers": ["assigned_users"],
+        "keypairs": ["assigned_users"],
     },
 }
 

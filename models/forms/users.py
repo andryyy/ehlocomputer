@@ -32,22 +32,20 @@ class UserProfile(BaseModel):
             )
         return email
 
-    @field_validator("access_tokens", mode="before")
+    @field_validator("access_tokens", mode="after")
     def access_tokens_validator(cls, v):
-        if v == [""]:
-            return []
         for s in v:
-            if s != "":
-                try:
-                    TypeAdapter(ACCESS_TOKEN_FORMAT).validate_python(s)
-                except ValidationError as e:
-                    raise PydanticCustomError(
-                        "access_tokens",
-                        f"The provided token {s} is invalid",
-                        dict(access_token=s),
-                    )
+            try:
+                TypeAdapter(ACCESS_TOKEN_FORMAT).validate_python(s)
+            except ValidationError as e:
+                s = s[:3] + (s[3:] and "***")
+                raise PydanticCustomError(
+                    "access_tokens",
+                    f"The provided token {s} is invalid",
+                    dict(access_token=s),
+                )
 
-        return to_unique_sorted_str_list(ensure_list(v))
+        return v
 
     email: str = Field(
         default="",
@@ -60,7 +58,10 @@ class UserProfile(BaseModel):
         },
     )
 
-    access_tokens: list = Field(
+    access_tokens: Annotated[
+        str | list,
+        AfterValidator(lambda x: to_unique_sorted_str_list(ensure_list(x))),
+    ] = Field(
         default=[],
         json_schema_extra={
             "title": "Access tokens",

@@ -8,7 +8,7 @@ from config.database import *
 from config.logs import logger
 from pydantic import Field, constr, validate_call
 from tools import cluster_task, evaluate_db_params
-from utils.helpers import ensure_list, merge_deep
+from utils.helpers import ensure_list, merge_deep, merge_models
 from uuid import UUID
 
 
@@ -136,20 +136,18 @@ async def patch(user_id: UUID, data: dict):
 async def patch_profile(user_id: UUID, data: dict):
     db_params = evaluate_db_params()
 
+    user = await get(user_id)
+    if not user:
+        raise ValueError("name", "The provided user does not exist")
+
+    patch_data = users_model.UserProfile.model_validate(data)
+    patched_user_profile = merge_models(user.profile, patch_data)
+
     async with TinyDB(**db_params) as db:
-        user = db.table("users").get(Query().id == str(user_id))
-        if not user:
-            raise ValueError("name", "The provided user does not exist")
-
-        patched_user_profile = users_model.UserProfile.model_validate(
-            merge_deep(user["profile"], data)
-        )
-
         db.table("users").update(
             {"profile": patched_user_profile.dict()},
             Query().id == str(user_id),
         )
-
         return user_id
 
 

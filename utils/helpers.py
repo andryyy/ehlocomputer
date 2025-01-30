@@ -10,7 +10,9 @@ from uuid import UUID
 
 # Returns new model (based on original model) using
 # deep merged data of both input models data
-def merge_models(original: BaseModel, override: BaseModel) -> BaseModel:
+def merge_models(
+    original: BaseModel, override: BaseModel, post_data_keys: list | None = None
+) -> BaseModel:
     # Convert both models to dictionaries
     original_data = original.model_dump(mode="json")
     override_data = override.model_dump(mode="json")

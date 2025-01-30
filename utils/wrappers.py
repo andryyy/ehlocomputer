@@ -17,7 +17,8 @@ from quart import (
     abort,
     websocket,
 )
-from tools.users import get as get_user, what_id
+from tools.objects import search as search_object
+from tools.users import get as get_user, what_id, search as search_users
 from web.helpers import session_clear, trigger_notification
 from typing import Literal
 
@@ -143,3 +144,32 @@ def acl(acl_type):
         return wrapper
 
     return check_acl
+
+
+def formoptions(options):
+    def inject_options(fn):
+        @wraps(fn)
+        async def wrapper(*args, **kwargs):
+            request.form_options = dict()
+            for option in options:
+                if option == "users":
+                    request.form_options[option] = [
+                        {"name": user.login, "value": user.id}
+                        for user in await search_users(name="")
+                    ]
+                else:
+                    request.form_options[option] = [
+                        {"name": o.name, "value": o.id}
+                        for o in await search_object(
+                            object_type=option,
+                            match_all={"assigned_users": [session["id"]]}
+                            if not "system" in session["acl"]
+                            else {},
+                        )
+                    ]
+
+            return await fn(*args, **kwargs)
+
+        return wrapper
+
+    return inject_options

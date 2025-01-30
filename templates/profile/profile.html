@@ -18,7 +18,7 @@
   <form hx-trigger="submit throttle:1s" hx-patch="/profile/edit" id="profile-form">
 
     {% with
-      schema=_user_profile_schema,
+      schema=schemas.user_profile,
       current_data=data.user.profile
     %}
       {% include "includes/form_builder.html" %}

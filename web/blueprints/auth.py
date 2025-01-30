@@ -1,7 +1,5 @@
 import asyncio
 import json
-import qrcode
-import qrcode.image.svg
 
 from base64 import b64decode, b64encode
 from config import defaults
@@ -493,7 +491,7 @@ async def register_webauthn():
     }
 
     try:
-        async with ClusterLock("main"):
+        async with ClusterLock("users"):
             if not appending_passkey:
                 user_id = await create_user(data={"login": login})
 
@@ -600,7 +598,7 @@ async def auth_login_verify():
         if matched_user_credential.sign_count != 0:
             data["sign_count"] = verification.new_sign_count
 
-        async with ClusterLock("main"):
+        async with ClusterLock("credentials"):
             user_id = await what_id(login=login)
             await patch_credential(
                 user_id=user_id,

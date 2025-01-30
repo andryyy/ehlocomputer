@@ -21,10 +21,10 @@ blueprint = Blueprint("users", __name__, url_prefix="/system/users")
 
 
 @blueprint.context_processor
-def load_schemas():
-    return {
-        "_user_profile_schema": UserProfile.model_json_schema(),
-    }
+def load_context():
+    context = dict()
+    context["schemas"] = {"user_profile": UserProfile.model_json_schema()}
+    return context
 
 
 @blueprint.route("/<user_id>")
@@ -48,9 +48,14 @@ async def get_user(user_id: str):
 @wrappers.acl("system")
 async def get_users():
     try:
-        search_model, page, page_size, sort_attr, sort_reverse = TableSearchHelper(
-            request.form_parsed, "users", default_sort_attr="login"
-        )
+        (
+            search_model,
+            page,
+            page_size,
+            sort_attr,
+            sort_reverse,
+            filters,
+        ) = TableSearchHelper(request.form_parsed, "users", default_sort_attr="login")
     except ValidationError as e:
         return validation_error(e.errors())
 
@@ -121,7 +126,7 @@ async def delete_user(user_id: str | None = None):
 @wrappers.acl("system")
 async def patch_user_credential(user_id: str, hex_id: str):
     try:
-        async with ClusterLock("users"):
+        async with ClusterLock("credentials"):
             await _patch_credential(
                 user_id=user_id,
                 hex_id=hex_id,
