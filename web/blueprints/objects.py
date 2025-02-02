@@ -146,6 +146,7 @@ async def get_objects(object_type: str):
                 "domain": search_model.q,
                 "local_part": search_model.q,
                 "username": search_model.q,
+                "assigned_domain": search_model.q,
             }
             match_all = (
                 {"assigned_users": [session["id"]]}

@@ -10,7 +10,7 @@
       {% endif %}
     </a>
     &#60;{{ object.details.local_part ~ "@" -}}
-    <a class="color-pink-200" href="#" hx-target="#body-main" hx-push-url="true" hx-get="/objects/domains/{{ object.details.assigned_domain.id }}">
+    <a class="color-pink-350" href="#" hx-target="#body-main" hx-push-url="true" hx-get="/objects/domains/{{ object.details.assigned_domain.id }}">
       {{- object.details.assigned_domain.name -}}
     </a>
     {{- "&#62;"|safe -}}

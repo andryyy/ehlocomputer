@@ -18,7 +18,7 @@ DATA FIELDS
       <input {{ v.input_extra|safe }} id="{{ v.form_id }}"
         name="{% if root_key %}{{ root_key }}.{{ k }}{% else %}{{ k }}{% endif %}"
         type="{{ v.type }}"
-        value="{{ current_data[k] or v.default }}">
+        value="{% if current_data[k] == None %}{{ v.default }}{% else %}{{ current_data[k] }}{% endif %}">
       {% if v.description %}
       <small>{{ v.description|safe }}</small>
       {% endif %}
@@ -32,7 +32,7 @@ DATA FIELDS
       <input {{ v.input_extra|safe }} id="{{ v.form_id }}"
         name="{% if root_key %}{{ root_key }}.{{ k }}{% else %}{{ k }}{% endif %}"
         type="{{ v.type }}"
-        value="{{ current_data[k] or v.default }}">
+        value="{% if current_data[k] == None %}{{ v.default }}{% else %}{{ current_data[k] }}{% endif %}">
       {% if v.description %}
       <small>{{ v.description|safe }}</small>
       {% endif %}
@@ -65,7 +65,7 @@ DATA FIELDS
       <input list="{{ v.form_id }}-datalist"
         name="{% if root_key %}{{ root_key }}.{{ k }}{% else %}{{ k }}{% endif %}"
         id="{{ v.form_id }}"
-        value="{{ current_data[k] or v.default }}" {{ v.input_extra|safe }}>
+        value="{% if current_data[k] == None %}{{ v.default }}{% else %}{{ current_data[k] }}{% endif %}" {{ v.input_extra|safe }}>
       <datalist
         id="{{ v.form_id }}-datalist">
         {% for option in v.options %}
@@ -178,7 +178,7 @@ DATA FIELDS
     {% if not request.form_options.keypairs or request.form_options.keypairs == [] %}
       <p>No key pairs available</p>
     {% else %}
-      <fieldset {% if k in system_fields and not "system" in session["acl"] %}class="system-field" disabled{% endif %} class="keypair">
+      <fieldset {% if k in system_fields and not "system" in session["acl"] %}class="system-field keypair" disabled{% endif %} class="keypair">
         <label for="{{ v.form_id }}">{{ v.title }}</label>
         <select {{ v.input_extra|safe }}
           name="{% if root_key %}{{ root_key }}.{{ k }}{% else %}{{ k }}{% endif %}"

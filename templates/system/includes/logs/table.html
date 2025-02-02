@@ -10,7 +10,7 @@
   hx-post="/system/logs/search"
   hx-target="#system-logs-table-body">
   <fieldset role="group">
-    <input type="text" name="q"
+    <input type="search" name="q"
       hx-on:keydown="event.keyCode==13?event.preventDefault():null"
       placeholder="Type to search"
       autocomplete="off"
@@ -19,13 +19,6 @@
       spellcheck="false" />
       <input form="system-logs-form" hx-get="/system/logs/refresh?force=1" data-loading-disable type="submit" value="↺" />
     </fieldset>
-    <small>
-      <a href="#"
-         class="secondary"
-         hx-on:click="event.preventDefault();this.closest('form').reset();htmx.trigger(this.closest('form'), 'submit')">
-           Reset search
-      </a>
-    </small>
 </form>
 
 <div class="overflow-auto">

@@ -701,7 +701,7 @@ body > footer {
   body > header,
   body > main,
   body > footer {
-    max-width: 95%;
+    max-width: 98%;
     padding-right: 0;
     padding-left: 0;
   }
@@ -710,7 +710,7 @@ body > footer {
   body > header,
   body > main,
   body > footer {
-    max-width: 95%;
+    max-width: 98%;
   }
 }
 @media (min-width: 1024px) {
@@ -756,14 +756,14 @@ section {
 
 @media (min-width: 576px) {
   .container {
-    max-width: 95%;
+    max-width: 98%;
     padding-right: 0;
     padding-left: 0;
   }
 }
 @media (min-width: 768px) {
   .container {
-    max-width: 95%;
+    max-width: 98%;
   }
 }
 @media (min-width: 1024px) {
@@ -2404,12 +2404,12 @@ dialog article {
 }
 @media (min-width: 576px) {
   dialog article {
-    max-width: 95%;
+    max-width: 98%;
   }
 }
 @media (min-width: 768px) {
   dialog article {
-    max-width: 95%;
+    max-width: 98%;
   }
 }
 dialog article > header > * {
@@ -2991,14 +2991,20 @@ table td a[role=button] {
   color: var(--pico-color);
 }
 
-.table-navigation button.sorting, button.filters {
+.table-navigation button.sorting {
   font-size: 0.875rem;
   border: 0;
 }
 
-.table-navigation button.filters {
-  font-size: 0.825rem;
-  --pico-border-radius: .25rem;
+.table-navigation div.filters {
+  white-space: wrap;
+}
+
+.table-navigation div.filters button {
+  font-size: 9.5pt;
+  padding: calc(var(--pico-form-element-spacing-vertical) / 2) calc(var(--pico-form-element-spacing-horizontal) / 2);
+  border: 1px solid var(--pico-form-element-border-color);
+  --pico-border-radius: .5rem;
 }
 
 .table-navigation .paging.disabled {

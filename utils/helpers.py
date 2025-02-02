@@ -24,21 +24,21 @@ def merge_models(
     return original.__class__(**merged_data)
 
 
-def merge_deep(dict1: dict, dict2: dict):
-    result = deepcopy(dict1)
+def merge_deep(original_data: dict, override_data: dict):
+    result = deepcopy(original_data)
 
-    def _recursive_merge(_dict1, _dict2):
-        for key in _dict2:
+    def _recursive_merge(_original_data, _override_data):
+        for key in _override_data:
             if (
-                key in _dict1
-                and isinstance(_dict1[key], dict)
-                and isinstance(_dict2[key], dict)
+                key in _original_data
+                and isinstance(_original_data[key], dict)
+                and isinstance(_override_data[key], dict)
             ):
-                _recursive_merge(_dict1[key], _dict2[key])
+                _recursive_merge(_original_data[key], _override_data[key])
             else:
-                _dict1[key] = _dict2[key]
+                _original_data[key] = _override_data[key]
 
-    _recursive_merge(result, dict2)
+    _recursive_merge(result, override_data)
     return result
 
 

@@ -181,27 +181,5 @@ async def search(name: constr(strip_whitespace=True, min_length=0) = Field(...))
 
     async with TinyDB(**db_params) as db:
         matches = db.table("users").search(Query().login.test(search_name))
-        _parsed = []
-        for user in matches:
-            user = users_model.User.parse_obj(user)
-            credentials = db.table("credentials").search(
-                Query().id.one_of(user.credentials)
-            )
-            user.credentials = _create_credentials_mapping(credentials)
-            _parsed.append(user)
 
-    return _parsed
-
-
-@validate_call
-async def search_credential(
-    q: constr(strip_whitespace=True, min_length=0) = Field(...)
-):
-    db_params = evaluate_db_params()
-
-    in_q = lambda s: q in s
-    async with TinyDB(**db_params) as db:
-        matches = db.table("credentials").search(
-            (Query().id.test(in_q)) | (Query().friendly_name.test(in_q))
-        )
-        return _create_credentials_mapping(matches)
+    return [await get(user["id"]) for user in matches]

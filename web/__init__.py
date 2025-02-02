@@ -8,7 +8,7 @@ from config.cluster import ClusterHTTPException
 from contextlib import suppress
 from quart import Quart, request
 from utils.cluster import Cluster
-from utils.helpers import merge_deep
+from utils.helpers import merge_deep, ensure_list
 from web.blueprints import auth
 from web.blueprints import objects
 from web.blueprints import profile
@@ -103,6 +103,11 @@ def load_defaults():
 @app.template_filter(name="hex")
 def to_hex(value):
     return value.hex()
+
+
+@app.template_filter(name="ensurelist")
+def ensurelist(value):
+    return ensure_list(value)
 
 
 @app.template_filter(name="toprettyjson")

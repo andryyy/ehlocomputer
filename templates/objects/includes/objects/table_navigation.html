@@ -40,8 +40,8 @@
       </div>
     </div>
 
+    {% include "objects/includes/objects/table_filters/" ~ request.view_args.get("object_type") ~ ".html" %}
     <div>
-      {% include "objects/includes/objects/table_filters/" ~ request.view_args.get("object_type") ~ ".html" %}
 
       {% for attribute in ["name", "created", "updated"] %}
       <button class="sorting {{ "secondary outline" if sorting_attr != attribute }}"

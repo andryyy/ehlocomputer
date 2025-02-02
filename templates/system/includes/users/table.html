@@ -7,20 +7,13 @@
   hx-trigger="load once, keyup changed from:input[name=q] delay:100ms, submit throttle:100ms"
   hx-post="/system/users/search"
   hx-target="#system-users-table-body">
-  <input type="text" name="q"
+  <input type="search" name="q"
     hx-on:keydown="event.keyCode==13?event.preventDefault():null"
     placeholder="Type to search"
     autocomplete="off"
     autocorrect="off"
     autocapitalize="off"
     spellcheck="false">
-    <small>
-      <a href="#"
-         class="secondary"
-         hx-on:click="event.preventDefault();this.closest('form').reset();htmx.trigger(this.closest('form'), 'submit')">
-           Reset search
-      </a>
-    </small>
 </form>
 
 <div class="overflow-auto">

@@ -19,7 +19,7 @@ from enum import Enum
 from hashlib import sha256
 from tools import CONTEXT_TRANSACTION, evaluate_db_params
 from utils.datetimes import ntime_utc_now
-from utils.helpers import ensure_list, is_path_within_cwd, read_n_to_last_line
+from utils.helpers import ensure_list, is_path_within_cwd, read_n_to_last_line, to_unique_list
 from uuid import uuid4
 
 
@@ -72,6 +72,7 @@ class Cluster:
         self.started = ntime_utc_now()
         self.tickets = dict()
         self.server_init = False
+        self.position = None
 
         IN_MEMORY_DB["peer_failures"] = dict()
 
@@ -99,7 +100,7 @@ class Cluster:
                 if data.get("meta")
             ),
             key=lambda x: x[1],
-            default=(None, float("inf")),  # Default value if no valid entries are found
+            default=(None, float("inf")),
         )
 
         if self.started < started:  # donkey elects itself
@@ -110,6 +111,7 @@ class Cluster:
                 self.server_init = True
                 self.master_node = defaults.CLUSTER_PEERS_ME
                 self.role = Role.MASTER
+                self.position = None
 
         else:
             their_master = self.connections[master_node]["meta"]["master"]
@@ -137,6 +139,19 @@ class Cluster:
                 logger.info(
                     f"<set_master_node> elected foreign peer {self.master_node} as master"
                 )
+
+        meta_started = to_unique_list(data["meta"]["started"] for data in self.connections.values() if data.get("meta"))
+        self_position = None
+        for idx, s in enumerate(meta_started, 1):
+            if float(s) > self.started:
+                self_position = idx
+                break
+
+        if self_position == None:
+            self_position = len(meta_started) + 1
+
+        if self.server_init:
+            self.position = self_position
 
         logger.debug(
             f"<set_master_node> our swarm has {n_online_peers}/{n_all_peers} worms"
@@ -169,6 +184,7 @@ class Cluster:
             "META",
             f"NAME {defaults.NODENAME}",
             f"STARTED {self.started}",
+            f"POSITION {self.position or "?CONFUSED"}",
             "MASTER {master_node}".format(master_node=self.master_node or "?CONFUSED"),
             f"BIND {defaults.CLUSTER_PEERS_ME}",
         ]
@@ -194,6 +210,7 @@ class Cluster:
         patterns = [
             r"NAME (?P<name>\S+)",
             r"STARTED (?P<started>\S+)",
+            r"POSITION (?P<position>\S+)",
             r"MASTER (?P<master>\S+)",
             r"BIND (?P<bind>\S+)",
         ]
@@ -215,6 +232,12 @@ class Cluster:
         )
 
         return ticket, cmd, meta_dict
+
+
+    def get_backoff_time(self, node_position, offset_factor = 0.05, base_delay = 0.1):
+        join_offset = float(node_position) * offset_factor
+        random_factor = random.uniform(0.85, 1.15)
+        return (base_delay + join_offset) * random_factor
 
     async def connection_handler(
         self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter
@@ -337,8 +360,8 @@ class Cluster:
                                     "lock": asyncio.Lock(),
                                     "ticket": None,
                                 }
-
-                            await asyncio.wait_for(self.locks[t]["lock"].acquire(), 0.45)
+                            backoff_time = self.get_backoff_time(peer_info["position"])
+                            await asyncio.wait_for(self.locks[t]["lock"].acquire(), backoff_time)
                             self.locks[t]["ticket"] = ticket
 
                     except TimeoutError:

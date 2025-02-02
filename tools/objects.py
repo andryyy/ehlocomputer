@@ -16,7 +16,6 @@ from utils.helpers import ensure_list, merge_models
 from uuid import UUID
 from functools import reduce, wraps
 
-IN_MEMORY_DB["object_mappings"] = dict()
 IN_MEMORY_DB["objects_cache"] = dict()
 
 
@@ -29,8 +28,6 @@ def cache_buster(object_id: UUID | list[UUID]):
             cached_keys = list(IN_MEMORY_DB["objects_cache"][cache_user].keys())
             if object_id in cached_keys:
                 mapping_name = IN_MEMORY_DB["objects_cache"][cache_user][object_id].name
-                if mapping_name in IN_MEMORY_DB["object_mappings"]:
-                    del IN_MEMORY_DB["object_mappings"][mapping_name]
                 if object_id in IN_MEMORY_DB["objects_cache"][cache_user]:
                     del IN_MEMORY_DB["objects_cache"][cache_user][object_id]
 
@@ -107,9 +104,6 @@ async def get(
                         object_id=v,
                         permission_validation=False,
                     )
-                    IN_MEMORY_DB["object_mappings"][
-                        IN_MEMORY_DB["objects_cache"][cache_user][v].name
-                    ] = IN_MEMORY_DB["objects_cache"][cache_user][v].id
 
                 o_parsed.details.assigned_domain = IN_MEMORY_DB["objects_cache"][
                     cache_user
@@ -121,9 +115,6 @@ async def get(
                         object_id=v,
                         permission_validation=False,
                     )
-                    IN_MEMORY_DB["object_mappings"][
-                        IN_MEMORY_DB["objects_cache"][cache_user][v].name
-                    ] = IN_MEMORY_DB["objects_cache"][cache_user][v].id
                 setattr(
                     o_parsed.details, k, IN_MEMORY_DB["objects_cache"][cache_user][v]
                 )
@@ -136,9 +127,6 @@ async def get(
                             object_id=u,
                             permission_validation=False,
                         )
-                        IN_MEMORY_DB["object_mappings"][
-                            IN_MEMORY_DB["objects_cache"][cache_user][u].name
-                        ] = IN_MEMORY_DB["objects_cache"][cache_user][u].id
                     o_parsed.details.assigned_emailusers.append(
                         IN_MEMORY_DB["objects_cache"][cache_user][u]
                     )
@@ -332,8 +320,8 @@ async def patch(
 
         async with TinyDB(**db_params) as db:
             db.table(object_type).update(
-                patched_object.dict(
-                    exclude_none=True, exclude={"name", "id", "created"}
+                patched_object.model_dump(
+                    mode="json", exclude_none=True, exclude={"name", "id", "created"}
                 ),
                 Query().id == to_patch.id,
             )
@@ -353,11 +341,6 @@ async def create(
         data["details"] = dict()
 
     data["details"]["assigned_users"] = permitted_objects["_meta"]["user_id"]
-
-    if current_app and session.get("id"):
-        cache_user = session["id"]
-    else:
-        cache_user = "anonymous"
 
     create_object = objects_model.model_classes["add"][object_type].model_validate(data)
 
@@ -381,12 +364,35 @@ async def create(
         ]:
             raise ValueError("name", "The provided domain is unavailable")
 
+        addresses_in_domain = await search(
+            object_type="addresses",
+            match_all={"assigned_domain": create_object.details.assigned_domain},
+            fully_resolve=False,
+        )
+        domain_data = await get(
+            object_type="domains",
+            object_id=create_object.details.assigned_domain,
+            permission_validation=True,
+        )
+
+        domain_assigned_users = set(domain_data.details.assigned_users)
+        domain_assigned_users.add(permitted_objects["_meta"]["user_id"])
+        create_object.details.assigned_users = list(domain_assigned_users)
+
+        if domain_data.details.n_mailboxes and domain_data.details.n_mailboxes < (
+            len(addresses_in_domain) + 1
+        ):
+            raise ValueError(
+                f"details.assigned_domain",
+                "The domain's mailbox limit is reached",
+            )
+
     if object_type == "domains":
         if not "system" in permitted_objects["_meta"]["user_acl"]:
             raise ValueError("name", "You need system permission to create a domain")
 
     async with TinyDB(**db_params) as db:
-        insert_data = create_object.dict()
+        insert_data = create_object.model_dump(mode="json")
         db.table(object_type).insert(insert_data)
 
     await get(
@@ -413,15 +419,8 @@ async def search(
     def filter_details(s, _any: bool = False):
         def match(key, value, current_data):
             if key in current_data:
-                if key.startswith("assigned_") and key != "assigned_users":
-                    _value = [value]
-                    for m in [*IN_MEMORY_DB["object_mappings"]]:
-                        if value in m:
-                            _value.append(IN_MEMORY_DB["object_mappings"][m])
-                    value = _value
-
                 if isinstance(value, list):
-                    return any(item in current_data[key] for item in value)
+                    return any(item in ensure_list(current_data[key]) for item in value)
 
                 return value in current_data[key]
 

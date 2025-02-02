@@ -4,8 +4,8 @@
   $enable-responsive-typography: false,
   $theme-color: "slate",
   $breakpoints: (
-    sm: (breakpoint: 576px, viewport: 95%),
-    md: (breakpoint: 768px, viewport: 95%),
+    sm: (breakpoint: 576px, viewport: 98%),
+    md: (breakpoint: 768px, viewport: 98%),
     lg: (breakpoint: 1024px, viewport: 90%),
     xl: (breakpoint: 1280px, viewport: 90%),
     xxl: (breakpoint: 1536px, viewport: 85%)
@@ -127,13 +127,18 @@ table td a[role="button"] {
   padding: var(--pico-form-element-spacing-vertical) var(--pico-form-element-spacing-horizontal);
   color: var(--pico-color);
 }
-.table-navigation button.sorting, button.filters {
+.table-navigation button.sorting {
   font-size: .875rem;
   border: 0;
 }
-.table-navigation button.filters {
-  font-size: .825rem; // on top of .875rem
-  --pico-border-radius: .25rem;
+.table-navigation div.filters {
+  white-space: wrap;
+}
+.table-navigation div.filters button {
+  font-size: 9.5pt;
+  padding: calc(var(--pico-form-element-spacing-vertical) / 2) calc(var(--pico-form-element-spacing-horizontal) / 2);
+  border: 1px solid var(--pico-form-element-border-color);
+  --pico-border-radius: .5rem;
 }
 .table-navigation .paging.disabled {
   opacity: .5;

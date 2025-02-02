@@ -60,6 +60,7 @@ async def main():
             print("Received shutdown event, exit")
             sys.exit(0)
         except asyncio.CancelledError:
+            print("Shutting down")
             pass
 
 
