@@ -2884,27 +2884,6 @@ pre {
   padding: calc(var(--pico-spacing) / 2);
 }
 
-shake {
-  animation: horizontal-shaking 0.25s linear 1;
-}
-
-@keyframes horizontal-shaking {
-  0% {
-    transform: translateX(0);
-  }
-  25% {
-    transform: translateX(5px);
-  }
-  50% {
-    transform: translateX(-5px);
-  }
-  75% {
-    transform: translateX(5px);
-  }
-  100% {
-    transform: translateX(0);
-  }
-}
 #nav-system-mode-switch:checked {
   --pico-background-color: #f17961;
   --pico-border-color: #f17961;
@@ -3001,9 +2980,9 @@ table td a[role=button] {
 }
 
 .table-navigation div.filters button {
-  font-size: 9.5pt;
+  font-size: 0.875rem;
   padding: calc(var(--pico-form-element-spacing-vertical) / 2) calc(var(--pico-form-element-spacing-horizontal) / 2);
-  border: 1px solid var(--pico-form-element-border-color);
+  border-color: var(--pico-form-element-border-color);
   --pico-border-radius: .5rem;
 }
 
@@ -3034,9 +3013,9 @@ table td a[role=button] {
   background-color: var(--pico-background-color);
   background-image: var(--pico-icon);
   background-position: center left var(--pico-form-element-spacing-vertical);
-  background-size: calc(var(--pico-font-size) * 1.5);
+  background-size: calc(var(--pico-spacing) * 1.5);
   background-blend-mode: color-burn;
-  padding-left: calc(var(--pico-form-element-spacing-vertical) * 2 + var(--pico-font-size) * 1.5);
+  padding-left: calc(var(--pico-form-element-spacing-vertical) * 2 + var(--pico-spacing) * 1.5);
 }
 
 .notification-error {

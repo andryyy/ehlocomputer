@@ -21,14 +21,15 @@
   <table>
     <tbody>
       <tr>
-        <th scope="row" colspan="3">
+        <th scope="row" colspan="4">
           <h5>Cluster status</h5>
         </th>
       </tr>
       <tr>
         <th scope="row">Peer</th>
         <th scope="row">Consecutive failures <sup>1</sup></th>
-        <th scope="row">Meta <sup>2</sup></th>
+        <th scope="row">Critical responses <sup>2</sup></th>
+        <th scope="row">Meta <sup>3</sup></th>
       </tr>
       {% for peer in CLUSTER_PEERS_THEM %}
       <tr>
@@ -37,14 +38,22 @@
           put 0 into me
         end
         ">
-          {% set peer_failures = data.status.peer_failures.get(peer, {}) %}
-
+          {% set peer_failures = data.status.peer_failures.get(peer, 0) %}
           {% if peer_failures > CLUSTER_PEER_MAX_FAILURES %}
             <b class="color-red">failed</b> - <a href="#" hx-post="/system/cluster/reset-failed-peer" hx-vars='{"peer": "{{- peer -}}"}'>reset</a>
           {% elif peer_failures > 0 %}
             <b class="color-pumpkin">{{ peer_failures }}</b> - <a href="#" hx-post="/system/cluster/reset-failed-peer" hx-vars='{"peer": "{{- peer -}}"}'>reset</a>
           {% else %}
             {{ peer_failures }}
+          {% endif %}
+        </td>
+        <td _="on htmx:afterRequest[event.detail.successful==true]
+          put '' into me
+        end
+        ">
+          {% set peer_critical = data.status.peer_critical.get(peer, None) %}
+          {% if peer_critical %}
+            <b class="color-red">{{ peer_critical }}</b>
           {% endif %}
         </td>
         <td>
@@ -60,9 +69,18 @@
       {% endfor %}
     </tbody>
   </table>
+
+  <button type="submit" {{ "disabled" if data.status.enforce_commit }}
+    hx-on::after-request="event.detail.successful==true?this.setAttribute('disabled', 'disabled'):null"
+    hx-confirm="This action will overwrite table data on nodes with a mismatching database, are you sure?"
+    hx-post="/system/cluster/enforce-commit">
+      Enforce next transaction
+  </button>
+
   <p class="no-text-wrap">
     <small><sup>1</sup> A failed peer will not be retried until its status is reset</small><br>
-    <small><sup>2</sup> The cluster is updated in a lazy manner</small>
+    <small><sup>2</sup> Critical transaction responses, which will also mark the peer as failed</small><br>
+    <small><sup>3</sup> The cluster is updated gradually (lazy-update).</small>
   </p>
   </div>
 </article>

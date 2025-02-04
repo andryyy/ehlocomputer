@@ -2,7 +2,7 @@ import base64
 import json
 import os
 
-from config.database import TINYDB_PARAMS, TinyDB
+from config.database import *
 from config.defaults import CLUSTER_PEERS_ME
 from config.logs import logger
 from deepdiff import DeepDiff, Delta
@@ -29,7 +29,13 @@ class ClusterLock:
         self.aenter_db_data = dict()
 
     async def __aenter__(self):
-        await cluster.acquire_lock(self.tables)
+        try:
+            await cluster.acquire_lock(self.tables)
+        except Exception as e:
+            if current_app:
+                raise ClusterHTTPException(description=e)
+            raise
+
         self.db_params = evaluate_db_params()
 
         async with TinyDB(**self.db_params) as db:
@@ -66,14 +72,20 @@ class ClusterLock:
                     commit = True
                     table_delta = Delta(diff)
                     delta_string = base64.b64encode(table_delta.dumps()).decode("utf-8")
+
                     async with cluster.receiving:
                         try:
+                            apply_mode = (
+                                "APPLY"
+                                if not IN_MEMORY_DB.get("enforce_commit", False)
+                                else "ENFORCEAPPLY"
+                            )
                             _, receivers = await cluster.send_command(
-                                f"APPLY {t}@{self.aenter_db_data[t]['hash']} {delta_string}",
+                                f"{apply_mode} {t}@{self.aenter_db_data[t]['hash']} {delta_string}",
                                 "*",
                                 ticket=ticket,
                             )
-                            await cluster._await_receivers(
+                            await cluster.await_receivers(
                                 ticket, receivers, raise_on_error=True
                             )
                         except Exception as e:
@@ -81,13 +93,17 @@ class ClusterLock:
                             logger.error(f"<ClusterLock> failed to apply {ticket}: {e}")
                             break
 
+                    if apply_mode == "ENFORCEAPPLY":
+                        IN_MEMORY_DB["enforce_commit"] = False
+                        IN_MEMORY_DB["peer_critical"] = dict()
+
             if commit and error == False:
                 async with cluster.receiving:
                     try:
                         _, receivers = await cluster.send_command(
                             f"COMMIT", "*", ticket=ticket
                         )
-                        await cluster._await_receivers(
+                        await cluster.await_receivers(
                             ticket, receivers, raise_on_error=True
                         )
                         os.rename(self.db_params["filename"], TINYDB_PARAMS["filename"])

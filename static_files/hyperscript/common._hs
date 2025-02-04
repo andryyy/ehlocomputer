@@ -38,11 +38,9 @@ behavior buttonCheckHtmxResponse
     if event.detail.successful then
       put `👍` into me
     else
-      add .shake to me
       put `🤖 An error occured` into me
     end
     wait 1s
-    remove .shake from me
     put :_v into me
     set :_v to null
   end
@@ -105,14 +103,36 @@ end
 
 behavior bodydefault
   on htmx:responseError
+    log event.detail.xhr
     set status to event.detail.xhr.status
     if status >= 500
-      trigger notifcation(error: {title: 'Server error', message: 'The server could not handle the given request'})
+      trigger notification(title: 'Server error', level: 'error', message: 'The server could not handle the given request', duration: 10000)
     else if status == 404
-      trigger notifcation(error: {title: 'Not found', message: 'Route not found'})
+      trigger notification(title: 'Not found', level: 'error', message: `Route not found: ${event.detail.xhr.responseURL}`, duration: 3000)
     end
   end
   on htmx:beforeRequest
     remove @aria-invalid from <[aria-invalid]/>
+  end
+end
+
+behavior objectFilters(submitForm)
+  on click from <button[name=_filters]/> in me
+      halt the event
+      put '' into .generated-filters in me
+
+      repeat for btn in (<button[name=_filters]/> in me)
+        if (btn is event.target and btn does not match .active) or (btn is not event.target and btn matches .active)
+          render #filter-item with (value: btn's value)
+          then put the result at the end of .generated-filters in me
+        end
+      end
+
+      if length of <.generated-filters input/> is 0
+        render #filter-item with (value: '')
+        then put the result at the end of .generated-filters in me
+      end
+
+      trigger submit on submitForm
   end
 end

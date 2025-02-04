@@ -51,7 +51,9 @@ class TableSearch(BaseModel):
             return (sort_attr, sort_reverse)
 
 
-def TableSearchHelper(body, session_key_identifier, default_sort_attr):
+def TableSearchHelper(
+    body, session_key_identifier, default_sort_attr, default_sort_reverse: bool = False
+):
     from quart import session
 
     search_model = TableSearch.parse_obj(body or {})
@@ -71,7 +73,10 @@ def TableSearchHelper(body, session_key_identifier, default_sort_attr):
     )
     sorting = search_model_post.get(
         "sorting",
-        session.get(f"{session_key_identifier}_sorting", (default_sort_attr, False)),
+        session.get(
+            f"{session_key_identifier}_sorting",
+            (default_sort_attr, default_sort_reverse),
+        ),
     )
     sort_attr, sort_reverse = sorting
 

@@ -4,7 +4,7 @@ from utils.datetimes import utc_now_as_str
 
 
 class SystemSettingsBase(BaseModel):
-    settings: SystemSettings = SystemSettings()
+    details: SystemSettings = SystemSettings()
 
 
 class UpdateSystemSettings(SystemSettingsBase):

@@ -168,6 +168,11 @@ def formoptions(options):
                         )
                     ]
 
+            for o in request.form_options:
+                request.form_options[o] = sorted(
+                    request.form_options[o], key=lambda x: x["name"]
+                )
+
             return await fn(*args, **kwargs)
 
         return wrapper

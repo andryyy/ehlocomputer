@@ -1,30 +1,9 @@
-<div id="{{ request.view_args.get("object_type") }}-table-filters" class="filters"
-  _="on click from <button[name=__filters]/> in me
-    halt the event
-    set vals to []
-    put '' into .generated-filters in me
-
-    repeat for btn in (<button[name=__filters]/> in me)
-      if (btn is event.target and btn does not match .active) or (btn is not event.target and btn matches .active)
-        render #filter-item with (value: btn's value)
-        then put the result at the end of .generated-filters in me
-      end
-    end
-
-    if length of <.generated-filters input/> is 0
-      render #filter-item with (value: '')
-      then put the result at the end of .generated-filters in me
-    end
-
-    trigger submit on #{{ request.view_args.get("object_type") }}-table-search
-
-  end">
+<div id="{{ request.view_args.get("object_type") }}-table-filters" class="filters" _="install objectFilters(submitForm: #{{ request.view_args.get("object_type") }}-table-search)">
 
   {% for option in request.form_options.domains %}
   <button
     type="submit"
-    name="__filters"
-    form="{{ request.view_args.get("object_type") }}-table-search"
+    name="_filters"
     value="assigned_domain:{{ option["value"] }}"
     class="{{ "active button-pink-300" if option["value"] in filters["assigned_domain"]|ensurelist else "outline primary" }}">
   {{ option["name"] }}

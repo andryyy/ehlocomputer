@@ -4,7 +4,7 @@ import json
 
 from config import defaults
 from config.cluster import ClusterLock, cluster
-from config.database import IN_MEMORY_DB
+from config.database import *
 from datetime import datetime
 from models import system as system_model
 from models.tables import TableSearchHelper
@@ -39,6 +39,39 @@ def load_context():
     return context
 
 
+@blueprint.route("/cluster/enforce-commit", methods=["POST"])
+@wrappers.acl("system")
+async def cluster_enforce_commit():
+    if not IN_MEMORY_DB.get("enforce_commit", False):
+        IN_MEMORY_DB["enforce_commit"] = True
+        app.add_background_task(
+            expire_key,
+            IN_MEMORY_DB,
+            "enforce_commit",
+            defaults.CLUSTER_ENFORCE_COMMIT_TIMEOUT,
+        )
+        await ws_htmx(
+            "system",
+            "beforeend",
+            "<div hidden _=\"on load trigger notification(title: 'Enforce commit', level: 'system', message: 'Caution: enforced commit is active', duration: 10000)\"></div>",
+        )
+        return trigger_notification(
+            level="success",
+            response_body="",
+            response_code=204,
+            title="Activated",
+            message="Enforced commit mode is active",
+        )
+    else:
+        return trigger_notification(
+            level="warning",
+            response_body="",
+            response_code=409,
+            title="Already active",
+            message="Enforced commit mode is already active",
+        )
+
+
 @blueprint.route("/cluster/reset-failed-peer", methods=["POST"])
 @wrappers.acl("system")
 async def cluster_reset_failed_peer():
@@ -66,7 +99,9 @@ async def cluster_reset_failed_peer():
 @wrappers.acl("system")
 async def status():
     status = {
+        "peer_critical": IN_MEMORY_DB["peer_critical"],
         "peer_failures": IN_MEMORY_DB["peer_failures"],
+        "enforce_commit": IN_MEMORY_DB.get("enforce_commit", False),
         "connections": cluster.connections,
     }
     return await render_template("system/status.html", data={"status": status})
@@ -121,7 +156,10 @@ async def cluster_logs():
             sort_reverse,
             filters,
         ) = TableSearchHelper(
-            request.form_parsed, "system_logs", default_sort_attr="record.time.repr"
+            request.form_parsed,
+            "system_logs",
+            default_sort_attr="record.time.repr",
+            default_sort_reverse=True,
         )
     except ValidationError as e:
         return validation_error(e.errors())
@@ -199,7 +237,7 @@ async def refresh_cluster_logs():
             "application_logs_refresh",
             defaults.CLUSTER_LOGS_REFRESH_AFTER,
         )
-        async with ClusterLock("main") as c:
+        async with ClusterLock("files") as c:
             await c.request_files("logs/application.log", defaults.CLUSTER_PEERS_THEM)
 
     refresh_ago = round(ntime_utc_now() - IN_MEMORY_DB["application_logs_refresh"])

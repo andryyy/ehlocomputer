@@ -21,7 +21,8 @@ from tools import CONTEXT_TRANSACTION, evaluate_db_params
 from utils.datetimes import ntime_utc_now
 from utils.helpers import ensure_list, is_path_within_cwd, read_n_to_last_line, to_unique_list
 from uuid import uuid4
-
+from typing import Literal
+from pydantic import FilePath, validate_call
 
 StreamPair = tuple[asyncio.StreamReader, asyncio.StreamWriter]
 
@@ -75,6 +76,7 @@ class Cluster:
         self.position = None
 
         IN_MEMORY_DB["peer_failures"] = dict()
+        IN_MEMORY_DB["peer_critical"] = dict()
 
     def _set_master_node(self):
         def _destroy():
@@ -260,7 +262,7 @@ class Cluster:
             except asyncio.exceptions.IncompleteReadError:
                 async with self.receiving:
                     ticket, receivers = await self.send_command("STATUS", "*")
-                    await self._await_receivers(ticket, receivers, raise_on_error=False)
+                    await self.await_receivers(ticket, receivers, raise_on_error=False)
                     self._set_master_node()
                     break
 
@@ -273,7 +275,7 @@ class Cluster:
                     )
 
                 # A task starting with "R" indicates a resync
-                elif cmd.startswith("APPLY"):
+                elif cmd.startswith("APPLY") or cmd.startswith("ENFORCEAPPLY"):
                     _, _, payload = cmd.partition(" ")
                     table_w_hash, delta_payload = payload.split(" ")
                     table, table_hash = table_w_hash.split("@")
@@ -293,7 +295,7 @@ class Cluster:
                                     )
                                 ).hexdigest()
 
-                                if local_table_hash != table_hash:
+                                if local_table_hash != table_hash and cmd.startswith("APPLY"):
                                     await self.send_command(
                                         "ACK CRIT:TABLE_HASH_MISMATCH", [peer_info["bind"]], ticket=ticket
                                     )
@@ -413,7 +415,7 @@ class Cluster:
                 IN_MEMORY_DB["peer_failures"][peer] = 0
             elif IN_MEMORY_DB["peer_failures"][peer] > defaults.CLUSTER_PEER_MAX_FAILURES:
                 logger.warning(
-                    f"<send_command> not trying peer {peer} due to {IN_MEMORY_DB["peer_failures"][peer]} failed connection attempts"
+                    f"<send_command> not trying peer {peer} due to {IN_MEMORY_DB["peer_failures"][peer]} consecutive failures"
                 )
                 continue
 
@@ -462,7 +464,7 @@ class Cluster:
                     ticket, receivers = await self.send_command(
                         f"UNLOCK {','.join(tables)}", [self.master_node]
                     )
-                    ret, responses = await self._await_receivers(
+                    ret, responses = await self.await_receivers(
                         ticket, receivers, raise_on_error=True
                     )
                 except IncompleteClusterResponses:
@@ -477,7 +479,7 @@ class Cluster:
         if "master_not_reachable" in errors:
             async with self.receiving:
                 ticket, receivers = await self.send_command("STATUS", "*")
-                await self._await_receivers(ticket, receivers, raise_on_error=False)
+                await self.await_receivers(ticket, receivers, raise_on_error=False)
             raise DistLockCancelled("Master re-election")
 
     async def acquire_lock(self, tables: list = ["main"]) -> str:
@@ -510,7 +512,7 @@ class Cluster:
                     ticket, receivers = await self.send_command(
                         f"LOCK {','.join(tables)}", [self.master_node]
                     )
-                    result, responses = await self._await_receivers(
+                    result, responses = await self.await_receivers(
                         ticket, receivers, raise_on_error=True
                     )
                     if "BUSY" in responses:
@@ -538,16 +540,16 @@ class Cluster:
                     self.locks[t]["lock"].release()
             async with self.receiving:
                 ticket, receivers = await self.send_command("STATUS", "*")
-                await self._await_receivers(ticket, receivers, raise_on_error=False)
+                await self.await_receivers(ticket, receivers, raise_on_error=False)
             raise DistLockCancelled("Master re-election")
 
         self._context_token = CONTEXT_TRANSACTION.set(ntime_utc_now())
 
-    async def request_files(self, files: str | list, peers="*"):
-        files = ensure_list(files)
+    @validate_call
+    async def request_files(self, files: FilePath | list[FilePath], peers: Literal["*"] | list):
         async with self.receiving:
-            try:
-                for file in files:
+            for file in ensure_list(files):
+                try:
                     if not is_path_within_cwd(file):
                         logger.error(f"<request_files> file not within cwd: {file}")
                         continue
@@ -555,25 +557,27 @@ class Cluster:
                     ticket, receivers = await self.send_command(
                         f"FILEGET {file}", peers
                     )
-                    _, responses = await self._await_receivers(
+                    _, responses = await self.await_receivers(
                         ticket, receivers, raise_on_error=True
                     )
 
                     for r in responses:
                         r_file, r_peer, r_data = r.split(" ")
-                        assert r_file == file
+                        assert FilePath(r_file) == file
                         assert r_peer in defaults.CLUSTER_PEERS_THEM
                         file_dest = f"peer_files/{r_peer}/{file}"
                         os.makedirs(os.path.dirname(file_dest), exist_ok=True)
                         payload = zlib.decompress(base64.b64decode(r_data))
                         with open(file_dest, "wb") as f:
                             f.write(payload)
-            except IncompleteClusterResponses:
-                logger.error(
-                    f"<request_files> sending command to peers '{peers}'' failed"
-                )
-            except Exception as e:
-                logger.error(f"<request_files> unhandled error: {e}")
+
+                except IncompleteClusterResponses:
+                    logger.error(
+                        f"<request_files> sending command to peers '{peers}'' failed"
+                    )
+                except Exception as e:
+                    raise
+                    logger.error(f"<request_files> unhandled error: {e}")
 
     async def run(self, shutdown_trigger) -> None:
         server = await asyncio.start_server(
@@ -590,7 +594,7 @@ class Cluster:
         while not status or not self.server_init:
             async with self.receiving:
                 ticket, receivers = await self.send_command("INIT", "*")
-                status, responses = await self._await_receivers(ticket, receivers, raise_on_error=False)
+                status, responses = await self.await_receivers(ticket, receivers, raise_on_error=False)
                 if status:
                     self._set_master_node()
                 if not self.server_init:
@@ -599,7 +603,7 @@ class Cluster:
         async with server:
             await shutdown_trigger.wait()
 
-    async def _await_receivers(self, ticket, receivers, raise_on_error: bool):
+    async def await_receivers(self, ticket, receivers, raise_on_error: bool):
         _err_msg = None
         try:
             while not all(
@@ -615,20 +619,24 @@ class Cluster:
             _err_msg = f"missing receviers: {", ".join(missing_receivers)}"
         finally:
             responses = [response for _, response in self.tickets[ticket]]
-            crit_responses = [s for s in responses if "CRIT" in s]
+            critical_errors = {p: m for p, m in self.tickets[ticket] if "CRIT" in m}
 
-            if len(responses) != len(receivers):
+            if critical_errors:
+                for peer, critical_error in critical_errors.items():
+                    IN_MEMORY_DB["peer_critical"][peer] = critical_error
+                    IN_MEMORY_DB["peer_failures"][peer] = defaults.CLUSTER_PEER_MAX_FAILURES + 1
+
+                _err_msg = critical_errors
+
+            elif len(responses) != len(receivers):
                 _err_msg = "unplausible amount of responses for ticket"
-
-            if crit_responses:
-                _err_msg = f"one or more peers reported CRIT: {self.tickets[ticket]}"
 
             del self.tickets[ticket]
 
             if _err_msg:
                 logger.error(_err_msg)
                 if raise_on_error:
-                    raise IncompleteClusterResponses(f"<{ticket}> {_err_msg}")
+                    raise IncompleteClusterResponses(f"<await_receivers> {_err_msg}")
             else:
                 logger.success(f"<{ticket}> ticket confirmed")
 

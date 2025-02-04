@@ -38,11 +38,11 @@ class UserProfile(BaseModel):
             try:
                 TypeAdapter(ACCESS_TOKEN_FORMAT).validate_python(s)
             except ValidationError as e:
-                s = s[:3] + (s[3:] and "***")
+                s_priv = s[:3] + (s[3:] and "***")
                 raise PydanticCustomError(
                     "access_tokens",
-                    f"The provided token {s} is invalid",
-                    dict(access_token=s),
+                    f"The provided token {s_priv} is invalid",
+                    dict(access_token=s, list_index=v.index(s)),
                 )
 
         return v

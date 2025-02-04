@@ -1,4 +1,3 @@
-import re
 from pydantic import (
     AfterValidator,
     BeforeValidator,
@@ -11,34 +10,13 @@ from pydantic_core import PydanticCustomError
 from typing import Annotated, Literal
 from uuid import uuid4
 from config import defaults
+from utils.helpers import ensure_list
 
 
 class SystemSettings(BaseModel):
-    @field_validator("ACCEPT_LANGUAGES", mode="before")
-    def languages(cls, v):
-        for lang in v:
-            if lang not in ["en", "de"]:
-                raise PydanticCustomError(
-                    "language_invalid",
-                    "The provided language code is invalid",
-                    dict(provided_language=v),
-                )
-        return v
-
-    @field_validator("LOG_FILE_ROTATION", mode="before")
-    def log_file_rotation(cls, v):
-        pattern = r"^\d{1} days$"  # Matches a single digit followed by " days"
-        if not bool(re.match(pattern, v)):
-            raise PydanticCustomError(
-                "log_file_rotation_invalid",
-                "The provided string is invalid",
-                dict(provided_language=v),
-            )
-        return v
-
     ACCEPT_LANGUAGES: Annotated[
-        list[str],
-        AfterValidator(lambda x: [x] if not isinstance(x, list) else x),
+        list[Literal["en", "de"]],
+        BeforeValidator(lambda x: ensure_list(x)),
     ] = Field(
         min_length=1,
         default=defaults.ACCEPT_LANGUAGES,
@@ -116,6 +94,7 @@ class SystemSettings(BaseModel):
     )
 
     LOG_FILE_ROTATION: str = Field(
+        pattern=r"^\d{1} days$",
         default=defaults.LOG_FILE_ROTATION,
         json_schema_extra={
             "title": "Log file rotation",

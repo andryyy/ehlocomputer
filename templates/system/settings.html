@@ -26,13 +26,18 @@
     </hgroup>
   </article>
 
-  <article>
-    <form id="system-settings-form" hx-trigger="submit throttle:200ms"
-          hx-patch="/system/settings">
+  <article id="system-settings"
+    hx-trigger="htmx:afterRequest[event.detail.successful==true] from:#system-settings-form"
+    hx-target="this"
+    hx-select="#system-settings"
+    hx-swap="outerHTML"
+    hx-get="/system/settings">
+
+    <form id="system-settings-form" hx-trigger="submit throttle:200ms" hx-patch="/system/settings">
       {% with
         schema=schemas.system_settings,
-        current_data=settings.settings,
-        root_key="settings"
+        current_data=settings.details,
+        root_key="details"
       %}
         {% include "includes/form_builder.html" %}
       {% endwith %}
