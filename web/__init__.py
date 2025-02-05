@@ -4,11 +4,13 @@ import os
 import time
 
 from config import defaults
+from config.database import IN_MEMORY_DB
 from config.cluster import ClusterHTTPException
 from contextlib import suppress
 from quart import Quart, request
 from utils.cluster import Cluster
 from utils.helpers import merge_deep, ensure_list
+from utils.datetimes import ntime_utc_now
 from web.blueprints import auth
 from web.blueprints import objects
 from web.blueprints import profile
@@ -38,6 +40,19 @@ app.config["TEMPLATES_AUTO_RELOAD"] = defaults.TEMPLATES_AUTO_RELOAD
 app.config["SERVER_NAME"] = defaults.HOSTNAME
 app.config["SESSION_VALIDATED"] = dict()
 app.config["WS_CONNECTIONS"] = dict()
+
+
+@app.context_processor
+def load_context():
+    enforce_commit = IN_MEMORY_DB.get("enforce_commit", False)
+    if enforce_commit:
+        enforce_commit = defaults.CLUSTER_ENFORCE_COMMIT_TIMEOUT - (
+            round(ntime_utc_now() - enforce_commit)
+        )
+
+    return {
+        "ENFORCE_COMMIT_MODE": enforce_commit,
+    }
 
 
 @app.errorhandler(ClusterHTTPException)

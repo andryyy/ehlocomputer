@@ -1,7 +1,7 @@
 <nav hx-target="#body-main">
   <ul>
     <li>
-      <a href="#" hx-get="/" hx-target="#body-main" class="nav-logo"
+      <a href="#" hx-get="/" class="nav-logo"
         {%- if "system" in session.get("acl", []) -%}
         _="def toggleSysMode()
           if #nav-system-mode-switch's checked is true
@@ -19,6 +19,7 @@
       <span aria-busy="true" data-loading></span>
     </li>
   </ul>
+
   <ul>
     {% if not session["login"] %}
     <li>
@@ -35,51 +36,53 @@
       </a>
     </li>
     {% else %}
-      {% if "system" in session.get("acl", []) or "user" in session.get("acl", []) %}
-      <li>
-        <details class="dropdown" hx-on:click="event.target.nodeName==='A'?this.open=false:null">
-          <summary>Ctrl</summary>
-          <ul>
-            <li>
-              <a href="#" class="secondary" hx-get="/objects/domains">Domains</a>
-            </li>
-            <li>
-              <a href="#" class="secondary" hx-get="/objects/addresses">Addresses</a>
-            </li>
-            <li>
-              <a href="#" class="secondary" hx-get="/objects/emailusers">Email Users</a>
-            </li>
-            <li>
-              <a href="#" class="secondary" hx-get="/objects/keypairs">Signing keys</a>
-            </li>
-            {% endif %}
-            {% if "system" in session.get("acl", []) %}
-            <li class="system-menu">
-              <hr>
-              <small>System</small>
-            </li>
-            <li class="system-menu">
-              <a href="#" hx-get="/system/users">Users</a>
-            </li>
-            <li class="system-menu">
-              <a href="#" hx-get="/system/logs">Logs</a>
-            </li>
-            <li class="system-menu">
-              <a href="#" hx-get="/system/settings">Settings</a>
-            </li>
-            <li class="system-menu">
-              <a href="#" hx-get="/system/status">Status</a>
-            </li>
-            {% endif %}
-          </ul>
-        </details>
-      </li>
+
+    {% if "system" in session.get("acl", []) or "user" in session.get("acl", []) %}
+    <li>
+      <details class="dropdown" hx-on:click="event.target.nodeName==='A'?this.open=false:null">
+        <summary>Ctrl</summary>
+        <ul dir="rtl">
+          <li>
+            <a href="#" class="secondary" hx-get="/objects/domains">Domains</a>
+          </li>
+          <li>
+            <a href="#" class="secondary" hx-get="/objects/addresses">Addresses</a>
+          </li>
+          <li>
+            <a href="#" class="secondary" hx-get="/objects/emailusers">Email Users</a>
+          </li>
+          <li>
+            <a href="#" class="secondary" hx-get="/objects/keypairs">Signing keys</a>
+          </li>
+          {% endif %}
+          {% if "system" in session.get("acl", []) %}
+          <li class="system-menu">
+            <hr>
+            <small>System</small>
+          </li>
+          <li class="system-menu">
+            <a href="#" hx-get="/system/users">Users</a>
+          </li>
+          <li class="system-menu">
+            <a href="#" hx-get="/system/logs">Logs</a>
+          </li>
+          <li class="system-menu">
+            <a href="#" hx-get="/system/settings">Settings</a>
+          </li>
+          <li class="system-menu">
+            <a href="#" hx-get="/system/status">Status</a>
+          </li>
+          {% endif %}
+        </ul>
+      </details>
+    </li>
     {% endif %}
+
     {% if session["login"] %}
     <li>
       <details class="dropdown" hx-on:click="event.target.nodeName==='A'?this.open=false:null">
         <summary>User</summary>
-        <ul>
+        <ul dir="rtl">
           <li>
             <a href="#" hx-get="/profile">Profile</a>
           </li>
@@ -97,7 +100,7 @@
 <hr>
 
 {% if session["login"] %}
-<div class="flex flex-space-between" hx-target="#body-main">
+<div id="nav-sub-primary" hx-target="#body-main" class="flex flex-space-between" >
   <div class="no-text-wrap">
     Hi <b><a href="#" hx-get="/profile">{{ session.get("login") or "guest" }} 👋</a></b>
   </div>
@@ -107,8 +110,19 @@
 </div>
 {% endif %}
 
-<div class="flex flex-end">
+<div id="nav-sub-secondary" hx-target="#body-main" class="flex flex-end">
   {% if "system" in session.get("acl", []) %}
+  <div id="enforce-commit" hx-swap-oob="outerHTML">
+  {% if ENFORCE_COMMIT_MODE %}
+  <button data-tooltip="Enforced commit mode"
+      class="button-red-800"
+      id="enforce-commit-button"
+      hx-get="/system/status"
+      _="on load call countdownSeconds(me, {{ ENFORCE_COMMIT_MODE }}) end">
+        !!!
+  </button>
+  {% endif %}
+  </div>
   <div>
     <label><input id="nav-system-mode-switch" type="checkbox" role="switch" /> System</label>
   </div>

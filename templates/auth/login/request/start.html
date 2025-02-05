@@ -17,15 +17,8 @@
       </li>
     </ol>
     <footer>
-      <button _="
-      on load
-        set i to {{ AUTH_REQUEST_TIMEOUT }}
-        repeat until i is 0
-          put `Cancel process (${i}s)` into me
-          decrement i by 1
-          wait 1s
-        end
-      end"
-      hx-get="/" hx-target="#body-main" hx-push-url="true" hx-confirm="Cancel process?"></button>
+      <button _="on load call countdownSeconds(me, {{ AUTH_REQUEST_TIMEOUT }}) end"
+        hx-get="/"
+        hx-target="#body-main" hx-push-url="true" hx-confirm="Cancel process?">Cancel process</button>
     </footer>
 </article>

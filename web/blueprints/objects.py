@@ -49,7 +49,6 @@ async def objects_before_request():
             if "Hx-Request" in request.headers:
                 return trigger_notification(
                     level="error",
-                    response_body="",
                     response_code=204,
                     title="Object type error",
                     message="Object type is unknown",
@@ -213,7 +212,6 @@ async def create_object(object_type: str):
 
     return trigger_notification(
         level="success",
-        response_body="",
         response_code=204,
         title="Object created",
         message=f"Object {object_id} created",
@@ -241,7 +239,6 @@ async def delete_object(object_type: str, object_id: str | None = None):
 
     return trigger_notification(
         level="success",
-        response_body="",
         response_code=204,
         title="Object removed",
         message=f"{len(deleted_objects)} object{'s' if len(deleted_objects) > 1 else ''} removed",
@@ -268,7 +265,6 @@ async def patch_object(object_type: str, object_id: str | None = None):
 
     return trigger_notification(
         level="success" if len(patched_objects) > 0 else "warning",
-        response_body="",
         response_code=204,
         title="Patch completed",
         message=f"{len(patched_objects)} object{'s' if (len(patched_objects) > 1 or len(patched_objects) == 0) else ''} modified",

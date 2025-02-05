@@ -115,7 +115,6 @@ async def delete_user(user_id: str | None = None):
 
     return trigger_notification(
         level="success",
-        response_body="",
         response_code=204,
         title="User removed",
         message=f"{len(user_ids)} user{'s' if len(user_ids) > 1 else ''} removed",
@@ -140,7 +139,6 @@ async def patch_user_credential(user_id: str, hex_id: str):
 
     return trigger_notification(
         level="success",
-        response_body="",
         response_code=204,
         title="Credential modified",
         message="Credential was modified",
@@ -171,7 +169,6 @@ async def patch_user(user_id: str | None = None):
 
     return trigger_notification(
         level="success",
-        response_body="",
         response_code=204,
         title="User modified",
         message=f"User was updated",

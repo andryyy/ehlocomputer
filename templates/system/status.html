@@ -33,7 +33,7 @@
       </tr>
       {% for peer in CLUSTER_PEERS_THEM %}
       <tr>
-        <th scope="row"><code>{{ peer }}</codekbd></th>
+        <th scope="row"><code>{{ peer }}</code></th>
         <td _="on htmx:afterRequest[event.detail.successful==true]
           put 0 into me
         end
@@ -70,12 +70,39 @@
     </tbody>
   </table>
 
-  <button type="submit" {{ "disabled" if data.status.enforce_commit }}
-    hx-on::after-request="event.detail.successful==true?this.setAttribute('disabled', 'disabled'):null"
-    hx-confirm="This action will overwrite table data on nodes with a mismatching database, are you sure?"
-    hx-post="/system/cluster/enforce-commit">
-      Enforce next transaction
-  </button>
+  <div hx-trigger="htmx:afterRequest[event.detail.successful==true] from:button"
+    hx-swap="outerHTML"
+    hx-get="/system/status"
+    hx-target="#system-status"
+    hx-select="#system-status">
+
+    {% if not ENFORCE_COMMIT_MODE  %}
+    <button type="submit"
+      hx-trigger="click queue:first"
+      hx-confirm="This action will overwrite table data on nodes with a mismatching database, are you sure?"
+      hx-post="/system/cluster/enforce-transaction/start" hx-target="#nav-sub-secondary">
+        Start enforce transaction mode
+    </button>
+    {% else %}
+    <button type="submit" hx-trigger="click queue:first"
+      hx-post="/system/cluster/enforce-transaction/stop">
+        Stop enforce transaction mode
+    </button>
+    {% endif %}
+
+    {% if ENFORCE_COMMIT_MODE and request.headers.get("Hx-Request") %}
+    <div id="enforce-commit" hx-swap-oob="outerHTML">
+      <button data-tooltip="Enforced commit mode"
+          class="button-red-800"
+          id="enforce-commit-button"
+          hx-get="/system/status"
+          _="on load call countdownSeconds(me, {{ ENFORCE_COMMIT_MODE }}) end">
+            !!!!
+      </button>
+    </div>
+    {% endif %}
+
+  </div>
 
   <p class="no-text-wrap">
     <small><sup>1</sup> A failed peer will not be retried until its status is reset</small><br>

@@ -110,7 +110,6 @@ async def login_request_confirm_modal(request_token: str):
 
         return trigger_notification(
             level="warning",
-            response_body="",
             response_code=403,
             title="Confirmation failed",
             message="Token denied",
@@ -391,7 +390,6 @@ async def register_webauthn_options():
         if not session.get("id"):
             return trigger_notification(
                 level="error",
-                response_body="",
                 response_code=409,
                 title="Registration failed",
                 message="Something went wrong",
@@ -456,7 +454,6 @@ async def register_webauthn():
     if not challenge:
         return trigger_notification(
             level="error",
-            response_body="",
             response_code=409,
             title="Registration session invalid",
             message="Registration session invalid",
@@ -475,7 +472,6 @@ async def register_webauthn():
     except Exception as e:
         return trigger_notification(
             level="error",
-            response_body="",
             response_code=409,
             title="Registration failed",
             message="An error occured while verifying the credential",
@@ -508,7 +504,6 @@ async def register_webauthn():
     except Exception as e:
         return trigger_notification(
             level="error",
-            response_body="",
             response_code=409,
             title="Registration failed",
             message="An error occured verifying the registration",
@@ -523,7 +518,6 @@ async def register_webauthn():
         )
         return trigger_notification(
             level="success",
-            response_body="",
             response_code=204,
             title="New token registered",
             message="A new token was appended to your account and can now be used to login",
@@ -531,7 +525,6 @@ async def register_webauthn():
 
     return trigger_notification(
         level="success",
-        response_body="",
         response_code=204,
         title="Welcome on board 👋",
         message="Your account was created, you can now log in",
@@ -555,7 +548,6 @@ async def auth_login_verify():
         if not all([webauthn_challenge_id, challenge, login]):
             return trigger_notification(
                 level="error",
-                response_body="",
                 response_code=409,
                 title="Verification failed",
                 message="Verification process timed out",
@@ -577,7 +569,6 @@ async def auth_login_verify():
         if not matched_user_credential:
             return trigger_notification(
                 level="error",
-                response_body="",
                 response_code=409,
                 title="Verification failed",
                 message="No such credential in user realm",
@@ -609,7 +600,6 @@ async def auth_login_verify():
     except Exception as e:
         return trigger_notification(
             level="error",
-            response_body="",
             response_code=409,
             title="Verification failed",
             message="An error occured verifying the credential",

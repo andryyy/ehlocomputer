@@ -19,7 +19,12 @@ from enum import Enum
 from hashlib import sha256
 from tools import CONTEXT_TRANSACTION, evaluate_db_params
 from utils.datetimes import ntime_utc_now
-from utils.helpers import ensure_list, is_path_within_cwd, read_n_to_last_line, to_unique_list
+from utils.helpers import (
+    ensure_list,
+    is_path_within_cwd,
+    read_n_to_last_line,
+    to_unique_list,
+)
 from uuid import uuid4
 from typing import Literal
 from pydantic import FilePath, validate_call
@@ -54,6 +59,20 @@ class IncompleteClusterResponses(Exception):
 
 
 class Role(Enum):
+    MASTER = 1
+    SLAVE = 0
+
+
+class CritErrors(Enum):
+    NOT_READY = "ACK CRIT:NOT_READY"
+    NO_SUCH_TABLE = "ACK CRIT:NO_SUCH_TABLE"
+    TABLE_HASH_MISMATCH = "ACK CRIT:TABLE_HASH_MISMATCH"
+    CANNOT_APPLY = "ACK CRIT:CANNOT_APPLY"
+    NOTHING_TO_COMMIT = "ACK CRIT:NOTHING_TO_COMMIT"
+    INVALID_FILE_PATH = "ACK CRIT:INVALID_FILE_PATH"
+
+
+class CRIT(Enum):
     MASTER = 1
     SLAVE = 0
 
@@ -142,7 +161,11 @@ class Cluster:
                     f"<set_master_node> elected foreign peer {self.master_node} as master"
                 )
 
-        meta_started = to_unique_list(data["meta"]["started"] for data in self.connections.values() if data.get("meta"))
+        meta_started = to_unique_list(
+            data["meta"]["started"]
+            for data in self.connections.values()
+            if data.get("meta")
+        )
         self_position = None
         for idx, s in enumerate(meta_started, 1):
             if float(s) > self.started:
@@ -186,7 +209,7 @@ class Cluster:
             "META",
             f"NAME {defaults.NODENAME}",
             f"STARTED {self.started}",
-            f"POSITION {self.position or "?CONFUSED"}",
+            "POSITION {position}".format(position=self.position or "?CONFUSED"),
             "MASTER {master_node}".format(master_node=self.master_node or "?CONFUSED"),
             f"BIND {defaults.CLUSTER_PEERS_ME}",
         ]
@@ -235,8 +258,7 @@ class Cluster:
 
         return ticket, cmd, meta_dict
 
-
-    def get_backoff_time(self, node_position, offset_factor = 0.05, base_delay = 0.1):
+    def get_backoff_time(self, node_position, offset_factor=0.05, base_delay=0.1):
         join_offset = float(node_position) * offset_factor
         random_factor = random.uniform(0.85, 1.15)
         return (base_delay + join_offset) * random_factor
@@ -271,7 +293,7 @@ class Cluster:
                     map(lambda s: cmd.startswith(s), ["ACK", "STATUS", "APPLY", "INIT"])
                 ):
                     await self.send_command(
-                        "ACK CRIT:NOT_READY", [peer_info["bind"]], ticket=ticket
+                        CritErrors.NOT_READY.value, [peer_info["bind"]], ticket=ticket
                     )
 
                 # A task starting with "R" indicates a resync
@@ -279,12 +301,17 @@ class Cluster:
                     _, _, payload = cmd.partition(" ")
                     table_w_hash, delta_payload = payload.split(" ")
                     table, table_hash = table_w_hash.split("@")
-                    table_delta = Delta(base64.b64decode(delta_payload), safe_to_import="tinydb.table.Document")
+                    table_delta = Delta(
+                        base64.b64decode(delta_payload),
+                        safe_to_import="tinydb.table.Document",
+                    )
                     db_params = evaluate_db_params(ticket)
                     async with TinyDB(**db_params) as db:
                         if not table in db.tables():
                             await self.send_command(
-                                "ACK CRIT:NO_SUCH_TABLE", [peer_info["bind"]], ticket=ticket
+                                CritErrors.NO_SUCH_TABLE.value,
+                                [peer_info["bind"]],
+                                ticket=ticket,
                             )
                         else:
                             try:
@@ -295,35 +322,53 @@ class Cluster:
                                     )
                                 ).hexdigest()
 
-                                if local_table_hash != table_hash and cmd.startswith("APPLY"):
+                                if local_table_hash != table_hash and cmd.startswith(
+                                    "APPLY"
+                                ):
                                     await self.send_command(
-                                        "ACK CRIT:TABLE_HASH_MISMATCH", [peer_info["bind"]], ticket=ticket
+                                        CritErrors.TABLE_HASH_MISMATCH.value,
+                                        [peer_info["bind"]],
+                                        ticket=ticket,
                                     )
                                 else:
                                     db.table(table).truncate()
-                                    db.table(table).insert_multiple(table_data + table_delta)
-                                    await self.send_command("ACK", [peer_info["bind"]], ticket=ticket)
+                                    db.table(table).insert_multiple(
+                                        table_data + table_delta
+                                    )
+                                    await self.send_command(
+                                        "ACK", [peer_info["bind"]], ticket=ticket
+                                    )
                             except Exception as e:
                                 logger.error(f"<connection_handler> {type(e)}: {e}")
-                                await self.send_command("ACK CRIT:CANNOT_APPLY", [peer_info["bind"]], ticket=ticket)
+                                await self.send_command(
+                                    CritErrors.CANNOT_APPLY.value,
+                                    [peer_info["bind"]],
+                                    ticket=ticket,
+                                )
 
                 elif cmd == "COMMIT":
                     db_params = evaluate_db_params(ticket)
                     if not os.path.isfile(db_params["filename"]):
-                        await self.send_command("ACK CRIT:NOTHING_TO_COMMIT", [peer_info["bind"]], ticket=ticket)
+                        await self.send_command(
+                            CritErrors.NOTHING_TO_COMMIT.value,
+                            [peer_info["bind"]],
+                            ticket=ticket,
+                        )
                     else:
                         async with TinyDB(**db_params) as db:  # acquires tinydbs lock
                             os.rename(db_params["filename"], TINYDB_PARAMS["filename"])
-                        await self.send_command("ACK", [peer_info["bind"]], ticket=ticket)
+                        await self.send_command(
+                            "ACK", [peer_info["bind"]], ticket=ticket
+                        )
 
-                elif (cmd == "STATUS" or cmd == "INIT"):
+                elif cmd == "STATUS" or cmd == "INIT":
                     await self.send_command("ACK", [peer_info["bind"]], ticket=ticket)
 
                 elif cmd.startswith("FILEGET"):
                     _, _, payload = cmd.partition(" ")
                     if not is_path_within_cwd(payload):
                         await self.send_command(
-                            "ACK CRIT:INVALID_FILE_PATH",
+                            CritErrors.INVALID_FILE_PATH.value,
                             [peer_info["bind"]],
                             ticket=ticket,
                         )
@@ -363,7 +408,9 @@ class Cluster:
                                     "ticket": None,
                                 }
                             backoff_time = self.get_backoff_time(peer_info["position"])
-                            await asyncio.wait_for(self.locks[t]["lock"].acquire(), backoff_time)
+                            await asyncio.wait_for(
+                                self.locks[t]["lock"].acquire(), backoff_time
+                            )
                             self.locks[t]["ticket"] = ticket
 
                     except TimeoutError:
@@ -413,9 +460,11 @@ class Cluster:
         for peer in receivers:
             if peer not in IN_MEMORY_DB["peer_failures"]:
                 IN_MEMORY_DB["peer_failures"][peer] = 0
-            elif IN_MEMORY_DB["peer_failures"][peer] > defaults.CLUSTER_PEER_MAX_FAILURES:
+            elif (
+                IN_MEMORY_DB["peer_failures"][peer] > defaults.CLUSTER_PEER_MAX_FAILURES
+            ):
                 logger.warning(
-                    f"<send_command> not trying peer {peer} due to {IN_MEMORY_DB["peer_failures"][peer]} consecutive failures"
+                    f"<send_command> not trying peer {peer} due to consecutive failures"
                 )
                 continue
 
@@ -469,7 +518,6 @@ class Cluster:
                     )
                 except IncompleteClusterResponses:
                     errors.append("master_not_reachable")
-
 
         for t in tables:
             with suppress(RuntimeError):
@@ -546,7 +594,9 @@ class Cluster:
         self._context_token = CONTEXT_TRANSACTION.set(ntime_utc_now())
 
     @validate_call
-    async def request_files(self, files: FilePath | list[FilePath], peers: Literal["*"] | list):
+    async def request_files(
+        self, files: FilePath | list[FilePath], peers: Literal["*"] | list
+    ):
         async with self.receiving:
             for file in ensure_list(files):
                 try:
@@ -573,7 +623,7 @@ class Cluster:
 
                 except IncompleteClusterResponses:
                     logger.error(
-                        f"<request_files> sending command to peers '{peers}'' failed"
+                        f"<request_files> sending command to peers '{peers}' failed"
                     )
                 except Exception as e:
                     raise
@@ -588,13 +638,15 @@ class Cluster:
             limit=10485760,  # 10 MiB
         )
 
-        logger.info(f"Listening on {self.port} on address {" and ".join(self.host)}...")
+        logger.info(f"Listening on {self.port} on address {' and '.join(self.host)}...")
 
         status = False
         while not status or not self.server_init:
             async with self.receiving:
                 ticket, receivers = await self.send_command("INIT", "*")
-                status, responses = await self.await_receivers(ticket, receivers, raise_on_error=False)
+                status, responses = await self.await_receivers(
+                    ticket, receivers, raise_on_error=False
+                )
                 if status:
                     self._set_master_node()
                 if not self.server_init:
@@ -616,7 +668,7 @@ class Cluster:
                 for r in receivers
                 if r not in [peer for peer, _ in self.tickets[ticket]]
             ]
-            _err_msg = f"missing receviers: {", ".join(missing_receivers)}"
+            _err_msg = f"missing receviers: {', '.join(missing_receivers)}"
         finally:
             responses = [response for _, response in self.tickets[ticket]]
             critical_errors = {p: m for p, m in self.tickets[ticket] if "CRIT" in m}
@@ -624,7 +676,9 @@ class Cluster:
             if critical_errors:
                 for peer, critical_error in critical_errors.items():
                     IN_MEMORY_DB["peer_critical"][peer] = critical_error
-                    IN_MEMORY_DB["peer_failures"][peer] = defaults.CLUSTER_PEER_MAX_FAILURES + 1
+                    IN_MEMORY_DB["peer_failures"][peer] = (
+                        defaults.CLUSTER_PEER_MAX_FAILURES + 1
+                    )
 
                 _err_msg = critical_errors
 

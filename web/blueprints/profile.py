@@ -73,7 +73,6 @@ async def user_profile_patch():
 
     return trigger_notification(
         level="success",
-        response_body="",
         response_code=204,
         title="Profile updated",
         message="Your profile was updated",
@@ -95,7 +94,6 @@ async def patch_credential(credential_hex_id: str):
 
     return trigger_notification(
         level="success",
-        response_body="",
         response_code=204,
         title="Credential modified",
         message="Credential was modified",
@@ -113,7 +111,6 @@ async def delete_credential(credential_hex_id: str):
 
     return trigger_notification(
         level="success",
-        response_body="",
         response_code=204,
         title="Credential deleted",
         message="Credential was removed",

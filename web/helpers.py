@@ -77,10 +77,10 @@ def session_clear(preserved_keys: list = []) -> None:
 @validate_call
 def trigger_notification(
     level: Literal["error", "warning", "success", "user", "system"],
-    response_body: str,
     response_code: int,
     title: str,
     message: str,
+    response_body: str = "",
     duration: int = 7000,
     additional_triggers: dict = {},
 ):

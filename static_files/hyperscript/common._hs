@@ -8,6 +8,16 @@ def getJsonUrlAsObject(url)
   return result as Object
 end
 
+def countdownSeconds(el, sec)
+  set i to sec
+  set _s to el's textContent
+  repeat until i is 0
+    put `${_s} (${i}s)` into el
+    decrement i by 1
+    wait 1s
+  end
+end
+
 def setCheckboxes(el, option)
   repeat for e in (<input[type='checkbox'].multiselect/> in el)
     if option == 'all'

@@ -94,7 +94,6 @@ class ClusterLock:
                             break
 
                     if apply_mode == "ENFORCEAPPLY":
-                        IN_MEMORY_DB["enforce_commit"] = False
                         IN_MEMORY_DB["peer_critical"] = dict()
 
             if commit and error == False:

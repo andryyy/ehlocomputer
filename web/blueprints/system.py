@@ -39,36 +39,57 @@ def load_context():
     return context
 
 
-@blueprint.route("/cluster/enforce-commit", methods=["POST"])
+@blueprint.route("/cluster/enforce-transaction/<action>", methods=["POST"])
 @wrappers.acl("system")
-async def cluster_enforce_commit():
-    if not IN_MEMORY_DB.get("enforce_commit", False):
-        IN_MEMORY_DB["enforce_commit"] = True
-        app.add_background_task(
-            expire_key,
-            IN_MEMORY_DB,
-            "enforce_commit",
-            defaults.CLUSTER_ENFORCE_COMMIT_TIMEOUT,
-        )
+async def cluster_enforce_commit(action: str):
+    if action == "start":
+        if not IN_MEMORY_DB.get("enforce_commit", False):
+            IN_MEMORY_DB["enforce_commit"] = ntime_utc_now()
+            IN_MEMORY_DB["peer_failures"] = dict()
+            app.add_background_task(
+                expire_key,
+                IN_MEMORY_DB,
+                "enforce_commit",
+                defaults.CLUSTER_ENFORCE_COMMIT_TIMEOUT,
+            )
+            await ws_htmx(
+                "system",
+                "beforeend",
+                """<div hidden _="on load trigger
+                    notification(
+                    title: 'Enforced transaction mode',
+                    level: 'system',
+                    message: 'Caution: Enforced transaction mode is now enabled',
+                    duration: 10000
+                    )"></div>""",
+            )
+
+            return trigger_notification(
+                level="success",
+                response_code=204,
+                title="Activated",
+                message="Enforced transaction mode is enabled",
+            )
+        else:
+            return trigger_notification(
+                level="warning",
+                response_code=409,
+                title="Already active",
+                message="Enforced transaction mode is already enabled",
+            )
+    elif action == "stop":
+        IN_MEMORY_DB["enforce_commit"] = False
         await ws_htmx(
             "system",
             "beforeend",
-            "<div hidden _=\"on load trigger notification(title: 'Enforce commit', level: 'system', message: 'Caution: enforced commit is active', duration: 10000)\"></div>",
+            '<div hidden _="on load remove #enforce-commit-button trigger '
+            + "notification(title: 'Enforced transaction disabled', level: 'system', message: 'Enforced transaction mode is now disabled', duration: 10000)\"></div>",
         )
         return trigger_notification(
             level="success",
-            response_body="",
             response_code=204,
-            title="Activated",
-            message="Enforced commit mode is active",
-        )
-    else:
-        return trigger_notification(
-            level="warning",
-            response_body="",
-            response_code=409,
-            title="Already active",
-            message="Enforced commit mode is already active",
+            title="Deactivated",
+            message="Enforced transaction mode is disabled",
         )
 
 
@@ -80,7 +101,6 @@ async def cluster_reset_failed_peer():
         IN_MEMORY_DB["peer_failures"][peer] = 0
         return trigger_notification(
             level="success",
-            response_body="",
             response_code=204,
             title="Peer reset",
             message="Peer failed counter was reset",
@@ -88,7 +108,6 @@ async def cluster_reset_failed_peer():
     else:
         return trigger_notification(
             level="error",
-            response_body="",
             response_code=409,
             title="Unknown peer",
             message="Peer was not reset",
@@ -125,7 +144,6 @@ async def write_settings():
 
     return trigger_notification(
         level="success",
-        response_body="",
         response_code=204,
         title="Settings updated",
         message="System settings were updated",
