@@ -300,12 +300,16 @@ class Cluster:
                     )
 
                 elif cmd.startswith("PATCHTABLE") or cmd.startswith("FULLTABLE"):
+                    if cmd.startswith("FULLTABLE") and IN_MEMORY_DB[
+                        "peer_critical"
+                    ].get(peer_info["bind"]):
+                        del IN_MEMORY_DB["peer_critical"][peer_info["bind"]]
+
                     if (
                         cmd.startswith("PATCHTABLE")
                         and IN_MEMORY_DB["peer_critical"].get(peer_info["bind"])
                         == "CRIT:TABLE_HASH_MISMATCH"
                     ):
-                        NO_TRUST muss zurückgesetzt werden, wenn einer fulltable ausgeführt hat
                         await self.send_command(
                             CritErrors.NO_TRUST.value,
                             [peer_info["bind"]],
