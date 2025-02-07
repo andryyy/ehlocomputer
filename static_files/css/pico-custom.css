@@ -2884,11 +2884,6 @@ pre {
   padding: calc(var(--pico-spacing) / 2);
 }
 
-#nav-system-mode-switch:checked {
-  --pico-background-color: #f17961;
-  --pico-border-color: #f17961;
-}
-
 #nav-theme-toggle {
   cursor: pointer !important;
 }
@@ -2897,12 +2892,9 @@ pre {
   filter: grayscale(100%);
 }
 
-.nav-logo {
-  transition: 350ms filter cubic-bezier(0, 0.75, 0.75, 1);
-}
-
-.system-mode-filter {
-  filter: hue-rotate(250deg) saturate(190%);
+.hi, .hi a {
+  font-size: 1.1rem;
+  --pico-text-decoration: none;
 }
 
 table tr fieldset {
@@ -3004,6 +2996,10 @@ table td a[role=button] {
 
 .notification:not(:last-child) {
   margin-bottom: 0.25rem;
+}
+
+.notification-text {
+  white-space: pre-line;
 }
 
 .notification {

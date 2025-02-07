@@ -61,8 +61,8 @@ async def handle_cluster_error(error):
         level="error",
         response_body="",
         response_code=204,
-        title="Cluster error",
-        message=f"🤖 Computer failed, oh no... ({error})",
+        title="🤖 Cluster error",
+        message=f"An error occured:\n{error.description}",
     )
 
 

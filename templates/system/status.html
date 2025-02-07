@@ -27,8 +27,8 @@
       </tr>
       <tr>
         <th scope="row">Peer</th>
-        <th scope="row">Consecutive failures <sup>1</sup></th>
-        <th scope="row">Critical responses <sup>2</sup></th>
+        <th scope="row">Consecutive connection failures <sup>1</sup></th>
+        <th scope="row">Errors<sup>2</sup></th>
         <th scope="row">Meta <sup>3</sup></th>
       </tr>
       {% for peer in CLUSTER_PEERS_THEM %}
@@ -38,13 +38,13 @@
           put 0 into me
         end
         ">
-          {% set peer_failures = data.status.peer_failures.get(peer, 0) %}
-          {% if peer_failures > CLUSTER_PEER_MAX_FAILURES %}
+          {% set connection_failures = data.status.connection_failures.get(peer, 0) %}
+          {% if connection_failures > CLUSTER_PEER_MAX_FAILURES %}
             <b class="color-red">failed</b> - <a href="#" hx-post="/system/cluster/reset-failed-peer" hx-vars='{"peer": "{{- peer -}}"}'>reset</a>
-          {% elif peer_failures > 0 %}
-            <b class="color-pumpkin">{{ peer_failures }}</b> - <a href="#" hx-post="/system/cluster/reset-failed-peer" hx-vars='{"peer": "{{- peer -}}"}'>reset</a>
+          {% elif connection_failures > 0 %}
+            <b class="color-pumpkin">{{ connection_failures }}</b> - <a href="#" hx-post="/system/cluster/reset-failed-peer" hx-vars='{"peer": "{{- peer -}}"}'>reset</a>
           {% else %}
-            {{ peer_failures }}
+            {{ connection_failures }}
           {% endif %}
         </td>
         <td _="on htmx:afterRequest[event.detail.successful==true]
@@ -81,12 +81,12 @@
       hx-trigger="click queue:first"
       hx-confirm="This action will overwrite table data on nodes with a mismatching database, are you sure?"
       hx-post="/system/cluster/enforce-transaction/start" hx-target="#nav-sub-secondary">
-        Start enforce transaction mode
+        🟢 Start enforce transaction mode
     </button>
     {% else %}
     <button type="submit" hx-trigger="click queue:first"
       hx-post="/system/cluster/enforce-transaction/stop">
-        Stop enforce transaction mode
+        🔴 Stop
     </button>
     {% endif %}
 
@@ -105,8 +105,11 @@
   </div>
 
   <p class="no-text-wrap">
-    <small><sup>1</sup> A failed peer will not be retried until its status is reset</small><br>
-    <small><sup>2</sup> Critical transaction responses, which will also mark the peer as failed</small><br>
+    <small>
+      <sup>1</sup> A failed connection attempt will increase the counter up to {{ CLUSTER_PEER_MAX_FAILURES }} (CLUSTER_PEER_MAX_FAILURES).
+      A successful inbound connection as well as a manual reset will reset the counter to 0.
+    </small><br>
+    <small><sup>2</sup> Critical protocol errors (e.g. checksum mismatches).</small><br>
     <small><sup>3</sup> The cluster is updated gradually (lazy-update).</small>
   </p>
   </div>

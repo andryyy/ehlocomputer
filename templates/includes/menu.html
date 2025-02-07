@@ -1,19 +1,7 @@
 <nav hx-target="#body-main">
   <ul>
     <li>
-      <a href="#" hx-get="/" class="nav-logo"
-        {%- if "system" in session.get("acl", []) -%}
-        _="def toggleSysMode()
-          if #nav-system-mode-switch's checked is true
-            remove @hidden from .system-menu
-            add .system-mode-filter settle
-          else
-            add @hidden to .system-menu
-            remove .system-mode-filter settle
-          end
-        init toggleSysMode() end
-        on click from #nav-system-mode-switch toggleSysMode() end"
-        {%- endif -%}>
+      <a href="#" hx-get="/" class="nav-logo">
         {% include "ehlo.svg" %}
       </a>
       <span aria-busy="true" data-loading></span>
@@ -56,20 +44,20 @@
           </li>
           {% endif %}
           {% if "system" in session.get("acl", []) %}
-          <li class="system-menu">
+          <li>
             <hr>
             <small>System</small>
           </li>
-          <li class="system-menu">
+          <li>
             <a href="#" hx-get="/system/users">Users</a>
           </li>
-          <li class="system-menu">
+          <li>
             <a href="#" hx-get="/system/logs">Logs</a>
           </li>
-          <li class="system-menu">
+          <li>
             <a href="#" hx-get="/system/settings">Settings</a>
           </li>
-          <li class="system-menu">
+          <li>
             <a href="#" hx-get="/system/status">Status</a>
           </li>
           {% endif %}
@@ -101,8 +89,8 @@
 
 {% if session["login"] %}
 <div id="nav-sub-primary" hx-target="#body-main" class="flex flex-space-between" >
-  <div class="no-text-wrap">
-    Hi <b><a href="#" hx-get="/profile">{{ session.get("login") or "guest" }} 👋</a></b>
+  <div class="no-text-wrap hi">
+    👋 <b><a href="#" hx-get="/profile">{{ session.get("login") or "guest" }}</a></b>
   </div>
   <div>
   {% for role in session.get("acl", []) %}<mark>{{ role }}</mark>&nbsp;{% endfor %}
@@ -113,18 +101,15 @@
 <div id="nav-sub-secondary" hx-target="#body-main" class="flex flex-end">
   {% if "system" in session.get("acl", []) %}
   <div id="enforce-commit" hx-swap-oob="outerHTML">
-  {% if ENFORCE_COMMIT_MODE %}
-  <button data-tooltip="Enforced commit mode"
-      class="button-red-800"
-      id="enforce-commit-button"
-      hx-get="/system/status"
-      _="on load call countdownSeconds(me, {{ ENFORCE_COMMIT_MODE }}) end">
-        !!!
-  </button>
-  {% endif %}
-  </div>
-  <div>
-    <label><input id="nav-system-mode-switch" type="checkbox" role="switch" /> System</label>
+    {% if ENFORCE_COMMIT_MODE %}
+    <button data-tooltip="Enforced commit mode"
+        class="button-red-800"
+        id="enforce-commit-button"
+        hx-get="/system/status"
+        _="on load call countdownSeconds(me, {{ ENFORCE_COMMIT_MODE }}) end">
+          !!!
+    </button>
+    {% endif %}
   </div>
   {% endif %}
 

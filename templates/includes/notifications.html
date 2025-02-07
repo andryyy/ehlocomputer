@@ -73,10 +73,10 @@
     @if level is in ['error', 'warning', 'validationError'] set bullet to '&#10071;' end
     @if message is a Array
       @repeat for m in message
-        ${bullet} ${m}<br>
+      <span class="notification-text">${bullet} ${m}</span><br>
       @end
     @else
-      ${bullet} ${message}<br>
+      <span class="notification-text">${bullet} ${message}</span><br>
     @end
   </div>
 </template>

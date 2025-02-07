@@ -125,7 +125,6 @@ def validation_error(
 ):
     locations = []
     if errors:
-        print(errors)
         for loc in [l.get("loc") for l in errors if l.get("loc")]:
             i = 1
             _location = None

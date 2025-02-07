@@ -70,6 +70,7 @@ class CritErrors(Enum):
     CANNOT_APPLY = "ACK CRIT:CANNOT_APPLY"
     NOTHING_TO_COMMIT = "ACK CRIT:NOTHING_TO_COMMIT"
     INVALID_FILE_PATH = "ACK CRIT:INVALID_FILE_PATH"
+    NO_TRUST = "ACK CRIT:NO_TRUST"
 
 
 class CRIT(Enum):
@@ -94,7 +95,7 @@ class Cluster:
         self.server_init = False
         self.position = None
 
-        IN_MEMORY_DB["peer_failures"] = dict()
+        IN_MEMORY_DB["connection_failures"] = dict()
         IN_MEMORY_DB["peer_critical"] = dict()
 
     def _set_master_node(self):
@@ -259,7 +260,7 @@ class Cluster:
         return ticket, cmd, meta_dict
 
     def get_backoff_time(self, node_position, offset_factor=0.05, base_delay=0.1):
-        join_offset = float(node_position) * offset_factor
+        join_offset = float(node_position or 0) * offset_factor
         random_factor = random.uniform(0.85, 1.15)
         return (base_delay + join_offset) * random_factor
 
@@ -276,11 +277,10 @@ class Cluster:
             try:
                 ticket, cmd, peer_info = await self._recv((reader, writer))
                 self._set_master_node()
-                IN_MEMORY_DB["peer_failures"][peer_info["bind"]] = 0
-                if ((ntime_utc_now() - float(ticket)) > 5.0) and not cmd.startswith(
-                    "RTASK"
-                ):
-                    continue
+                IN_MEMORY_DB["connection_failures"][peer_info["bind"]] = 0
+                # if (ntime_utc_now() - float(ticket)) > 15.0:
+                #     continue
+
             except asyncio.exceptions.IncompleteReadError:
                 async with self.receiving:
                     ticket, receivers = await self.send_command("STATUS", "*")
@@ -290,22 +290,35 @@ class Cluster:
 
             try:
                 if not self.server_init and not any(
-                    map(lambda s: cmd.startswith(s), ["ACK", "STATUS", "APPLY", "INIT"])
+                    map(
+                        lambda s: cmd.startswith(s),
+                        ["ACK", "STATUS", "FULLTABLE", "INIT"],
+                    )
                 ):
                     await self.send_command(
                         CritErrors.NOT_READY.value, [peer_info["bind"]], ticket=ticket
                     )
 
-                # A task starting with "R" indicates a resync
-                elif cmd.startswith("APPLY") or cmd.startswith("ENFORCEAPPLY"):
+                elif cmd.startswith("PATCHTABLE") or cmd.startswith("FULLTABLE"):
+                    if (
+                        cmd.startswith("PATCHTABLE")
+                        and IN_MEMORY_DB["peer_critical"].get(peer_info["bind"])
+                        == "CRIT:TABLE_HASH_MISMATCH"
+                    ):
+                        NO_TRUST muss zurückgesetzt werden, wenn einer fulltable ausgeführt hat
+                        await self.send_command(
+                            CritErrors.NO_TRUST.value,
+                            [peer_info["bind"]],
+                            ticket=ticket,
+                        )
+                        continue
+
                     _, _, payload = cmd.partition(" ")
-                    table_w_hash, delta_payload = payload.split(" ")
+                    table_w_hash, table_payload = payload.split(" ")
                     table, table_hash = table_w_hash.split("@")
-                    table_delta = Delta(
-                        base64.b64decode(delta_payload),
-                        safe_to_import="tinydb.table.Document",
-                    )
+
                     db_params = evaluate_db_params(ticket)
+
                     async with TinyDB(**db_params) as db:
                         if not table in db.tables():
                             await self.send_command(
@@ -315,29 +328,43 @@ class Cluster:
                             )
                         else:
                             try:
-                                table_data = db.table(table).all()
-                                local_table_hash = sha256(
-                                    json.dumps(table_data, sort_keys=True).encode(
-                                        "utf-8"
-                                    )
-                                ).hexdigest()
+                                if cmd.startswith("PATCHTABLE"):
+                                    table_data = {
+                                        doc.doc_id: doc for doc in db.table(table).all()
+                                    }
+                                    local_table_hash = sha256(
+                                        json.dumps(table_data, sort_keys=True).encode(
+                                            "utf-8"
+                                        )
+                                    ).hexdigest()
 
-                                if local_table_hash != table_hash and cmd.startswith(
-                                    "APPLY"
-                                ):
-                                    await self.send_command(
-                                        CritErrors.TABLE_HASH_MISMATCH.value,
-                                        [peer_info["bind"]],
-                                        ticket=ticket,
+                                    if local_table_hash != table_hash:
+                                        await self.send_command(
+                                            CritErrors.TABLE_HASH_MISMATCH.value,
+                                            [peer_info["bind"]],
+                                            ticket=ticket,
+                                        )
+                                        continue
+
+                                    table_delta = Delta(
+                                        base64.b64decode(table_payload),
+                                        safe_to_import="tinydb.table.Document",
                                     )
-                                else:
-                                    db.table(table).truncate()
-                                    db.table(table).insert_multiple(
-                                        table_data + table_delta
+                                    insert_data = table_data + table_delta
+                                elif cmd.startswith("FULLTABLE"):
+                                    insert_data = json.loads(
+                                        base64.b64decode(table_payload)
                                     )
-                                    await self.send_command(
-                                        "ACK", [peer_info["bind"]], ticket=ticket
-                                    )
+
+                                db.table(table).truncate()
+
+                                for doc_id, doc in insert_data.items():
+                                    db.table(table).insert(Document(doc, doc_id=doc_id))
+
+                                await self.send_command(
+                                    "ACK", [peer_info["bind"]], ticket=ticket
+                                )
+
                             except Exception as e:
                                 logger.error(f"<connection_handler> {type(e)}: {e}")
                                 await self.send_command(
@@ -458,10 +485,11 @@ class Cluster:
         successful_receivers = []
 
         for peer in receivers:
-            if peer not in IN_MEMORY_DB["peer_failures"]:
-                IN_MEMORY_DB["peer_failures"][peer] = 0
+            if peer not in IN_MEMORY_DB["connection_failures"]:
+                IN_MEMORY_DB["connection_failures"][peer] = 0
             elif (
-                IN_MEMORY_DB["peer_failures"][peer] > defaults.CLUSTER_PEER_MAX_FAILURES
+                IN_MEMORY_DB["connection_failures"][peer]
+                > defaults.CLUSTER_PEER_MAX_FAILURES
             ):
                 logger.warning(
                     f"<send_command> not trying peer {peer} due to consecutive failures"
@@ -473,7 +501,7 @@ class Cluster:
                     sock.settimeout(defaults.CLUSTER_PEERS_TIMEOUT)
                     if sock.connect_ex((peer, self.port)) != 0:
                         logger.warning(f"<{peer}> Connection timed out")
-                        IN_MEMORY_DB["peer_failures"][peer] += 1
+                        IN_MEMORY_DB["connection_failures"][peer] += 1
                         continue
 
                 self.connections[peer] = {
@@ -486,11 +514,11 @@ class Cluster:
                     self.connections[peer]["streams"] = await asyncio.open_connection(
                         peer, self.port, ssl=get_ssl_context("client")
                     )
-                    IN_MEMORY_DB["peer_failures"][peer] = 0
+                    IN_MEMORY_DB["connection_failures"][peer] = 0
                 except ConnectionRefusedError:
-                    if IN_MEMORY_DB["peer_failures"][peer] == 0:
+                    if IN_MEMORY_DB["connection_failures"][peer] == 0:
                         logger.warning(f"<{peer}> ConnectionRefusedError")
-                    IN_MEMORY_DB["peer_failures"][peer] += 1
+                    IN_MEMORY_DB["connection_failures"][peer] += 1
 
             if self.connections[peer]["streams"]:
                 try:
@@ -673,16 +701,13 @@ class Cluster:
             responses = [response for _, response in self.tickets[ticket]]
             critical_errors = {p: m for p, m in self.tickets[ticket] if "CRIT" in m}
 
-            if critical_errors:
+            if not _err_msg and critical_errors:
                 for peer, critical_error in critical_errors.items():
                     IN_MEMORY_DB["peer_critical"][peer] = critical_error
-                    IN_MEMORY_DB["peer_failures"][peer] = (
-                        defaults.CLUSTER_PEER_MAX_FAILURES + 1
-                    )
 
                 _err_msg = critical_errors
 
-            elif len(responses) != len(receivers):
+            elif not _err_msg and len(responses) != len(receivers):
                 _err_msg = "unplausible amount of responses for ticket"
 
             del self.tickets[ticket]

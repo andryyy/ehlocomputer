@@ -45,7 +45,7 @@ async def cluster_enforce_commit(action: str):
     if action == "start":
         if not IN_MEMORY_DB.get("enforce_commit", False):
             IN_MEMORY_DB["enforce_commit"] = ntime_utc_now()
-            IN_MEMORY_DB["peer_failures"] = dict()
+            IN_MEMORY_DB["connection_failures"] = dict()
             app.add_background_task(
                 expire_key,
                 IN_MEMORY_DB,
@@ -97,8 +97,8 @@ async def cluster_enforce_commit(action: str):
 @wrappers.acl("system")
 async def cluster_reset_failed_peer():
     peer = request.form_parsed.get("peer")
-    if peer and peer in IN_MEMORY_DB["peer_failures"]:
-        IN_MEMORY_DB["peer_failures"][peer] = 0
+    if peer and peer in IN_MEMORY_DB["connection_failures"]:
+        IN_MEMORY_DB["connection_failures"][peer] = 0
         return trigger_notification(
             level="success",
             response_code=204,
@@ -119,7 +119,7 @@ async def cluster_reset_failed_peer():
 async def status():
     status = {
         "peer_critical": IN_MEMORY_DB["peer_critical"],
-        "peer_failures": IN_MEMORY_DB["peer_failures"],
+        "connection_failures": IN_MEMORY_DB["connection_failures"],
         "enforce_commit": IN_MEMORY_DB.get("enforce_commit", False),
         "connections": cluster.connections,
     }

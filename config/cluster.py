@@ -41,11 +41,14 @@ class ClusterLock:
         async with TinyDB(**self.db_params) as db:
             for t in self.tables:
                 self.aenter_db_data[t] = dict()
-                self.aenter_db_data[t]["data"] = db.table(t).all()
+                self.aenter_db_data[t]["data"] = {
+                    doc.doc_id: doc for doc in db.table(t).all()
+                }
+                self.aenter_db_data[t]["json_bytes"] = json.dumps(
+                    self.aenter_db_data[t]["data"], sort_keys=True
+                ).encode("utf-8")
                 self.aenter_db_data[t]["hash"] = sha256(
-                    json.dumps(self.aenter_db_data[t]["data"], sort_keys=True).encode(
-                        "utf-8"
-                    )
+                    self.aenter_db_data[t]["json_bytes"]
                 ).hexdigest()
 
         return cluster
@@ -58,30 +61,34 @@ class ClusterLock:
             ticket = str(ntime_utc_now())
 
             for t in self.tables:
-                table_data = db.table(t).all()
-
+                table_data = {doc.doc_id: doc for doc in db.table(t).all()}
                 diff = DeepDiff(
                     self.aenter_db_data[t]["data"],
                     table_data,
-                    ignore_order=True,
+                    ignore_order=False,
                     report_repetition=True,
                     view="tree",
                 )
 
                 if diff:
                     commit = True
-                    table_delta = Delta(diff)
-                    delta_string = base64.b64encode(table_delta.dumps()).decode("utf-8")
-
                     async with cluster.receiving:
                         try:
-                            apply_mode = (
-                                "APPLY"
-                                if not IN_MEMORY_DB.get("enforce_commit", False)
-                                else "ENFORCEAPPLY"
-                            )
+                            if not IN_MEMORY_DB.get("enforce_commit", False):
+                                apply_mode = "PATCHTABLE"
+                                table_delta = Delta(diff)
+                                apply_data = base64.b64encode(
+                                    table_delta.dumps()
+                                ).decode("utf-8")
+                            else:
+                                apply_mode = "FULLTABLE"
+                                jb = json.dumps(table_data, sort_keys=True).encode(
+                                    "utf-8"
+                                )
+                                apply_data = base64.b64encode(jb).decode("utf-8")
+
                             _, receivers = await cluster.send_command(
-                                f"{apply_mode} {t}@{self.aenter_db_data[t]['hash']} {delta_string}",
+                                f"{apply_mode} {t}@{self.aenter_db_data[t]['hash']} {apply_data}",
                                 "*",
                                 ticket=ticket,
                             )
@@ -90,10 +97,12 @@ class ClusterLock:
                             )
                         except Exception as e:
                             error = e
-                            logger.error(f"<ClusterLock> failed to apply {ticket}: {e}")
+                            logger.error(
+                                f"<ClusterLock> command {apply_mode} failed for {ticket}: {error}"
+                            )
                             break
 
-                    if apply_mode == "ENFORCEAPPLY":
+                    if apply_mode == "FULLTABLE":
                         IN_MEMORY_DB["peer_critical"] = dict()
 
             if commit and error == False:
