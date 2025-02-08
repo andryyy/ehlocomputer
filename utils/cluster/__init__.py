@@ -14,7 +14,6 @@ from config import defaults
 from config.database import *
 from config.logs import logger
 from contextlib import closing, suppress
-from deepdiff import Delta
 from enum import Enum
 from hashlib import sha256
 from tools import CONTEXT_TRANSACTION, evaluate_db_params
@@ -103,6 +102,7 @@ class Cluster:
             self.master_node = None
             self.role = Role.SLAVE
             self.server_init = False
+            self.position = None
 
         established = [k for k, v in self.connections.items() if v["meta"]]
         n_online_peers = len(established) + 1
@@ -133,7 +133,6 @@ class Cluster:
                 self.server_init = True
                 self.master_node = defaults.CLUSTER_PEERS_ME
                 self.role = Role.MASTER
-                self.position = None
 
         else:
             their_master = self.connections[master_node]["meta"]["master"]
@@ -179,9 +178,7 @@ class Cluster:
         if self.server_init:
             self.position = self_position
 
-        logger.debug(
-            f"<set_master_node> our swarm has {n_online_peers}/{n_all_peers} worms"
-        )
+        logger.debug(f"<set_master_node> cluster size {n_online_peers}/{n_all_peers}")
 
     def log_rx(self, peer: str, msg: str, max_msg_len=200):
         msg = msg[:max_msg_len] + (msg[max_msg_len:] and "...")
@@ -350,32 +347,43 @@ class Cluster:
                                         )
                                         continue
 
-                                    table_delta = Delta(
-                                        base64.b64decode(table_payload),
-                                        safe_to_import="tinydb.table.Document",
-                                    )
-                                    insert_data = table_data + table_delta
+                                    diff = json.loads(base64.b64decode(table_payload))
+                                    for doc_id, doc in diff["changed"].items():
+                                        db.table(table).upsert(
+                                            Document(doc, doc_id=doc_id)
+                                        )
+                                    for doc_id, doc in diff["added"].items():
+                                        db.table(table).insert(
+                                            Document(doc, doc_id=doc_id)
+                                        )
+                                    for doc_id, doc in diff["removed"].items():
+                                        d = db.table(table).get(doc_id=doc_id)
+                                        if d.doc_id == doc_id:
+                                            db.table(table).remove(
+                                                Query().id == doc["id"]
+                                            )
+
                                 elif cmd.startswith("FULLTABLE"):
                                     insert_data = json.loads(
                                         base64.b64decode(table_payload)
                                     )
-
-                                db.table(table).truncate()
-
-                                for doc_id, doc in insert_data.items():
-                                    db.table(table).insert(Document(doc, doc_id=doc_id))
+                                    db.table(table).truncate()
+                                    for doc_id, doc in insert_data.items():
+                                        db.table(table).insert(
+                                            Document(doc, doc_id=doc_id)
+                                        )
 
                                 await self.send_command(
                                     "ACK", [peer_info["bind"]], ticket=ticket
                                 )
 
                             except Exception as e:
-                                logger.error(f"<connection_handler> {type(e)}: {e}")
                                 await self.send_command(
                                     CritErrors.CANNOT_APPLY.value,
                                     [peer_info["bind"]],
                                     ticket=ticket,
                                 )
+                                continue
 
                 elif cmd == "COMMIT":
                     db_params = evaluate_db_params(ticket)
@@ -658,7 +666,6 @@ class Cluster:
                         f"<request_files> sending command to peers '{peers}' failed"
                     )
                 except Exception as e:
-                    raise
                     logger.error(f"<request_files> unhandled error: {e}")
 
     async def run(self, shutdown_trigger) -> None:

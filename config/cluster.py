@@ -5,7 +5,6 @@ import os
 from config.database import *
 from config.defaults import CLUSTER_PEERS_ME
 from config.logs import logger
-from deepdiff import DeepDiff, Delta
 from hashlib import sha256
 from tools import evaluate_db_params
 from utils.cluster import Cluster
@@ -15,6 +14,25 @@ from quart import current_app
 from werkzeug.exceptions import HTTPException
 
 cluster = Cluster(host=CLUSTER_PEERS_ME, port=2102)
+
+
+def compare_tables(d1, d2):
+    keys1 = set(d1.keys())
+    keys2 = set(d2.keys())
+
+    added = keys2 - keys1
+    removed = keys1 - keys2
+    common_keys = keys1 & keys2
+    changed = {doc_id: d2[doc_id] for doc_id in common_keys if d1[doc_id] != d2[doc_id]}
+
+    if not changed and not added and not removed:
+        return None
+
+    return {
+        "changed": changed,
+        "added": {doc_id: d2[doc_id] for doc_id in added},
+        "removed": {doc_id: d1[doc_id] for doc_id in removed},
+    }
 
 
 class ClusterHTTPException(HTTPException):
@@ -62,13 +80,7 @@ class ClusterLock:
 
             for t in self.tables:
                 table_data = {doc.doc_id: doc for doc in db.table(t).all()}
-                diff = DeepDiff(
-                    self.aenter_db_data[t]["data"],
-                    table_data,
-                    ignore_order=False,
-                    report_repetition=True,
-                    view="tree",
-                )
+                diff = compare_tables(self.aenter_db_data[t]["data"], table_data)
 
                 if diff:
                     commit = True
@@ -76,10 +88,10 @@ class ClusterLock:
                         try:
                             if not IN_MEMORY_DB.get("enforce_commit", False):
                                 apply_mode = "PATCHTABLE"
-                                table_delta = Delta(diff)
-                                apply_data = base64.b64encode(
-                                    table_delta.dumps()
-                                ).decode("utf-8")
+                                diff_json_bytes = json.dumps(diff).encode("utf-8")
+                                apply_data = base64.b64encode(diff_json_bytes).decode(
+                                    "utf-8"
+                                )
                             else:
                                 apply_mode = "FULLTABLE"
                                 jb = json.dumps(table_data, sort_keys=True).encode(

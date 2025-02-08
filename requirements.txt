@@ -6,4 +6,3 @@ email-validator
 loguru
 tinydb
 aiotinydb
-deepdiff
