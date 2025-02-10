@@ -1,6 +1,7 @@
 import base64
 import hashlib
 import os
+import json
 
 from cryptography.fernet import Fernet
 from cryptography.fernet import InvalidToken
@@ -23,9 +24,17 @@ __all__ = [
 ]
 
 
-def sha256_filedigest(filename: str):
+def file_digest_sha256(filename: str):
     with open(filename, "rb", buffering=0) as f:
-        return hashlib.file_digest(f, "sha256").hexdigest()
+        return hashlib.file_digest(f, "256").hexdigest()
+
+
+def dict_digest_sha1(d: str):
+    return hashlib.sha1(json.dumps(d, sort_keys=True).encode("utf-8")).hexdigest()
+
+
+def dict_digest_sha256(d: str):
+    return hashlib.sha256(json.dumps(d, sort_keys=True).encode("utf-8")).hexdigest()
 
 
 @validate_call

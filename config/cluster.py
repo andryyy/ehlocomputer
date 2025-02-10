@@ -5,7 +5,7 @@ import os
 from config.database import *
 from config.defaults import CLUSTER_PEERS_ME
 from config.logs import logger
-from hashlib import sha256
+from utils.crypto import dict_digest_sha1
 from tools import evaluate_db_params
 from utils.cluster import Cluster
 from utils.datetimes import ntime_utc_now
@@ -14,25 +14,6 @@ from quart import current_app
 from werkzeug.exceptions import HTTPException
 
 cluster = Cluster(host=CLUSTER_PEERS_ME, port=2102)
-
-
-def compare_tables(d1, d2):
-    keys1 = set(d1.keys())
-    keys2 = set(d2.keys())
-
-    added = keys2 - keys1
-    removed = keys1 - keys2
-    common_keys = keys1 & keys2
-    changed = {doc_id: d2[doc_id] for doc_id in common_keys if d1[doc_id] != d2[doc_id]}
-
-    if not changed and not added and not removed:
-        return None
-
-    return {
-        "changed": changed,
-        "added": {doc_id: d2[doc_id] for doc_id in added},
-        "removed": {doc_id: d1[doc_id] for doc_id in removed},
-    }
 
 
 class ClusterHTTPException(HTTPException):
@@ -45,6 +26,27 @@ class ClusterLock:
     def __init__(self, tables: list | str):
         self.tables = ensure_list(tables)
         self.aenter_db_data = dict()
+
+    @staticmethod
+    def compare_tables(d1, d2):
+        keys1 = set(d1.keys())
+        keys2 = set(d2.keys())
+
+        added = keys2 - keys1
+        removed = keys1 - keys2
+        common_keys = keys1 & keys2
+        changed = {
+            doc_id: d2[doc_id] for doc_id in common_keys if d1[doc_id] != d2[doc_id]
+        }
+
+        if not changed and not added and not removed:
+            return None
+
+        return {
+            "changed": changed,
+            "added": {doc_id: d2[doc_id] for doc_id in added},
+            "removed": {doc_id: d1[doc_id] for doc_id in removed},
+        }
 
     async def __aenter__(self):
         try:
@@ -62,12 +64,9 @@ class ClusterLock:
                 self.aenter_db_data[t]["data"] = {
                     doc.doc_id: doc for doc in db.table(t).all()
                 }
-                self.aenter_db_data[t]["json_bytes"] = json.dumps(
-                    self.aenter_db_data[t]["data"], sort_keys=True
-                ).encode("utf-8")
-                self.aenter_db_data[t]["hash"] = sha256(
-                    self.aenter_db_data[t]["json_bytes"]
-                ).hexdigest()
+                self.aenter_db_data[t]["digest"] = dict_digest_sha1(
+                    self.aenter_db_data[t]["data"]
+                )
 
         return cluster
 
@@ -80,7 +79,7 @@ class ClusterLock:
 
             for t in self.tables:
                 table_data = {doc.doc_id: doc for doc in db.table(t).all()}
-                diff = compare_tables(self.aenter_db_data[t]["data"], table_data)
+                diff = self.compare_tables(self.aenter_db_data[t]["data"], table_data)
 
                 if diff:
                     commit = True
@@ -100,12 +99,12 @@ class ClusterLock:
                                 apply_data = base64.b64encode(jb).decode("utf-8")
 
                             _, receivers = await cluster.send_command(
-                                f"{apply_mode} {t}@{self.aenter_db_data[t]['hash']} {apply_data}",
+                                f"{apply_mode} {t}@{self.aenter_db_data[t]['digest']} {apply_data}",
                                 "*",
                                 ticket=ticket,
                             )
                             await cluster.await_receivers(
-                                ticket, receivers, raise_on_error=True
+                                ticket, receivers, raise_err=True
                             )
                         except Exception as e:
                             error = e
@@ -123,9 +122,7 @@ class ClusterLock:
                         _, receivers = await cluster.send_command(
                             f"COMMIT", "*", ticket=ticket
                         )
-                        await cluster.await_receivers(
-                            ticket, receivers, raise_on_error=True
-                        )
+                        await cluster.await_receivers(ticket, receivers, raise_err=True)
                         os.rename(self.db_params["filename"], TINYDB_PARAMS["filename"])
                     except:
                         logger.error(f"<ClusterLock> failed to commit {ticket}")

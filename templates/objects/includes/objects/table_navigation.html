@@ -1,6 +1,5 @@
 {% set sorting_direction = "asc" if session.get(request.view_args.get("object_type") ~ "_sorting")[1] == False else "desc" %}
 {% set sorting_attr = session.get(request.view_args.get("object_type") ~ "_sorting")[0] %}
-{% set filters = session.get(request.view_args.get("object_type") ~ "_filters") %}
 
 <tr id="{{ request.view_args.get("object_type") }}-table-navigation-row">
   <td class="table-navigation" data-loading-disable colspan="2">
@@ -41,8 +40,8 @@
     </div>
 
     {% include "objects/includes/objects/table_filters/" ~ request.view_args.get("object_type") ~ ".html" %}
-    <div>
 
+    <div>
       {% for attribute in ["name", "created", "updated"] %}
       <button class="sorting {{ "secondary outline" if sorting_attr != attribute }}"
               type="submit"

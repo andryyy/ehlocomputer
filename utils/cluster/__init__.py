@@ -1,6 +1,5 @@
 import asyncio
 import base64
-import fileinput
 import json
 import os
 import random
@@ -15,8 +14,8 @@ from config.database import *
 from config.logs import logger
 from contextlib import closing, suppress
 from enum import Enum
-from hashlib import sha256
 from tools import CONTEXT_TRANSACTION, evaluate_db_params
+from utils.crypto import dict_digest_sha1
 from utils.datetimes import ntime_utc_now
 from utils.helpers import (
     ensure_list,
@@ -104,10 +103,11 @@ class Cluster:
             self.server_init = False
             self.position = None
 
-        established = [k for k, v in self.connections.items() if v["meta"]]
+        established = set(
+            [k for k, v in self.connections.items() if v["meta"] and v["streams"]]
+        )
         n_online_peers = len(established) + 1
         n_all_peers = len(defaults.CLUSTER_PEERS_THEM) + 1
-
         current_master_node = self.master_node
 
         if not (n_online_peers >= (51 / 100) * n_all_peers):
@@ -119,7 +119,7 @@ class Cluster:
             (
                 (peer, float(data["meta"]["started"]))
                 for peer, data in self.connections.items()
-                if data.get("meta")
+                if data["meta"]
             ),
             key=lambda x: x[1],
             default=(None, float("inf")),
@@ -135,16 +135,14 @@ class Cluster:
                 self.role = Role.MASTER
 
         else:
-            their_master = self.connections[master_node]["meta"]["master"]
-
-            if their_master == "?CONFUSED":
+            if self.connections[master_node]["meta"]["master"] == "?CONFUSED":
                 _destroy()
                 logger.info(
                     f"<set_master_node> potential master {master_node} is still confused, waiting"
                 )
                 return
 
-            if their_master != master_node:
+            if self.connections[master_node]["meta"]["master"] != master_node:
                 _destroy()
                 logger.warning(
                     f"<set_master_node> not electing {master_node}:"
@@ -164,20 +162,18 @@ class Cluster:
         meta_started = to_unique_list(
             data["meta"]["started"]
             for data in self.connections.values()
-            if data.get("meta")
+            if data["meta"]
         )
-        self_position = None
-        for idx, s in enumerate(meta_started, 1):
-            if float(s) > self.started:
-                self_position = idx
-                break
-
-        if self_position == None:
-            self_position = len(meta_started) + 1
 
         if self.server_init:
-            self.position = self_position
+            for idx, s in enumerate(meta_started, 1):
+                if float(s) > self.started:
+                    self.position = idx
+                    break
+            else:
+                self.position = len(meta_started) + 1
 
+        self.election_digest = established
         logger.debug(f"<set_master_node> cluster size {n_online_peers}/{n_all_peers}")
 
     def log_rx(self, peer: str, msg: str, max_msg_len=200):
@@ -275,13 +271,10 @@ class Cluster:
                 ticket, cmd, peer_info = await self._recv((reader, writer))
                 self._set_master_node()
                 IN_MEMORY_DB["connection_failures"][peer_info["bind"]] = 0
-                # if (ntime_utc_now() - float(ticket)) > 15.0:
-                #     continue
-
             except asyncio.exceptions.IncompleteReadError:
                 async with self.receiving:
                     ticket, receivers = await self.send_command("STATUS", "*")
-                    await self.await_receivers(ticket, receivers, raise_on_error=False)
+                    await self.await_receivers(ticket, receivers, raise_err=False)
                     self._set_master_node()
                     break
 
@@ -316,7 +309,7 @@ class Cluster:
 
                     _, _, payload = cmd.partition(" ")
                     table_w_hash, table_payload = payload.split(" ")
-                    table, table_hash = table_w_hash.split("@")
+                    table, table_digest = table_w_hash.split("@")
 
                     db_params = evaluate_db_params(ticket)
 
@@ -333,13 +326,9 @@ class Cluster:
                                     table_data = {
                                         doc.doc_id: doc for doc in db.table(table).all()
                                     }
-                                    local_table_hash = sha256(
-                                        json.dumps(table_data, sort_keys=True).encode(
-                                            "utf-8"
-                                        )
-                                    ).hexdigest()
+                                    local_table_digest = dict_digest_sha1(table_data)
 
-                                    if local_table_hash != table_hash:
+                                    if local_table_digest != table_digest:
                                         await self.send_command(
                                             CritErrors.TABLE_HASH_MISMATCH.value,
                                             [peer_info["bind"]],
@@ -356,12 +345,14 @@ class Cluster:
                                         db.table(table).insert(
                                             Document(doc, doc_id=doc_id)
                                         )
-                                    for doc_id, doc in diff["removed"].items():
-                                        d = db.table(table).get(doc_id=doc_id)
-                                        if d.doc_id == doc_id:
-                                            db.table(table).remove(
-                                                Query().id == doc["id"]
-                                            )
+                                    db.table(table).remove(
+                                        Query().id.one_of(
+                                            [
+                                                doc["id"]
+                                                for doc in diff["removed"].values()
+                                            ]
+                                        )
+                                    )
 
                                 elif cmd.startswith("FULLTABLE"):
                                     insert_data = json.loads(
@@ -554,7 +545,7 @@ class Cluster:
                         f"UNLOCK {','.join(tables)}", [self.master_node]
                     )
                     ret, responses = await self.await_receivers(
-                        ticket, receivers, raise_on_error=True
+                        ticket, receivers, raise_err=True
                     )
                 except IncompleteClusterResponses:
                     errors.append("master_not_reachable")
@@ -567,7 +558,7 @@ class Cluster:
         if "master_not_reachable" in errors:
             async with self.receiving:
                 ticket, receivers = await self.send_command("STATUS", "*")
-                await self.await_receivers(ticket, receivers, raise_on_error=False)
+                await self.await_receivers(ticket, receivers, raise_err=False)
             raise DistLockCancelled("Master re-election")
 
     async def acquire_lock(self, tables: list = ["main"]) -> str:
@@ -601,7 +592,7 @@ class Cluster:
                         f"LOCK {','.join(tables)}", [self.master_node]
                     )
                     result, responses = await self.await_receivers(
-                        ticket, receivers, raise_on_error=True
+                        ticket, receivers, raise_err=True
                     )
                     if "BUSY" in responses:
                         errors.append("master_busy")
@@ -628,7 +619,7 @@ class Cluster:
                     self.locks[t]["lock"].release()
             async with self.receiving:
                 ticket, receivers = await self.send_command("STATUS", "*")
-                await self.await_receivers(ticket, receivers, raise_on_error=False)
+                await self.await_receivers(ticket, receivers, raise_err=False)
             raise DistLockCancelled("Master re-election")
 
         self._context_token = CONTEXT_TRANSACTION.set(ntime_utc_now())
@@ -637,6 +628,7 @@ class Cluster:
     async def request_files(
         self, files: FilePath | list[FilePath], peers: Literal["*"] | list
     ):
+        assert self.locks["files"]["lock"].locked()
         async with self.receiving:
             for file in ensure_list(files):
                 try:
@@ -648,7 +640,7 @@ class Cluster:
                         f"FILEGET {file}", peers
                     )
                     _, responses = await self.await_receivers(
-                        ticket, receivers, raise_on_error=True
+                        ticket, receivers, raise_err=True
                     )
 
                     for r in responses:
@@ -684,7 +676,7 @@ class Cluster:
             async with self.receiving:
                 ticket, receivers = await self.send_command("INIT", "*")
                 status, responses = await self.await_receivers(
-                    ticket, receivers, raise_on_error=False
+                    ticket, receivers, raise_err=False
                 )
                 if status:
                     self._set_master_node()
@@ -694,8 +686,9 @@ class Cluster:
         async with server:
             await shutdown_trigger.wait()
 
-    async def await_receivers(self, ticket, receivers, raise_on_error: bool):
-        _err_msg = None
+    async def await_receivers(self, ticket, receivers, raise_err: bool):
+        errors = []
+        missing_receivers = []
         try:
             while not all(
                 r in [peer for peer, _ in self.tickets[ticket]] for r in receivers
@@ -707,30 +700,33 @@ class Cluster:
                 for r in receivers
                 if r not in [peer for peer, _ in self.tickets[ticket]]
             ]
-            _err_msg = f"missing receviers: {', '.join(missing_receivers)}"
+            errors.append(
+                f"Timeout waiting for receviers: {', '.join(missing_receivers)}"
+            )
+            for peer in missing_receivers:
+                del self.connections[peer]
+
         finally:
             responses = [response for _, response in self.tickets[ticket]]
             critical_errors = {p: m for p, m in self.tickets[ticket] if "CRIT" in m}
 
-            if not _err_msg and critical_errors:
-                for peer, critical_error in critical_errors.items():
-                    IN_MEMORY_DB["peer_critical"][peer] = critical_error
+            for peer, critical_error in critical_errors.items():
+                IN_MEMORY_DB["peer_critical"][peer] = critical_error
+                errors.append(f"{peer} is in critical state: {critical_error}")
 
-                _err_msg = critical_errors
-
-            elif not _err_msg and len(responses) != len(receivers):
-                _err_msg = "unplausible amount of responses for ticket"
+            if not missing_receivers and len(responses) != len(receivers):
+                errors.append("Unplausible amount of responses for ticket")
 
             del self.tickets[ticket]
 
-            if _err_msg:
-                logger.error(_err_msg)
-                if raise_on_error:
-                    raise IncompleteClusterResponses(f"<await_receivers> {_err_msg}")
+            if errors:
+                logger.error("\n".join(errors))
+                if raise_err:
+                    raise IncompleteClusterResponses("\n".join(errors))
             else:
-                logger.success(f"<{ticket}> ticket confirmed")
+                logger.success(f"<{ticket}> Ticket confirmed")
 
-            return not _err_msg, responses
+            return not errors, responses
 
     async def _cli_processor(self, streams: StreamPair):
         try:

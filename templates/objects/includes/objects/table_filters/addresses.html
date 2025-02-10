@@ -1,14 +1,32 @@
+{% set filters = session.get(request.view_args.get("object_type") ~ "_filters") %}
+
 <div id="{{ request.view_args.get("object_type") }}-table-filters" class="filters" _="install objectFilters(submitForm: #{{ request.view_args.get("object_type") }}-table-search)">
 
-  {% for option in request.form_options.domains %}
-  <button
-    type="submit"
-    name="_filters"
-    value="assigned_domain:{{ option["value"] }}"
-    class="{{ "active button-pink-300" if option["value"] in filters["assigned_domain"]|ensurelist else "outline primary" }}">
-  {{ option["name"] }}
-  </button>
-  {% endfor %}
+  <input type="text" placeholder="Filter domains"
+    _="init
+      hide <button:not(.button-pink-300)/> in .filter-buttons
+      remove @hidden from .filter-buttons
+    end
+    on keyup
+      if my value is ''
+        hide <button:not(.button-pink-300)/> in .filter-buttons
+      else
+        show <button/> in .filter-buttons when its textContent contains my value
+      end
+      show <button.button-pink-300/> in .filter-buttons
+    end">
+
+  <div class="filter-buttons" hidden>
+    {% for option in request.form_options.domains %}
+    <button
+      type="submit"
+      name="_filters"
+      value="assigned_domain:{{ option["value"] }}"
+      class="{{ "active button-pink-300" if option["value"] in filters["assigned_domain"]|ensurelist else "outline primary" }}">
+    {{ option["name"] }}
+    </button>
+    {% endfor %}
+  </div>
 
   <div class="generated-filters"></div>
   <template id="filter-item">
