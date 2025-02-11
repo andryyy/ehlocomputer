@@ -17,12 +17,7 @@ from enum import Enum
 from tools import CONTEXT_TRANSACTION, evaluate_db_params
 from utils.crypto import dict_digest_sha1
 from utils.datetimes import ntime_utc_now
-from utils.helpers import (
-    ensure_list,
-    is_path_within_cwd,
-    read_n_to_last_line,
-    to_unique_list,
-)
+from utils.helpers import ensure_list, is_path_within_cwd, to_unique_sorted_str_list
 from uuid import uuid4
 from typing import Literal
 from pydantic import FilePath, validate_call
@@ -69,6 +64,7 @@ class CritErrors(Enum):
     NOTHING_TO_COMMIT = "ACK CRIT:NOTHING_TO_COMMIT"
     INVALID_FILE_PATH = "ACK CRIT:INVALID_FILE_PATH"
     NO_TRUST = "ACK CRIT:NO_TRUST"
+    PEERS_MISMATCH = "ACK CRIT:PEERS_MISMATCH"
 
 
 class CRIT(Enum):
@@ -92,6 +88,7 @@ class Cluster:
         self.tickets = dict()
         self.server_init = False
         self.position = None
+        self.connected_nodes = None
 
         IN_MEMORY_DB["connection_failures"] = dict()
         IN_MEMORY_DB["peer_critical"] = dict()
@@ -102,6 +99,7 @@ class Cluster:
             self.role = Role.SLAVE
             self.server_init = False
             self.position = None
+            self.connected_nodes = None
 
         established = set(
             [k for k, v in self.connections.items() if v["meta"] and v["streams"]]
@@ -159,7 +157,7 @@ class Cluster:
                     f"<set_master_node> elected foreign peer {self.master_node} as master"
                 )
 
-        meta_started = to_unique_list(
+        meta_started = to_unique_sorted_str_list(
             data["meta"]["started"]
             for data in self.connections.values()
             if data["meta"]
@@ -173,7 +171,12 @@ class Cluster:
             else:
                 self.position = len(meta_started) + 1
 
-        self.election_digest = established
+            self.connected_nodes = ";".join(
+                data["meta"]["bind"]
+                for data in self.connections.values()
+                if data["meta"] and data["streams"]
+            )
+
         logger.debug(f"<set_master_node> cluster size {n_online_peers}/{n_all_peers}")
 
     def log_rx(self, peer: str, msg: str, max_msg_len=200):
@@ -202,6 +205,9 @@ class Cluster:
             cmd,
             "META",
             f"NAME {defaults.NODENAME}",
+            "CONNECTIONS {connected_nodes}".format(
+                connected_nodes=self.connected_nodes or "?CONFUSED"
+            ),
             f"STARTED {self.started}",
             "POSITION {position}".format(position=self.position or "?CONFUSED"),
             "MASTER {master_node}".format(master_node=self.master_node or "?CONFUSED"),
@@ -228,6 +234,7 @@ class Cluster:
 
         patterns = [
             r"NAME (?P<name>\S+)",
+            r"CONNECTIONS (?P<connections>\S+)",
             r"STARTED (?P<started>\S+)",
             r"POSITION (?P<position>\S+)",
             r"MASTER (?P<master>\S+)",
@@ -290,10 +297,12 @@ class Cluster:
                     )
 
                 elif cmd.startswith("PATCHTABLE") or cmd.startswith("FULLTABLE"):
-                    if cmd.startswith("FULLTABLE") and IN_MEMORY_DB[
-                        "peer_critical"
-                    ].get(peer_info["bind"]):
-                        del IN_MEMORY_DB["peer_critical"][peer_info["bind"]]
+                    if (
+                        cmd.startswith("FULLTABLE")
+                        and IN_MEMORY_DB["peer_critical"].get(peer_info["bind"])
+                        == "CRIT:TABLE_HASH_MISMATCH"
+                    ):
+                        IN_MEMORY_DB["peer_critical"][peer_info["bind"]] = None
 
                     if (
                         cmd.startswith("PATCHTABLE")
@@ -429,6 +438,23 @@ class Cluster:
                 elif cmd.startswith("LOCK"):
                     _, _, tables_str = cmd.partition(" ")
                     tables = tables_str.split(",")
+
+                    peer_connections = [
+                        c
+                        for c in peer_info["connections"].split(";")
+                        if c != defaults.CLUSTER_PEERS_ME
+                    ] + [peer_info["bind"]]
+
+                    if set(peer_connections) != set(self.connected_nodes.split(";")):
+                        logger.error(
+                            f'Rejecting LOCK for {peer_info["bind"]} due to inconsistent connections'
+                        )
+                        await self.send_command(
+                            CritErrors.PEERS_MISMATCH.value,
+                            [peer_info["bind"]],
+                            ticket=ticket,
+                        )
+                        continue
 
                     try:
                         for t in tables:
@@ -596,10 +622,23 @@ class Cluster:
                     )
                     if "BUSY" in responses:
                         errors.append("master_busy")
+
+                    if (
+                        IN_MEMORY_DB["peer_critical"].get(self.master_node)
+                        == "CRIT:PEERS_MISMATCH"
+                    ):
+                        IN_MEMORY_DB["peer_critical"][self.master_node] = None
+
                 except asyncio.CancelledError:
                     errors.append("lock_cancelled")
                 except IncompleteClusterResponses:
-                    errors.append("master_not_reachable")
+                    if (
+                        IN_MEMORY_DB["peer_critical"][self.master_node]
+                        == "CRIT:PEERS_MISMATCH"
+                    ):
+                        errors.append("lock_rejected")
+                    else:
+                        errors.append("master_not_reachable")
 
         if "master_busy" in errors:
             for t in tables:
@@ -607,11 +646,20 @@ class Cluster:
                     self.locks[t]["lock"].release()
             return await self.acquire_lock(tables)
 
+        if "lock_rejected" in errors:
+            for t in tables:
+                with suppress(RuntimeError):
+                    self.locks[t]["lock"].release()
+            async with self.receiving:
+                ticket, receivers = await self.send_command("STATUS", "*")
+                await self.await_receivers(ticket, receivers, raise_err=False)
+            raise DistLockCancelled("Master rejected LOCK due to inconsistency")
+
         if "lock_cancelled" in errors:
             for t in tables:
                 with suppress(RuntimeError):
                     self.locks[t]["lock"].release()
-            errors.append("master_not_reachable")
+            raise DistLockCancelled("Lock was cancelled")
 
         if "master_not_reachable" in errors:
             for t in tables:
@@ -657,8 +705,10 @@ class Cluster:
                     logger.error(
                         f"<request_files> sending command to peers '{peers}' failed"
                     )
+                    raise
                 except Exception as e:
                     logger.error(f"<request_files> unhandled error: {e}")
+                    raise
 
     async def run(self, shutdown_trigger) -> None:
         server = await asyncio.start_server(
@@ -712,7 +762,7 @@ class Cluster:
 
             for peer, critical_error in critical_errors.items():
                 IN_MEMORY_DB["peer_critical"][peer] = critical_error
-                errors.append(f"{peer} is in critical state: {critical_error}")
+                errors.append(f"{peer} reported a critical error: {critical_error}")
 
             if not missing_receivers and len(responses) != len(receivers):
                 errors.append("Unplausible amount of responses for ticket")
