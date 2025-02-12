@@ -112,8 +112,10 @@ behavior inlineHtmxRename
 end
 
 behavior bodydefault
+  on htmx:wsError or htmx:wsClose
+    set #ws-indicator's textContent to '⭕'
+  end
   on htmx:responseError
-    log event.detail.xhr
     set status to event.detail.xhr.status
     if status >= 500
       trigger notification(title: 'Server error', level: 'error', message: 'The server could not handle the given request', duration: 10000)

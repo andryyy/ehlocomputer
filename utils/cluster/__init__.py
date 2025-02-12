@@ -260,9 +260,9 @@ class Cluster:
         return ticket, cmd, meta_dict
 
     def get_backoff_time(self, node_position, offset_factor=0.05, base_delay=0.1):
-        join_offset = float(node_position or 0) * offset_factor
-        random_factor = random.uniform(0.85, 1.15)
-        return (base_delay + join_offset) * random_factor
+        position_offset = float(node_position or 0) * offset_factor
+        jitter = random.uniform(0.95, 1.05)
+        return (base_delay + position_offset) * jitter
 
     async def connection_handler(
         self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter
@@ -801,7 +801,10 @@ class Cluster:
                     awaiting = dict()
                     idx = 1
                     for k, v in IN_MEMORY_DB.items():
-                        if isinstance(v, dict) and v.get("status") == "awaiting":
+                        if (
+                            isinstance(v, dict)
+                            and v.get("token_type") == "cli_confirmation"
+                        ):
                             awaiting[idx] = (k, v["intention"])
                             idx += 1
                     writer.write(f"{json.dumps(awaiting)}\n".encode("ascii"))

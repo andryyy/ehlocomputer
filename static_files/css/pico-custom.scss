@@ -71,6 +71,7 @@ table td a[role="button"] {
 
 .no-text-decoration {
   text-decoration: none !important;
+  border-bottom: none !important;
 }
 
 [data-loading] {
@@ -181,25 +182,14 @@ table td a[role="button"] {
   --pico-color: #{$fuchsia-100};
 }
 
-.flex {
-  display: flex;
-  gap: var(--pico-spacing);
-  align-items: center;
-  margin-block: var(--pico-spacing);
+.login-grid {
+  display: grid;
+  grid-template-columns: 20% 60% 20%;
+  grid-template-rows: 1fr;
 }
-.flex label {
-  display: inline;
-}
-.flex-center {
-  justify-content: center;
-  flex-wrap: wrap;
-}
-.flex-end {
-  justify-content: flex-end;
-}
-.flex-space-between {
-  justify-content: space-between;
-}
+
+.login-register { grid-column-start: 2; }
+
 
 thead th, thead td, tfoot th, tfoot td {
   --pico-font-weight: 400;
@@ -231,13 +221,32 @@ dialog article {
   grid-column: span 3;
 }
 
+.grid-end {
+  display: grid;
+  justify-content: end;
+  grid-auto-columns: max-content;
+  grid-auto-flow: column;
+  gap: calc(var(--pico-spacing) /2);
+  align-items: center;
+  white-space: nowrap;
+}
+.grid-space-between {
+  display: grid;
+  justify-content: space-between;
+  grid-auto-columns: max-content;
+  grid-auto-flow: column;
+  gap: calc(var(--pico-spacing) /2);
+  white-space: nowrap;
+  align-items: center;
+  margin: calc(var(--pico-spacing) /2) auto;
+}
+
 .table-select {
   background-color: rgb(128 128 128 / 10%);
   backdrop-filter: blur(1px);
   position: sticky;
   bottom: var(--pico-form-element-spacing-vertical);
   padding: var(--pico-form-element-spacing-vertical) var(--pico-form-element-spacing-horizontal);
-  margin: var(--pico-form-element-spacing-vertical) var(--pico-form-element-spacing-horizontal);
 }
 
 nav details.dropdown {
@@ -256,8 +265,7 @@ nav details.dropdown {
 }
 @media (max-width: 1024px) {
   .split-grid.grid {
-    grid-column-gap: 2;
-    grid-row-gap: 2;
+    gap: 1em 1em;
   }
   .split-grid.grid > article {
     padding: 0;

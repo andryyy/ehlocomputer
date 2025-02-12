@@ -19,7 +19,7 @@ from tools.users import (
 )
 from utils import wrappers
 from utils.datetimes import utc_now_as_str
-from web.helpers import trigger_notification, validation_error, session_clear
+from web.helpers import trigger_notification, validation_error, session_clear, ws_htmx
 
 blueprint = Blueprint("profile", __name__, url_prefix="/profile")
 

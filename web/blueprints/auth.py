@@ -140,6 +140,7 @@ async def login_request_start():
     IN_MEMORY_DB[request_token] = {
         "intention": f"Authenticate user: {request_data.login}",
         "status": "awaiting",
+        "token_type": "web_confirmation",
         "requested_login": request_data.login,
     }
 
@@ -219,6 +220,7 @@ async def login_token():
         IN_MEMORY_DB[token] = {
             "intention": f"Authenticate user: {request_data.login}",
             "status": "awaiting",
+            "token_type": "cli_confirmation",
             "login": request_data.login,
         }
         app.add_background_task(
@@ -289,10 +291,9 @@ async def login_webauthn_options():
     try:
         user_id = await what_id(login=request.form_parsed.get("login"))
         user = await get_user(user_id=user_id)
-
         if not user.credentials:
             raise ValidationError
-    except ValidationError:
+    except (ValidationError, ValueError):
         return validation_error([{"loc": ["login"], "msg": f"User is not available"}])
 
     allow_credentials = [
@@ -514,7 +515,7 @@ async def register_webauthn():
         await ws_htmx(
             session["login"],
             "beforeend",
-            f'<div id="after-cred-add" hx-trigger="load delay:1s" hx-target="#body-main" hx-get="/profile"></div>',
+            f'<div id="after-cred-add" hx-sync="abort" hx-trigger="load delay:1s" hx-target="#body-main" hx-get="/profile"></div>',
         )
         return trigger_notification(
             level="success",

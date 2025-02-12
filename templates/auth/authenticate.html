@@ -12,7 +12,7 @@
 {% endblock breadcrumb %}
 
 {% block body %}
-<section class="flex-center">
+<div class="login-grid">
   {% include "auth/includes/login/login.html" %}
   {% with hidden=True %}
     {% include "auth/includes/register/register.html" %}

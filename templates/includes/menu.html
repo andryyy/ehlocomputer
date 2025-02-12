@@ -88,17 +88,20 @@
 <hr>
 
 {% if session["login"] %}
-<div id="nav-sub-primary" hx-target="#body-main" class="flex flex-space-between" >
+<div id="nav-sub-primary" hx-target="#body-main" class="grid-space-between">
   <div class="no-text-wrap hi">
     👋 <b><a href="#" hx-get="/profile">{{ session.get("login") or "guest" }}</a></b>
   </div>
   <div>
-  {% for role in session.get("acl", []) %}<mark>{{ role }}</mark>&nbsp;{% endfor %}
+  {% for role in session.get("acl", []) %}
+    <mark>{{ role }}</mark>
+  {% endfor %}
   </div>
 </div>
 {% endif %}
 
-<div id="nav-sub-secondary" hx-target="#body-main" class="flex flex-end">
+<div id="nav-sub-secondary" hx-target="#body-main" class="grid-end">
+  <div id="ws-indicator" class="no-text-decoration" data-tooltip="{% if session["login"] %}Disconnected{% else %}Not logged in{% endif %}" hx-swap-oob="outerHTML">⭕</div>
   {% if "system" in session.get("acl", []) %}
   <div id="enforce-commit" hx-swap-oob="outerHTML">
     {% if ENFORCE_COMMIT_MODE %}
@@ -112,7 +115,6 @@
     {% endif %}
   </div>
   {% endif %}
-
   <div id="nav-theme-toggle"
     _="on updateTheme
         if not localStorage.theme
@@ -127,9 +129,7 @@
         set my @class to (@data-theme of <html/>)
         set localStorage.theme to (@data-theme of <html/>)
       end
-
       init trigger updateTheme end
-
       on click
         if I match .light
           set (@data-theme of <html/>) to 'dark'

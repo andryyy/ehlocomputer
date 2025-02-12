@@ -15,6 +15,7 @@
           autocapitalize="off"
           spellcheck="false"
           required>
+        <small>You will be asked for your passkey.</small>
       </fieldset>
       <fieldset>
         <button type="submit"
@@ -22,7 +23,7 @@
           id="authenticate"
           hx-target="this"
           hx-swap="innerHTML">
-            Passkey login
+            Login
         </button>
       </fieldset>
       <hr>
@@ -31,7 +32,7 @@
         <div id="auth-options" hidden>
           <hr>
           <fieldset>
-            <label>Send a login request logged in users</label>
+            <label>Send a login request to this user</label>
             <button href="#" id="token-authentication"
             hx-post="/auth/login/request/start"
             hx-target="#body-main"
@@ -53,7 +54,6 @@
         </div>
       </article>
   </form>
-
   <form
     data-loading-disable
     hx-trigger="submit throttle:1s"
