@@ -3,7 +3,7 @@ import json
 
 from base64 import b64decode, b64encode
 from config import defaults
-from config.cluster import ClusterLock
+from utils.cluster.http_lock import ClusterLock
 from config.database import IN_MEMORY_DB
 from models import auth as auth_model
 from pydantic import ValidationError, TypeAdapter

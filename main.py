@@ -4,7 +4,7 @@ import ssl
 import sys
 
 from config import defaults
-from config.cluster import cluster
+from utils.cluster.cluster import cluster
 from hypercorn.asyncio import serve
 from hypercorn.config import Config
 from hypercorn.middleware import ProxyFixMiddleware

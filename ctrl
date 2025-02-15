@@ -79,7 +79,7 @@ async def main():
             elif data == b"\x02":
                 logger.warning("User is already administrator")
             elif data == b"\x03":
-                logger.error("User does not exist")
+                logger.error("User does not exist or an error occured")
 
         case {
             "confirm_token": True,

@@ -6,8 +6,7 @@ from pydantic import (
     BaseModel,
     Field,
     computed_field,
-    model_validator,
-    field_validator,
+    ConfigDict,
 )
 from pydantic_core import PydanticCustomError
 from utils.datetimes import utc_now_as_str
@@ -17,6 +16,8 @@ from uuid import UUID, uuid4
 
 
 class User(BaseModel):
+    model_config = ConfigDict(validate_assignment=True)
+
     id: Annotated[str, AfterValidator(lambda v: str(UUID(v)))]
     login: str
     credentials: dict[str, CredentialRead] | list[str] = {}
@@ -49,6 +50,8 @@ class UserAdd(BaseModel):
 
 
 class UserPatch(BaseModel):
+    model_config = ConfigDict(validate_assignment=True)
+
     login: str = Field(min_length=1)
     acl: Annotated[
         Literal[*USER_ACLS] | list[Literal[*USER_ACLS]],

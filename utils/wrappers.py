@@ -3,7 +3,7 @@ import json
 
 from config import defaults
 from config.logs import logger
-from config.cluster import cluster
+from utils.cluster.cluster import cluster
 from contextlib import suppress
 from functools import wraps
 from models.auth import UserSession

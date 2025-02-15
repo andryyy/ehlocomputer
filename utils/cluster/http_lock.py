@@ -3,23 +3,14 @@ import json
 import os
 
 from config.database import *
-from config.defaults import CLUSTER_PEERS_ME
 from config.logs import logger
 from utils.crypto import dict_digest_sha1
 from tools import evaluate_db_params
-from utils.cluster import Cluster
+from utils.cluster.cluster import cluster
+from utils.cluster.exceptions import ClusterHTTPException
 from utils.datetimes import ntime_utc_now
 from utils.helpers import ensure_list
 from quart import current_app
-from werkzeug.exceptions import HTTPException
-
-cluster = Cluster(host=CLUSTER_PEERS_ME, port=2102)
-
-
-class ClusterHTTPException(HTTPException):
-    def __init__(self, description=None):
-        super().__init__(description)
-        self.code = 999
 
 
 class ClusterLock:
@@ -36,7 +27,9 @@ class ClusterLock:
         removed = keys1 - keys2
         common_keys = keys1 & keys2
         changed = {
-            doc_id: d2[doc_id] for doc_id in common_keys if d1[doc_id] != d2[doc_id]
+            doc_id: (d1[doc_id], d2[doc_id])
+            for doc_id in common_keys
+            if d1[doc_id] != d2[doc_id]
         }
 
         if not changed and not added and not removed:

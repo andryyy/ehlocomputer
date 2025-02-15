@@ -3,6 +3,5 @@ jinja2
 pydantic
 webauthn
 email-validator
-loguru
 tinydb
 aiotinydb

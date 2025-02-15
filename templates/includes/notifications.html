@@ -69,7 +69,7 @@
       remove me
     end
   ">
-    <strong>${title}</strong><br>
+    <span class="notification-title">${title}</span><br>
     @if level is in ['error', 'warning', 'validationError'] set bullet to '&#10071;' end
     @if message is a Array
       @repeat for m in message

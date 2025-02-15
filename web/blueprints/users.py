@@ -1,6 +1,6 @@
 import re
 
-from config.cluster import ClusterLock
+from utils.cluster.http_lock import ClusterLock
 from models.tables import TableSearchHelper
 from models.forms.users import UserProfile
 from pydantic import ValidationError

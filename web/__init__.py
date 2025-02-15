@@ -5,7 +5,7 @@ import time
 
 from config import defaults
 from config.database import IN_MEMORY_DB
-from config.cluster import ClusterHTTPException
+from utils.cluster.http_lock import ClusterHTTPException
 from contextlib import suppress
 from quart import Quart, request
 from utils.cluster import Cluster
@@ -17,7 +17,7 @@ from web.blueprints import profile
 from web.blueprints import root
 from web.blueprints import system
 from web.blueprints import users
-from web.helpers import parse_form_to_dict, trigger_notification
+from web.helpers import parse_form_to_dict, trigger_notification, ws_htmx
 from werkzeug.exceptions import HTTPException
 
 app = Quart(
@@ -57,12 +57,26 @@ def load_context():
 
 @app.errorhandler(ClusterHTTPException)
 async def handle_cluster_error(error):
+    error_msg = str(error.description)
+    await ws_htmx(
+        "system",
+        "beforeend",
+        """<div hidden _="on load trigger
+            notification(
+            title: 'Cluster error',
+            level: 'system',
+            message: '{error}',
+            duration: 10000
+            )"></div>""".format(
+            error=error_msg
+        ),
+    )
     return trigger_notification(
         level="error",
         response_body="",
         response_code=error.code,
-        title="🤖 Cluster error",
-        message=f"An error occured:\n{error.description}",
+        title="Cluster error",
+        message=error_msg,
     )
 
 

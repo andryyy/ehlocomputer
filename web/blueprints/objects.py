@@ -1,5 +1,5 @@
 import re
-from config.cluster import ClusterLock
+from utils.cluster.http_lock import ClusterLock
 from models.tables import TableSearchHelper
 from models import objects as objects_model
 from pydantic import ValidationError

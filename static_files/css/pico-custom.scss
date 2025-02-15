@@ -176,6 +176,12 @@ table td a[role="button"] {
   --pico-icon: var(--pico-icon-chevron);
   --pico-color: #{$slate-50};
 }
+.notification-title {
+  font-weight: bold;
+}
+.notification-system > .notification-title:before {
+  content:"\1F4E2\0020 Broadcast:\0020";
+}
 .notification-system {
   --pico-background-color: #{$fuchsia-800};
   --pico-icon: var(--pico-icon-chevron);

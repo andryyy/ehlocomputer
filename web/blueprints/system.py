@@ -3,7 +3,8 @@ import fileinput
 import json
 
 from config import defaults
-from config.cluster import ClusterLock, cluster
+from utils.cluster.cluster import cluster
+from utils.cluster.http_lock import ClusterLock
 from config.database import *
 from datetime import datetime
 from models import system as system_model
@@ -99,6 +100,7 @@ async def cluster_reset_failed_peer():
     peer = request.form_parsed.get("peer")
     if peer and peer in IN_MEMORY_DB["connection_failures"]:
         IN_MEMORY_DB["connection_failures"][peer] = 0
+        IN_MEMORY_DB["peer_critical"].pop(cluster.master_node, None)
         return trigger_notification(
             level="success",
             response_code=204,

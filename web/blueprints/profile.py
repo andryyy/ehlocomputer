@@ -1,4 +1,4 @@
-from config.cluster import ClusterLock
+from utils.cluster.http_lock import ClusterLock
 from models.users import UserProfile
 from pydantic import ValidationError, validate_call
 from quart import (

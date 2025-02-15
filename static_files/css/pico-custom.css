@@ -3039,6 +3039,14 @@ table td a[role=button] {
   --pico-color: #eff1f4;
 }
 
+.notification-title {
+  font-weight: bold;
+}
+
+.notification-system > .notification-title:before {
+  content: "📢 Broadcast: ";
+}
+
 .notification-system {
   --pico-background-color: #5c0d41;
   --pico-icon: var(--pico-icon-chevron);

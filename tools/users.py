@@ -7,7 +7,7 @@ from config import defaults
 from config.database import *
 from config.logs import logger
 from pydantic import Field, constr, validate_call
-from tools import cluster_task, evaluate_db_params
+from tools import evaluate_db_params
 from utils.helpers import ensure_list, merge_deep, merge_models
 from uuid import UUID
 
@@ -17,6 +17,19 @@ def _create_credentials_mapping(credentials: dict):
     for c in credentials:
         user_credentials.update({c["id"]: auth_model.CredentialRead.parse_obj(c)})
     return user_credentials
+
+
+@validate_call
+async def what_id(login: str):
+    db_params = evaluate_db_params()
+
+    async with TinyDB(**db_params) as db:
+        user = db.table("users").get(Query().login == login)
+
+    if user:
+        return user["id"]
+    else:
+        raise ValueError("login", "The provided login name is unknown")
 
 
 @validate_call
@@ -34,20 +47,7 @@ async def create(data: dict):
 
 
 @validate_call
-async def what_id(login: str):
-    db_params = evaluate_db_params()
-
-    async with TinyDB(**db_params) as db:
-        user = db.table("users").get(Query().login == login)
-
-    if user:
-        return user["id"]
-    else:
-        raise ValueError("login", "The provided login name is unknown")
-
-
-@validate_call
-async def get(user_id: UUID):
+async def get(user_id: UUID, join_credentials: bool = True):
     db_params = evaluate_db_params()
 
     async with TinyDB(**db_params) as db:
@@ -57,18 +57,22 @@ async def get(user_id: UUID):
         credentials = db.table("credentials").search(
             (Query().id.one_of(user.credentials))
         )
-        user.credentials = _create_credentials_mapping(credentials)
+        if join_credentials:
+            user.credentials = _create_credentials_mapping(credentials)
+
         return user
 
 
 @validate_call
 async def delete(user_id: UUID):
     db_params = evaluate_db_params()
+    user = await get(user_id=user_id, join_credentials=False)
+
+    if not user:
+        raise ValueError("name", "The provided user does not exist")
 
     async with TinyDB(**db_params) as db:
-        user = db.table("users").get(Query().id == str(user_id))
-        for credential_hex_id in user["credentials"]:
-            db.table("credentials").remove(Query().id == credential_hex_id)
+        db.table("credentials").remove(Query().id.one_of(user.credentials))
         deleted = db.table("users").remove(Query().id == str(user_id))
         return user["id"]
 
@@ -76,14 +80,17 @@ async def delete(user_id: UUID):
 @validate_call
 async def create_credential(user_id: UUID, data: dict):
     db_params = evaluate_db_params()
-
     credential = auth_model.AddCredential.parse_obj(data)
+    user = await get(user_id=user_id, join_credentials=False)
+
+    if not user:
+        raise ValueError("name", "The provided user does not exist")
+
     async with TinyDB(**db_params) as db:
-        user = db.table("users").get(Query().id == str(user_id))
         db.table("credentials").insert(credential.dict())
-        user["credentials"].append(credential.id)
+        user.credentials.append(credential.id)
         db.table("users").update(
-            {"credentials": user["credentials"]},
+            {"credentials": user.credentials},
             Query().id == str(user_id),
         )
         return credential.id
@@ -94,14 +101,17 @@ async def delete_credential(
     user_id: UUID, hex_id: constr(pattern=r"^[0-9a-fA-F]+$", min_length=2)
 ):
     db_params = evaluate_db_params()
+    user = await get(user_id=user_id, join_credentials=False)
+
+    if not user:
+        raise ValueError("name", "The provided user does not exist")
 
     async with TinyDB(**db_params) as db:
-        user = db.table("users").get(Query().id == str(user_id))
-        if hex_id in user["credentials"]:
-            user["credentials"].remove(hex_id)
+        if hex_id in user.credentials:
+            user.credentials.remove(hex_id)
             db.table("credentials").remove(Query().id == hex_id)
             db.table("users").update(
-                {"credentials": user["credentials"]}, Query().id == str(user_id)
+                {"credentials": user.credentials}, Query().id == str(user_id)
             )
             return hex_id
 
@@ -110,6 +120,10 @@ async def delete_credential(
 async def patch(user_id: UUID, data: dict):
     db_params = evaluate_db_params()
     patch_user = users_model.UserPatch.parse_obj(data)
+    user = await get(user_id=user_id, join_credentials=False)
+
+    if not user:
+        raise ValueError("name", "The provided user does not exist")
 
     async with TinyDB(**db_params) as db:
         if db.table("users").get(
@@ -117,10 +131,8 @@ async def patch(user_id: UUID, data: dict):
         ):
             raise ValueError("login", "The provided login name exists")
 
-        user = db.table("users").get(Query().id == str(user_id))
-
         orphaned_credentials = [
-            c for c in user["credentials"] if c not in patch_user.credentials
+            c for c in user.credentials if c not in patch_user.credentials
         ]
 
         db.table("users").update(
@@ -129,14 +141,14 @@ async def patch(user_id: UUID, data: dict):
         )
         db.table("credentials").remove(Query().id.one_of(orphaned_credentials))
 
-        return user["id"]
+        return user.id
 
 
 @validate_call
 async def patch_profile(user_id: UUID, data: dict):
     db_params = evaluate_db_params()
+    user = await get(user_id=user_id, join_credentials=False)
 
-    user = await get(user_id)
     if not user:
         raise ValueError("name", "The provided user does not exist")
 
@@ -156,7 +168,10 @@ async def patch_credential(
     user_id: UUID, hex_id: constr(pattern=r"^[0-9a-fA-F]+$", min_length=2), data: dict
 ):
     db_params = evaluate_db_params()
-    user = await get(user_id=user_id)
+    user = await get(user_id=user_id, join_credentials=True)
+
+    if not user:
+        raise ValueError("name", "The provided user does not exist")
 
     if hex_id not in user.credentials:
         raise ValueError(
