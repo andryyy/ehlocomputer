@@ -34,7 +34,7 @@ def load_context():
         except:
             current_master = "Starting..."
     else:
-        current_master = defaults.NODENAME
+        current_master = defaults.CLUSTER_NODENAME
     context["current_master"] = current_master
 
     return context

@@ -8,6 +8,6 @@ logger.add(
     colorize=False,
     rotation=defaults.LOG_FILE_ROTATION,
     retention=defaults.LOG_FILE_RETENTION,
-    text=lambda _: defaults.NODENAME,
+    text=lambda _: defaults.CLUSTER_NODENAME,
     serialize=True,
 )

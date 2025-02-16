@@ -70,7 +70,7 @@ class Cluster:
             ticket,
             cmd,
             "META",
-            f"NAME {defaults.NODENAME}",
+            f"NAME {defaults.CLUSTER_NODENAME}",
             "CONNECTIONS {connected_nodes}".format(
                 connected_nodes=self.connected_nodes or "?CONFUSED"
             ),
@@ -334,13 +334,13 @@ class Cluster:
                                 }
                             await asyncio.wait_for(
                                 self.locks[t]["lock"].acquire(),
-                                0.15 + random.uniform(0.85, 1.15),
+                                0.3 + random.uniform(0.1, 0.5),
                             )
                             self.locks[t]["ticket"] = ticket
 
                     except TimeoutError:
                         for t in tables:
-                            if ntime_utc_now() - float(self.locks[t]["ticket"]) > 20.0:
+                            if ntime_utc_now() - float(self.locks[t]["ticket"]) > 60.0:
                                 with suppress(RuntimeError):
                                     self.locks[t]["lock"].release()
                                 self.locks[t]["ticket"] = None
@@ -471,7 +471,7 @@ class Cluster:
                         "ticket": None,
                     }
 
-                await asyncio.wait_for(self.locks[t]["lock"].acquire(), 3.0)
+                await asyncio.wait_for(self.locks[t]["lock"].acquire(), 60.0)
                 self.locks[t]["ticket"] = ticket
 
         except TimeoutError:
