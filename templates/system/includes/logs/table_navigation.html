@@ -2,10 +2,10 @@
 {% set sorting_attr = session.get("system_logs_sorting")[0] %}
 
 <tr id="system-logs-table-navigation-row">
-  <td class="table-navigation" data-loading-disable colspan="4">
+  <td class="table-navigation" colspan="4">
     <div class="grid-space-between">
       <div>
-        <select name="page_size" form="system-logs-table-search" _="on change trigger submit on #system-logs-table-search">
+        <select name="page_size" data-loading-disable form="system-logs-table-search" _="on change trigger submit on #system-logs-table-search">
           <option {{ "selected" if data.page_size == 1 }} value="1">1</option>
           <option {{ "selected" if data.page_size == 5 }} value="5">5</option>
           <option {{ "selected" if data.page_size == 10 }} value="10">10</option>
@@ -16,7 +16,7 @@
         <small>Items per page</small>
       </div>
       <div {{ "hidden" if data.elements == 0 }}>
-        <select name="page" form="system-logs-table-search" _="on change trigger submit on #system-logs-table-search">
+        <select name="page" data-loading-disable form="system-logs-table-search" _="on change trigger submit on #system-logs-table-search">
         {% for page in range(1, data.pages + 1) %}
           <option {{ "selected" if page == data.page }} value="{{ page }}">{{ page }} / {{ data.pages }}</option>
         {% endfor %}
@@ -47,7 +47,7 @@
         {% set fname = "Level" %}
       {% endif %}
 
-      <button class="sorting {{ "secondary outline" if sorting_attr != attribute }}"
+      <button class="sorting {{ "secondary outline" if sorting_attr != attribute }}" data-loading-disable
               type="submit"
               form="system-logs-table-search"
               name="sorting"

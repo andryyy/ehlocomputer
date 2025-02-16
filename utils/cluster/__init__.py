@@ -594,10 +594,15 @@ class Cluster:
         logger.info(f"Listening on {self.port} on address {' and '.join(self.host)}...")
 
         while not self.master_node:
-            async with self.receiving:
-                ticket, receivers = await self.send_command("INIT", "*")
-                self.tickets.pop(ticket, None)
-                await asyncio.sleep(0.5)
+            for peer in defaults.CLUSTER_PEERS_THEM:
+                with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as sock:
+                    sock.settimeout(defaults.CLUSTER_PEERS_TIMEOUT)
+                    if sock.connect_ex((peer, self.port)) == 0:
+                        async with self.receiving:
+                            ticket, receivers = await self.send_command("INIT", [peer])
+                            self.tickets.pop(ticket, None)
+                    continue
+            await asyncio.sleep(0.5)
 
         async with server:
             await shutdown_trigger.wait()
