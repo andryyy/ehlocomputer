@@ -154,7 +154,7 @@ def formoptions(options):
             for option in options:
                 if option == "users":
                     request.form_options[option] = [
-                        {"name": user.login, "value": user.id}
+                        {"name": user.login, "value": user.id, "groups": user.groups}
                         for user in await search_users(name="")
                     ]
                 else:

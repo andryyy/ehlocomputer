@@ -132,7 +132,7 @@ async def login_request_start():
     try:
         user_id = await what_id(login=request_data.login)
         user = await get_user(user_id=user_id)
-    except ValidationError as e:
+    except (ValidationError, ValueError):
         return validation_error([{"loc": ["login"], "msg": f"User is not available"}])
 
     request_token = token_urlsafe()

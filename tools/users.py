@@ -134,9 +134,8 @@ async def patch(user_id: UUID, data: dict):
         orphaned_credentials = [
             c for c in user.credentials if c not in patch_user.credentials
         ]
-
         db.table("users").update(
-            patch_user.dict(exclude_none=True),
+            patch_user.dict(exclude_unset=True),
             Query().id == str(user_id),
         )
         db.table("credentials").remove(Query().id.one_of(orphaned_credentials))
@@ -188,7 +187,9 @@ async def patch_credential(
 
 
 @validate_call
-async def search(name: constr(strip_whitespace=True, min_length=0) = Field(...)):
+async def search(
+    name: constr(strip_whitespace=True, min_length=0), join_credentials: bool = True
+):
     db_params = evaluate_db_params()
 
     def search_name(s):
@@ -197,4 +198,6 @@ async def search(name: constr(strip_whitespace=True, min_length=0) = Field(...))
     async with TinyDB(**db_params) as db:
         matches = db.table("users").search(Query().login.test(search_name))
 
-    return [await get(user["id"]) for user in matches]
+    return [
+        await get(user["id"], join_credentials=join_credentials) for user in matches
+    ]

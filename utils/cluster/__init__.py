@@ -30,6 +30,96 @@ from typing import Literal
 from pydantic import FilePath, validate_call
 
 
+class Health:
+    def __init__(self, Cluster):
+        self.cluster = Cluster
+        self.tasks = set()
+
+    def get_streams_by_bind(self, raddr):
+        for peer, peer_data in self.cluster.connections.items():
+            if peer_data.get("meta", {}).get("bind") == raddr:
+                return peer_data.get("streams")
+        return None
+
+    def cleanup_tickets(self):
+        raise Exception("Implement me")
+
+    async def create_watchdog(
+        self,
+        peer_info,
+        inbound_streams: tuple[asyncio.StreamReader, asyncio.StreamWriter],
+    ):
+        ireader, iwriter = inbound_streams
+
+        try:
+            raddr, *_ = iwriter.get_extra_info("peername")
+        except:
+            pass
+
+        outbound_streams = None
+
+        while not outbound_streams:
+            outbound_streams = self.get_streams_by_bind(peer_info["bind"])
+            if not outbound_streams:
+                logger.info(f"Evaluating stream for {peer_info['bind']}")
+                await asyncio.sleep(1.0)
+
+        oreader, owriter = outbound_streams
+
+        c = -1
+        while True:
+            await asyncio.sleep(1.0)
+
+            if iwriter.is_closing():
+                break
+
+            if owriter.is_closing():
+                break
+
+            c += 1
+
+            if not self.cluster.master_node:
+                async with self.cluster.receiving:
+                    ticket, receivers = await self.cluster.send_command("STATUS", "*")
+                    await self.cluster.await_receivers(
+                        ticket, receivers, raise_err=False, timeout=30
+                    )
+                continue
+
+            if not c % (
+                defaults.CLUSTER_HEALTH_INTERVAL + round(random.uniform(-2, 2))
+            ):
+                async with self.cluster.receiving:
+                    ticket, receivers = await self.cluster.send_command(
+                        "STATUS", [peer_info["bind"]]
+                    )
+                    await self.cluster.await_receivers(
+                        ticket, receivers, raise_err=False, timeout=30
+                    )
+                c = 0
+
+        if c != -1:
+            async with self.cluster.receiving:
+                try:
+                    iwriter.close()
+                    await iwriter.wait_closed()
+                except ConnectionResetError:
+                    pass
+
+                try:
+                    owriter.close()
+                    await owriter.wait_closed()
+                except ConnectionResetError:
+                    pass
+
+                logger.warning(f"Disconnected {peer_info['bind']} {raddr}")
+                self.cluster.connections.pop(peer_info["bind"], None)
+                ticket, receivers = await self.cluster.send_command("STATUS", "*")
+                await self.cluster.await_receivers(
+                    ticket, receivers, raise_err=False, timeout=30
+                )
+
+
 class Cluster:
     def __init__(self, host, port):
         assert isinstance(host, str) or isinstance(host, list)
@@ -44,48 +134,18 @@ class Cluster:
         self.role = Role.SLAVE
         self.started = ntime_utc_now()
         self.tickets = dict()
-        self.connected_nodes = None
+        self.swarm = set()
+        self.ping_pong = Health(self)
+        self.server_limit = 104857600  # 100 MiB
 
         IN_MEMORY_DB["connection_failures"] = dict()
         IN_MEMORY_DB["peer_critical"] = dict()
 
-    async def send(
-        self,
-        streams: tuple[asyncio.StreamReader, asyncio.StreamWriter],
-        ticket: str,
-        cmd: str,
-    ) -> None:
-        reader, writer = streams
-        if reader.at_eof():
-            writer.close()
-            await writer.wait_closed()
-            raise Exception("Reader at EOF")
+        self.locks["connecting"] = dict()
+        for peer in defaults.CLUSTER_PEERS_THEM:
+            self.locks["connecting"][peer] = asyncio.Lock()
 
-        if writer.is_closing():
-            raise Exception("Writer is closing")
-
-        raddr, _ = writer.get_extra_info("peername")
-
-        buffer_data = [
-            ticket,
-            cmd,
-            "META",
-            f"NAME {defaults.CLUSTER_NODENAME}",
-            "CONNECTIONS {connected_nodes}".format(
-                connected_nodes=self.connected_nodes or "?CONFUSED"
-            ),
-            f"STARTED {self.started}",
-            "MASTER {master_node}".format(master_node=self.master_node or "?CONFUSED"),
-            f"BIND {defaults.CLUSTER_PEERS_ME}",
-        ]
-
-        buffer_bytes = " ".join(buffer_data).encode("utf-8")
-        writer.write(len(buffer_bytes).to_bytes(4, "big"))
-        writer.write(buffer_bytes)
-        await writer.drain()
-        log_tx(raddr, cmd)
-
-    async def receive(self, reader: asyncio.StreamReader) -> tuple[str, str, dict]:
+    async def read_command(self, reader: asyncio.StreamReader) -> tuple[str, str, dict]:
         bytes_to_read = int.from_bytes(await reader.readexactly(4), "big")
         input_bytes = await reader.readexactly(bytes_to_read)
 
@@ -95,7 +155,8 @@ class Cluster:
 
         patterns = [
             r"NAME (?P<name>\S+)",
-            r"CONNECTIONS (?P<connections>\S+)",
+            r"WEBREQUESTS (?P<webrequests>\S+)",
+            r"SWARM (?P<swarm>\S+)",
             r"STARTED (?P<started>\S+)",
             r"MASTER (?P<master>\S+)",
             r"BIND (?P<bind>\S+)",
@@ -107,6 +168,7 @@ class Cluster:
         if not meta_dict["bind"] in self.connections:
             self.connections[meta_dict["bind"]] = {
                 "meta": meta_dict,
+                "requests": 0,
                 "streams": set(),
             }
         else:
@@ -119,29 +181,33 @@ class Cluster:
 
         return ticket, cmd, meta_dict
 
-    async def connection_handler(
+    async def incoming_handler(
         self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter
     ):
         raddr, *_ = writer.get_extra_info("peername")
         socket, *_ = writer.get_extra_info("socket").getsockname()
-        peer_info = {}
 
         if socket and raddr in defaults.CLUSTER_CLI_BINDINGS:
             return await cli_processor((reader, writer))
 
         while True:
             try:
-                ticket, cmd, peer_info = await self.receive(reader)
+                ticket, cmd, peer_info = await self.read_command(reader)
+
+                if not raddr in [t.get_name() for t in self.ping_pong.tasks]:
+                    t = asyncio.create_task(
+                        self.ping_pong.create_watchdog(peer_info, (reader, writer)),
+                        name=raddr,
+                    )
+                    self.ping_pong.tasks.add(t)
+                    t.add_done_callback(self.ping_pong.tasks.discard)
+
                 if IN_MEMORY_DB["connection_failures"].get(peer_info["bind"], 0) > 0:
                     logger.success(f"Peer {peer_info['bind']} recovered")
                 IN_MEMORY_DB["connection_failures"][peer_info["bind"]] = 0
-            except asyncio.exceptions.IncompleteReadError:
-                async with self.receiving:
-                    writer.close()
-                    await writer.wait_closed()
-                    ticket, receivers = await self.send_command("STATUS", "*")
-                    await self.await_receivers(ticket, receivers, raise_err=False)
-                    break
+
+            except (asyncio.exceptions.IncompleteReadError, ConnectionResetError):
+                break
 
             try:
                 if not self.master_node and not any(
@@ -274,21 +340,23 @@ class Cluster:
 
                 elif cmd.startswith("FILEGET"):
                     _, _, payload = cmd.partition(" ")
-                    if not is_path_within_cwd(payload):
+                    start, end, file = payload.split(" ")
+                    if not is_path_within_cwd(file):
                         await self.send_command(
                             CritErrors.INVALID_FILE_PATH.value,
                             [peer_info["bind"]],
                             ticket=ticket,
                         )
                     else:
-                        with open(payload, "rb") as f:
-                            compressed_data = zlib.compress(f.read())
+                        with open(file, "rb") as f:
+                            f.seek(int(start))
+                            compressed_data = zlib.compress(f.read(int(end)))
                             compressed_data_encoded = base64.b64encode(
                                 compressed_data
                             ).decode("utf-8")
 
                         await self.send_command(
-                            f"ACK {payload} {defaults.CLUSTER_PEERS_ME} {compressed_data_encoded}",
+                            f"ACK {file} {defaults.CLUSTER_PEERS_ME} {compressed_data_encoded}",
                             [peer_info["bind"]],
                             ticket=ticket,
                         )
@@ -308,13 +376,7 @@ class Cluster:
                     _, _, tables_str = cmd.partition(" ")
                     tables = tables_str.split(",")
 
-                    peer_connections = [
-                        c
-                        for c in peer_info["connections"].split(";")
-                        if c != defaults.CLUSTER_PEERS_ME
-                    ] + [peer_info["bind"]]
-
-                    if set(peer_connections) != set(self.connected_nodes.split(";")):
+                    if peer_info["swarm"] != self.swarm:
                         logger.error(
                             f'Rejecting LOCK for {peer_info["bind"]} due to inconsistent connections'
                         )
@@ -403,33 +465,53 @@ class Cluster:
 
                 self.connections[peer] = {
                     "meta": dict(),
+                    "requests": 0,
                     "streams": set(),
                 }
 
-            if not self.connections[peer].get("streams"):
-                try:
-                    self.connections[peer]["streams"] = await asyncio.open_connection(
-                        peer, self.port, ssl=get_ssl_context("client")
-                    )
-                    IN_MEMORY_DB["connection_failures"][peer] = 0
-                except ConnectionRefusedError:
-                    if IN_MEMORY_DB["connection_failures"][peer] == 0:
-                        logger.warning(f"Skipping {peer}: ConnectionRefusedError")
-                    IN_MEMORY_DB["connection_failures"][peer] += 1
-                    continue
+            async with self.locks["connecting"][peer]:
+                if not self.connections[peer]["streams"]:
+                    try:
+                        self.connections[peer][
+                            "streams"
+                        ] = await asyncio.open_connection(
+                            peer, self.port, ssl=get_ssl_context("client")
+                        )
+                        IN_MEMORY_DB["connection_failures"][peer] = 0
+                    except KeyError:
+                        continue
+                    except ConnectionRefusedError:
+                        if IN_MEMORY_DB["connection_failures"][peer] == 0:
+                            logger.warning(f"Skipping {peer}: ConnectionRefusedError")
+                        IN_MEMORY_DB["connection_failures"][peer] += 1
+                        continue
 
-            try:
-                await self.send(self.connections[peer]["streams"], ticket, cmd)
-                successful_receivers.append(peer)
-            except Exception as e:
-                logger.warning(
-                    f"Disconnecting and cleaning up connection to {peer}: {e})"
-                )
-                _, writer = self.connections[peer]["streams"]
-                writer.close()
-                await writer.wait_closed()
-                self.connections.pop(peer, None)
-                set_master_node(self)
+            reader, writer = self.connections[peer]["streams"]
+
+            buffer_data = [
+                ticket,
+                cmd,
+                "META",
+                f"NAME {defaults.CLUSTER_NODENAME}",
+                "WEBREQUESTS {web_requests}".format(
+                    web_requests=IN_MEMORY_DB["web_requests"]
+                ),
+                "SWARM {swarm}".format(swarm=self.swarm or "?CONFUSED"),
+                f"STARTED {self.started}",
+                "MASTER {master_node}".format(
+                    master_node=self.master_node or "?CONFUSED"
+                ),
+                f"BIND {defaults.CLUSTER_PEERS_ME}",
+            ]
+
+            buffer_bytes = " ".join(buffer_data).encode("utf-8")
+            writer.write(len(buffer_bytes).to_bytes(4, "big"))
+            writer.write(buffer_bytes)
+            await writer.drain()
+
+            log_tx(peer, cmd)
+
+            successful_receivers.append(peer)
 
         return ticket, successful_receivers
 
@@ -548,7 +630,11 @@ class Cluster:
 
     @validate_call
     async def request_files(
-        self, files: FilePath | list[FilePath], peers: Literal["*"] | list
+        self,
+        files: FilePath | list[FilePath],
+        peers: Literal["*"] | list,
+        start: int = 0,
+        end: int = -1,
     ):
         assert self.locks["files"]["lock"].locked()
         async with self.receiving:
@@ -558,22 +644,39 @@ class Cluster:
                         logger.error(f"File not within cwd: {file}")
                         continue
 
-                    ticket, receivers = await self.send_command(
-                        f"FILEGET {file}", peers
-                    )
-                    _, responses = await self.await_receivers(
-                        ticket, receivers, raise_err=True
-                    )
+                    for peer in peers:
+                        peer_start = start
+                        peer_end = end
+                        assert peer in defaults.CLUSTER_PEERS_THEM
+                        if peer_start == -1:
+                            if os.path.exists(f"peer_files/{peer}/{file}"):
+                                peer_start = os.stat(
+                                    f"peer_files/{peer}/{file}"
+                                ).st_size
+                            else:
+                                peer_start = 0
 
-                    for r in responses:
-                        r_file, r_peer, r_data = r.split(" ")
-                        assert FilePath(r_file) == file
-                        assert r_peer in defaults.CLUSTER_PEERS_THEM
-                        file_dest = f"peer_files/{r_peer}/{file}"
-                        os.makedirs(os.path.dirname(file_dest), exist_ok=True)
-                        payload = zlib.decompress(base64.b64decode(r_data))
-                        with open(file_dest, "wb") as f:
-                            f.write(payload)
+                        ticket, receivers = await self.send_command(
+                            f"FILEGET {peer_start} {peer_end} {file}", [peer]
+                        )
+                        _, response = await self.await_receivers(
+                            ticket, receivers, raise_err=True
+                        )
+
+                        for r in response:
+                            r_file, r_peer, r_data = r.split(" ")
+                            assert FilePath(r_file) == file
+                            assert r_peer == peer
+                            file_dest = f"peer_files/{peer}/{file}"
+                            os.makedirs(os.path.dirname(file_dest), exist_ok=True)
+                            payload = zlib.decompress(base64.b64decode(r_data))
+                            if os.path.exists(file_dest):
+                                mode = "r+b"
+                            else:
+                                mode = "w+b"
+                            with open(file_dest, mode) as f:
+                                f.seek(peer_start)
+                                f.write(payload)
 
                 except IncompleteClusterResponses:
                     logger.error(f"Sending command to peers '{peers}' failed")
@@ -584,37 +687,47 @@ class Cluster:
 
     async def run(self, shutdown_trigger) -> None:
         server = await asyncio.start_server(
-            self.connection_handler,
+            self.incoming_handler,
             self.host,
             self.port,
             ssl=get_ssl_context("server"),
-            limit=10485760,  # 10 MiB
+            limit=self.server_limit,
         )
 
         logger.info(f"Listening on {self.port} on address {' and '.join(self.host)}...")
 
-        while not self.master_node:
-            for peer in defaults.CLUSTER_PEERS_THEM:
-                with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as sock:
-                    sock.settimeout(defaults.CLUSTER_PEERS_TIMEOUT)
-                    if sock.connect_ex((peer, self.port)) == 0:
-                        async with self.receiving:
-                            ticket, receivers = await self.send_command("INIT", [peer])
-                            self.tickets.pop(ticket, None)
-                    continue
-            await asyncio.sleep(0.5)
-
         async with server:
-            await shutdown_trigger.wait()
+            async with self.receiving:
+                for peer in defaults.CLUSTER_PEERS_THEM:
+                    with closing(
+                        socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                    ) as sock:
+                        sock.settimeout(defaults.CLUSTER_PEERS_TIMEOUT)
+                        if sock.connect_ex((peer, self.port)) == 0:
+                            ticket, receivers = await self.send_command("INIT", [peer])
+                            ret, responses = await self.await_receivers(
+                                ticket, receivers, raise_err=False
+                            )
 
-    async def await_receivers(self, ticket, receivers, raise_err: bool):
+            await shutdown_trigger.wait()
+            [t.cancel() for t in self.ping_pong.tasks]
+
+    async def await_receivers(
+        self,
+        ticket,
+        receivers,
+        raise_err: bool,
+        timeout: float = defaults.CLUSTER_PEERS_TIMEOUT
+        * len(defaults.CLUSTER_PEERS_THEM)
+        + 0.2,
+    ):
         errors = []
         missing_receivers = []
         try:
             while not all(
                 r in [peer for peer, _ in self.tickets[ticket]] for r in receivers
             ):
-                await asyncio.wait_for(self.receiving.wait(), 2.25)
+                await asyncio.wait_for(self.receiving.wait(), timeout)
         except TimeoutError:
             missing_receivers = [
                 r

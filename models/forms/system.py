@@ -93,15 +93,14 @@ class SystemSettings(BaseModel):
         },
     )
 
-    LOG_FILE_ROTATION: str = Field(
-        pattern=r"^\d{1} days$",
+    LOG_FILE_ROTATION: int = Field(
         default=defaults.LOG_FILE_ROTATION,
         json_schema_extra={
-            "title": "Log file rotation",
-            "description": "Log file rotation in the format <code>n days</code>",
-            "type": "text",
+            "title": "Max size in bytes",
+            "description": "Log files will rotate after given bytes",
+            "type": "number",
             "input_extra": 'autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"',
-            "form_id": f"log-file-retention-{str(uuid4())}",
+            "form_id": f"log-file-rotation-{str(uuid4())}",
         },
     )
 

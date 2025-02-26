@@ -27,32 +27,32 @@
         </button>
       </fieldset>
       <hr>
-      <article>
+      <section>
         ❔ <a href="" class="no-text-decoration" hx-on:click="event.preventDefault();document.getElementById('auth-options').toggleAttribute('hidden')">Other authentication options</a>
         <div id="auth-options" hidden>
           <hr>
-          <fieldset>
-            <label>Send a login request to this user</label>
-            <button href="#" id="token-authentication"
-            hx-post="/auth/login/request/start"
-            hx-target="#body-main"
-            hx-swap="innerHTML">
-            Send login request
-            </button>
-          </fieldset>
-
-          <fieldset>
-            <label>Use a terminal to confirm a token</label>
-            <button href="#"
-            _="on click
-            halt the event
-            set value of #token-login to value of #webauthn-login
-            take @hidden from <form/> in #login-form for closest <form/>
-            end">Token authentication
-            </button>
-          </fieldset>
+          <p>Use an alternative authentication method:</p>
+          <ol>
+            <li>
+              <a href="#" class="no-text-decoration" id="token-authentication"
+              hx-post="/auth/login/request/start"
+              hx-target="#body-main"
+              hx-swap="innerHTML">
+                Send a login request to this user, if logged in
+              </a>
+            </li>
+            <li>
+              <a href="#" class="no-text-decoration"
+              _="on click
+              halt the event
+              set value of #token-login to value of #webauthn-login
+              take @hidden from <form/> in #login-form for closest <form/>
+              end">Use a terminal to confirm a generated token
+              </a>
+            </li>
+          </ol>
         </div>
-      </article>
+      </section>
   </form>
   <form
     data-loading-disable

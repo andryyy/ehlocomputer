@@ -13,10 +13,18 @@
 
 {% block body %}
 
-<h4>Users</h4>
+<h4>Groups</h4>
+<section id="system-groups">
+  {% include "system/includes/users/groups.html" %}
+</section>
 
-<article id="system-users-full-table">
-  {% include "system/includes/users/table.html" %}
-</article>
+<hr>
+
+<h4>Users</h4>
+<div class="grid split-grid">
+  <article id="system-users-full-table">
+    {% include "system/includes/users/table.html" %}
+  </article>
+</div>
 
 {% endblock body %}

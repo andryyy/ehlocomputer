@@ -1,7 +1,6 @@
 {% set filters = session.get(request.view_args.get("object_type") ~ "_filters") %}
 
 <div id="{{ request.view_args.get("object_type") }}-table-filters" class="filters" _="install objectFilters(submitForm: #{{ request.view_args.get("object_type") }}-table-search)">
-
   <input type="text" placeholder="Filter domains"
     _="init
       hide <button:not(.button-pink-300)/> in .filter-buttons

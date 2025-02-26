@@ -16,7 +16,7 @@
 <h4>System Status</h4>
 
 <article id="system-status">
-  <p>You are connected to <mark>{{ CLUSTER_PEERS_ME }}</mark></p>
+  <p>You are connected to <mark>{{ CLUSTER_PEERS_ME }}</mark> (Requests: {{ data.status.web_requests }})</p>
   <div class="overflow-auto">
   <table>
     <tbody>
@@ -110,7 +110,7 @@
       A successful inbound connection as well as a manual reset will reset the counter to 0.
     </small><br>
     <small><sup>2</sup> Critical protocol errors (e.g. checksum mismatches).</small><br>
-    <small><sup>3</sup> The cluster is updated gradually (lazy-update).</small>
+    <small><sup>3</sup> The cluster status is updated every {{ CLUSTER_HEALTH_INTERVAL }} seconds (plus jitter) and modifying requests (lazy-update).</small>
   </p>
   </div>
 </article>

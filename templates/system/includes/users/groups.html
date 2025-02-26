@@ -1,0 +1,116 @@
+{% set groups_dict = {} %}
+{% for option in request.form_options.users %}
+    {% for group in option.groups %}
+        {% if group not in groups_dict %}
+            {% set _ = groups_dict.update({group: []}) %}
+        {% endif %}
+        {% if option.value not in groups_dict[group] %}
+            {% set _ = groups_dict[group].append(option.value) %}
+        {% endif %}
+    {% endfor %}
+{% endfor %}
+
+<script type="text/hyperscript">
+  on load 1
+    set $names to []
+    {% for group, members in groups_dict.items() %}
+    if $names does not contain "{{- group -}}"
+        append "{{- group -}}" to $names
+        render #group-template with (name: "{{- group -}}", members: {{ members|list|tojson }})
+        put the result at the end of #user-groups
+        call htmx.process(#user-groups)
+        add @hidden to .no-groups
+        set .group's *opacity to 1
+    {% endfor %}
+    end
+  end
+</script>
+
+<section>
+  <div id="user-groups" class="grid-3-cols"
+    _="on htmx:afterRequest[event.detail.successful==true] queue all
+        set group to closest .group to event.target
+        set value of <[name=name]/> in group to value of <[name=new_name]/> in group
+        if <[name=members] option:checked/> in group is empty
+          add @hidden to group
+          settle
+          remove group
+          trigger deleteName
+        else
+          add @hidden to .group-unsaved in group
+        end
+    end
+    on change
+      remove @hidden from .group-unsaved in closest .group to event.target
+    end
+    on deleteName
+      set $names to value of <[name=name]/> as Array
+    end">
+    <article class="span-3 no-groups" hidden>
+      There is no group assigned to any user.
+    </article>
+  </div>
+</section>
+
+<section>
+  <form hx-disable _="on submit
+      halt the event
+      add @disabled to <fieldset/> in me
+      if $names does not contain #group.value and #group.value is not empty
+        append #group.value to $names
+        render #group-template with (name: #group.value, members: [])
+        put the result at the end of #user-groups
+        call htmx.process(#user-groups)
+        add @hidden to .no-groups
+        transition .group's opacity to 1 over 175ms
+      end
+      remove @disabled from <fieldset/> in me
+    end">
+    <fieldset>
+      <input autocomplete="off" id="group" name="group" type="text" placeholder="New group name" />
+      <button type="submit">Create</button>
+    </fieldset>
+  </form>
+</section>
+
+<template id="group-template">
+  @set hidden to "hidden" unless members is empty
+  <article class="group">
+    <form hx-patch="/system/users/groups">
+      <input type="hidden" name="name" value="${name}"/>
+      <fieldset data-loading-disable>
+        <label>Group name</label>
+        <input type="text" name="new_name" value="${name}">
+      </fieldset>
+      <fieldset>
+        <label>Members</label>
+        <select data-loading-disable
+          name="members"
+          multiple
+          class="user-select">
+          {% for option in request.form_options.users %}
+          @if members contains "{{ option["value"] }}"
+            <option selected value="{{ option["value"] }}">{{ option["name"] }}</option>
+          @else
+            <option value="{{ option["value"] }}">{{ option["name"] }}</option>
+          @end
+          {% endfor %}
+        </select>
+      </fieldset>
+      <small class="color-yellow-200 group-unsaved" ${hidden}>⚠️ unsaved</small>
+      <div class="grid-space-between">
+        <a href="#" _="install confirmButton
+          on confirmedButton
+            set selectedIndex of <select/> in closest .group to -1
+            trigger submit on closest <form/>
+          end">Remove</a>
+        <button data-loading-disable
+          class="button-green group-unsaved"
+          ${hidden}
+          type="submit">
+            Save
+        </button>
+      </div>
+    </form>
+  </article>
+</template>

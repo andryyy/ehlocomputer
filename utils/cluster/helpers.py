@@ -54,7 +54,7 @@ def set_master_node(Cluster) -> None:
     def _destroy():
         Cluster.master_node = None
         Cluster.role = Role.SLAVE
-        Cluster.connected_nodes = None
+        Cluster.swarm = None
 
     established = set(
         [k for k, v in Cluster.connections.items() if v["meta"] and v["streams"]]
@@ -115,10 +115,15 @@ def set_master_node(Cluster) -> None:
     )
 
     if Cluster.master_node:
-        Cluster.connected_nodes = ";".join(
-            data["meta"]["bind"]
-            for data in Cluster.connections.values()
-            if data["meta"] and data["streams"]
+        Cluster.swarm = ";".join(
+            sorted(
+                {
+                    data["meta"]["bind"]
+                    for data in Cluster.connections.values()
+                    if data.get("meta") and data.get("streams")
+                }
+                | {defaults.CLUSTER_PEERS_ME}
+            )
         )
 
     logger.debug(f"<set_master_node> cluster size {n_online_peers}/{n_all_peers}")

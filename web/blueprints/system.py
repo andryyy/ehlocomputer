@@ -1,6 +1,7 @@
 import asyncio
 import fileinput
 import json
+import os
 
 from config import defaults
 from utils.cluster.cluster import cluster
@@ -18,6 +19,7 @@ from utils.datetimes import ntime_utc_now
 from web.helpers import trigger_notification, validation_error, ws_htmx
 
 blueprint = Blueprint("system", __name__, url_prefix="/system")
+log_lock = asyncio.Lock()
 
 
 @blueprint.context_processor
@@ -123,6 +125,7 @@ async def status():
         "peer_critical": IN_MEMORY_DB["peer_critical"],
         "connection_failures": IN_MEMORY_DB["connection_failures"],
         "enforce_commit": IN_MEMORY_DB.get("enforce_commit", False),
+        "web_requests": IN_MEMORY_DB["web_requests"],
         "connections": cluster.connections,
     }
     return await render_template("system/status.html", data={"status": status})
@@ -186,9 +189,11 @@ async def cluster_logs():
 
     if request.method == "POST":
         _logs = []
-        for line in fileinput.input(list_application_log_files()):
-            if search_model.q in line:
-                _logs.append(json.loads(line.strip()))
+        async with log_lock:
+            with fileinput.input(list_application_log_files(), encoding="utf-8") as f:
+                for line in f:
+                    if search_model.q in line:
+                        _logs.append(json.loads(line.strip()))
 
         def system_logs_sort_func(sort_attr):
             if sort_attr == "text":
@@ -245,29 +250,68 @@ async def refresh_cluster_logs():
     await ws_htmx(
         session["login"],
         "beforeend",
-        "<div hidden _=\"on load trigger notification(title: 'Please wait', level: 'user', message: 'Refreshing cluster logs...', duration: 2000)\"></div>",
+        '<div class="loading-logs" hidden _="on load trigger '
+        + "notification("
+        + "title: 'Please wait', level: 'user', "
+        + "message: 'Requesting logs, your view will be updated automatically.', duration: 2000)\">"
+        + "</div>",
         "/system/logs",
     )
 
     if not IN_MEMORY_DB.get("application_logs_refresh") or request.args.get("force"):
         IN_MEMORY_DB["application_logs_refresh"] = ntime_utc_now()
+
         app.add_background_task(
             expire_key,
             IN_MEMORY_DB,
             "application_logs_refresh",
             defaults.CLUSTER_LOGS_REFRESH_AFTER,
         )
-        async with ClusterLock("files") as c:
-            await c.request_files("logs/application.log", defaults.CLUSTER_PEERS_THEM)
+
+        async with log_lock:
+            async with ClusterLock("files"):
+                for peer in cluster.connections.keys():
+                    start = -1
+                    file_path = f"peer_files/{peer}/logs/application.log"
+
+                    if os.path.exists(file_path) and os.path.getsize(file_path) > (
+                        5 * 1024 * 1024
+                    ):
+                        start = 0
+
+                    await cluster.request_files(
+                        "logs/application.log", [peer], start, -1
+                    )
+
+            missing_peers = ", ".join(
+                [
+                    p
+                    for p in defaults.CLUSTER_PEERS_THEM
+                    if p not in cluster.connections.keys()
+                ]
+            )
+
+            if missing_peers:
+                await ws_htmx(
+                    session["login"],
+                    "beforeend",
+                    '<div hidden _="on load trigger '
+                    + "notification("
+                    + "title: 'Missing peers', level: 'warning', "
+                    + f"message: 'Some peers seem to be offline and were not pulled: {missing_peers}', duration: 3000)\">"
+                    + "</div>",
+                    "/system/logs",
+                )
 
     refresh_ago = round(ntime_utc_now() - IN_MEMORY_DB["application_logs_refresh"])
 
     await ws_htmx(
         session["login"],
         "beforeend",
-        "<div hidden _=\"on load trigger notification(title: 'Task completed', level: 'success', message: 'Application logs were collected', duration: 2000) then "
-        + "trigger logsReady on #system-logs-table-search "
-        + f'then put {refresh_ago} into #system-logs-last-refresh"></div>',
+        '<div hidden _="on load trigger logsReady on #system-logs-table-search '
+        + f"then put {refresh_ago} into #system-logs-last-refresh "
+        + f'then trigger removeNotification on .notification-user"></div>',
         "/system/logs",
     )
+
     return "", 204

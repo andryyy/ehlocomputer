@@ -3,7 +3,8 @@ import re
 from utils.cluster.http_lock import ClusterLock
 from models.tables import TableSearchHelper
 from models.forms.users import UserProfile
-from pydantic import ValidationError
+from models.users import UserGroups
+from pydantic import ValidationError, constr, TypeAdapter
 from quart import Blueprint, current_app as app, render_template, request
 from tools.users import (
     search as search_users,
@@ -27,6 +28,47 @@ def load_context():
     return context
 
 
+@blueprint.route("/groups", methods=["PATCH"])
+@wrappers.acl("system")
+async def user_group():
+    try:
+        request_data = UserGroups.parse_obj(request.form_parsed)
+
+        assigned_to = [
+            u
+            for u in await search_users(name="", join_credentials=False)
+            if request_data.name in u.groups
+        ]
+
+        assign_to = []
+        for user_id in request_data.members:
+            assign_to.append(await _get_user(user_id=user_id, join_credentials=False))
+
+        _all = assigned_to + assign_to
+
+        async with ClusterLock("users"):
+            for user in _all:
+                user_dict = user.model_dump(mode="json")
+                if request_data.name in user_dict["groups"]:
+                    user_dict["groups"].remove(request_data.name)
+
+                if (
+                    request_data.new_name not in user_dict["groups"]
+                    and user in assign_to
+                ):
+                    user_dict["groups"].append(request_data.new_name)
+
+                await _patch_user(user_id=user.id, data=user_dict)
+
+        return "", 204
+
+    except ValidationError as e:
+        return validation_error(e.errors())
+    except ValueError as e:
+        name, message = e.args
+        return validation_error([{"loc": [name], "msg": message}])
+
+
 @blueprint.route("/<user_id>")
 @wrappers.acl("system")
 async def get_user(user_id: str):
@@ -46,6 +88,7 @@ async def get_user(user_id: str):
 @blueprint.route("/")
 @blueprint.route("/search", methods=["POST"])
 @wrappers.acl("system")
+@wrappers.formoptions(["users"])
 async def get_users():
     try:
         (

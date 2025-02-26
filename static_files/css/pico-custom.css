@@ -701,7 +701,7 @@ body > footer {
   body > header,
   body > main,
   body > footer {
-    max-width: 98%;
+    max-width: 95%;
     padding-right: 0;
     padding-left: 0;
   }
@@ -710,7 +710,7 @@ body > footer {
   body > header,
   body > main,
   body > footer {
-    max-width: 98%;
+    max-width: 95%;
   }
 }
 @media (min-width: 1024px) {
@@ -756,14 +756,14 @@ section {
 
 @media (min-width: 576px) {
   .container {
-    max-width: 98%;
+    max-width: 95%;
     padding-right: 0;
     padding-left: 0;
   }
 }
 @media (min-width: 768px) {
   .container {
-    max-width: 98%;
+    max-width: 95%;
   }
 }
 @media (min-width: 1024px) {
@@ -2404,12 +2404,12 @@ dialog article {
 }
 @media (min-width: 576px) {
   dialog article {
-    max-width: 98%;
+    max-width: 95%;
   }
 }
 @media (min-width: 768px) {
   dialog article {
-    max-width: 98%;
+    max-width: 95%;
   }
 }
 dialog article > header > * {
@@ -3034,7 +3034,7 @@ table td a[role=button] {
 }
 
 .notification-user {
-  --pico-background-color: #181c25;
+  --pico-background-color: #018cd4;
   --pico-icon: var(--pico-icon-chevron);
   --pico-color: #eff1f4;
 }
@@ -3103,7 +3103,7 @@ dialog article {
   grid-auto-columns: max-content;
   grid-auto-flow: column;
   gap: calc(var(--pico-spacing) / 2);
-  align-items: center;
+  align-items: baseline;
   white-space: nowrap;
 }
 
@@ -3114,8 +3114,24 @@ dialog article {
   grid-auto-flow: column;
   gap: calc(var(--pico-spacing) / 2);
   white-space: nowrap;
-  align-items: center;
+  align-items: baseline;
   margin: calc(var(--pico-spacing) / 2) auto;
+}
+
+.grid-3-cols {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: calc(var(--pico-spacing) / 2);
+}
+
+.grid-3-cols .span-3 {
+  grid-column: span 3;
+}
+
+.grid-3-cols > article {
+  margin-bottom: 0;
+  padding-bottom: var(--pico-form-element-spacing-vertical);
+  --pico-border-radius: .5rem;
 }
 
 .table-select {
@@ -3139,10 +3155,22 @@ nav details.dropdown {
   dialog article {
     max-width: 95%;
   }
+  .grid-3-cols {
+    display: grid;
+    grid-template-columns: repeat(1, 1fr);
+    gap: calc(var(--pico-spacing) / 2);
+  }
+  .grid-3-cols .span-3 {
+    grid-column: span 1;
+  }
+  .grid-3-cols > article {
+    margin-bottom: 0;
+    --pico-border-radius: .5rem;
+  }
 }
 @media (max-width: 1024px) {
   .split-grid.grid {
-    gap: 1em 1em;
+    gap: calc(var(--pico-spacing) / 2);
   }
   .split-grid.grid > article {
     padding: 0;
@@ -3153,6 +3181,10 @@ nav details.dropdown {
     --pico-spacing: 0.75rem;
   }
 }
+.group {
+  opacity: 0;
+}
+
 textarea.dns-data {
   border: 0;
   background: transparent;

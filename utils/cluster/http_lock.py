@@ -17,6 +17,7 @@ class ClusterLock:
     def __init__(self, tables: list | str):
         self.tables = ensure_list(tables)
         self.aenter_db_data = dict()
+        self.lock_tasks = set()
 
     @staticmethod
     def compare_tables(d1, d2):
@@ -109,16 +110,23 @@ class ClusterLock:
                     if apply_mode == "FULLTABLE":
                         IN_MEMORY_DB["peer_critical"] = dict()
 
-            if commit and error == False:
-                async with cluster.receiving:
-                    try:
-                        _, receivers = await cluster.send_command(
-                            f"COMMIT", "*", ticket=ticket
-                        )
-                        await cluster.await_receivers(ticket, receivers, raise_err=True)
-                        os.rename(self.db_params["filename"], TINYDB_PARAMS["filename"])
-                    except:
-                        logger.error(f"<ClusterLock> failed to commit {ticket}")
+            if error == False:
+                if commit:
+                    async with cluster.receiving:
+                        try:
+                            _, receivers = await cluster.send_command(
+                                f"COMMIT", "*", ticket=ticket
+                            )
+                            await cluster.await_receivers(
+                                ticket, receivers, raise_err=True
+                            )
+                            os.rename(
+                                self.db_params["filename"], TINYDB_PARAMS["filename"]
+                            )
+                        except:
+                            logger.error(f"<ClusterLock> failed to commit {ticket}")
+                else:
+                    os.unlink(self.db_params["filename"])
 
         await cluster.release(self.tables)
 

@@ -7,7 +7,7 @@ from config import defaults
 from config.database import IN_MEMORY_DB
 from utils.cluster.http_lock import ClusterHTTPException
 from contextlib import suppress
-from quart import Quart, request
+from quart import Quart, request, session
 from utils.cluster import Cluster
 from utils.helpers import merge_deep, ensure_list
 from utils.datetimes import ntime_utc_now
@@ -19,6 +19,7 @@ from web.blueprints import system
 from web.blueprints import users
 from web.helpers import parse_form_to_dict, trigger_notification, ws_htmx
 from werkzeug.exceptions import HTTPException
+from urllib.parse import quote_plus
 
 app = Quart(
     __name__,
@@ -40,6 +41,8 @@ app.config["TEMPLATES_AUTO_RELOAD"] = defaults.TEMPLATES_AUTO_RELOAD
 app.config["SERVER_NAME"] = defaults.HOSTNAME
 app.config["SESSION_VALIDATED"] = dict()
 app.config["WS_CONNECTIONS"] = dict()
+
+IN_MEMORY_DB["web_requests"] = 0
 
 
 @app.context_processor
@@ -98,6 +101,7 @@ async def before_request():
                     request.form_parsed = merge_deep(
                         request.form_parsed, parse_form_to_dict(k, v)
                     )
+    IN_MEMORY_DB["web_requests"] += 1
 
 
 @app.after_request
@@ -115,8 +119,7 @@ async def after_request(response):
 @app.teardown_request
 async def teardown_request(exc):
     if isinstance(exc, asyncio.exceptions.CancelledError):
-        with suppress(Exception):
-            await cluster.release()
+        pass
 
 
 @app.context_processor
@@ -137,6 +140,11 @@ def to_hex(value):
 @app.template_filter(name="ensurelist")
 def ensurelist(value):
     return ensure_list(value)
+
+
+@app.template_filter(name="urlencode")
+def urlencode(value):
+    return quote_plus(str(value)) if value else ""
 
 
 @app.template_filter(name="toprettyjson")

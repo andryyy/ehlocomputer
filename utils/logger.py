@@ -2,21 +2,26 @@ import logging
 import json
 import os
 import time
+import traceback
 from datetime import datetime, timedelta
-from logging.handlers import TimedRotatingFileHandler
+from logging.handlers import RotatingFileHandler
 import re
 
 SUCCESS_LEVEL = 25
+CRITICAL_LEVEL = 50
 logging.addLevelName(SUCCESS_LEVEL, "SUCCESS")
+logging.addLevelName(CRITICAL_LEVEL, "CRITICAL")
 
 # ANSI color codes for log levels
 LOG_COLORS = {
     "DEBUG": "\033[94m",  # Blue
-    "INFO": "\033[92m",  # Green
-    "SUCCESS": "\033[96m",  # Cyan
+    "INFO": "\033[96m",  # Cyan
+    "SUCCESS": "\033[92m",  # Green
     "WARNING": "\033[93m",  # Yellow
     "ERROR": "\033[91m",  # Red
+    "CRITICAL": "\033[95m",  # Magenta
     "RESET": "\033[0m",  # Reset
+    "BOLD": "\033[1m",  # Bold
 }
 
 
@@ -26,6 +31,10 @@ class JSONFormatter(logging.Formatter):
         self.text = text
 
     def format(self, record):
+        exc_text = None
+        if record.exc_info:
+            exc_text = traceback.format_exc()
+
         log_entry = {
             "text": self.text,
             "record": {
@@ -33,7 +42,7 @@ class JSONFormatter(logging.Formatter):
                     "repr": str(timedelta(seconds=record.relativeCreated / 1000)),
                     "seconds": record.relativeCreated / 1000,
                 },
-                "exception": record.exc_text if record.exc_info else None,
+                "exception": exc_text,
                 "extra": record.__dict__.get("extra", {}),
                 "file": {"name": record.filename, "path": record.pathname},
                 "function": record.funcName,
@@ -68,8 +77,8 @@ class PlainTextFormatter(logging.Formatter):
             "%Y-%m-%d %H:%M:%S.%f"
         )[:-3]
         level_color = LOG_COLORS.get(record.levelname, LOG_COLORS["RESET"])
-        relative_path = os.path.relpath(record.pathname, start=os.getcwd())
-        return f"{log_time} | {level_color}{record.levelname:<8}{LOG_COLORS['RESET']} | {relative_path}:{record.funcName}:{record.lineno} - {record.getMessage()}"
+        message_bold = f"{LOG_COLORS['BOLD']}{record.getMessage()}{LOG_COLORS['RESET']}"
+        return f"{log_time} | {LOG_COLORS['BOLD']}{level_color}{record.levelname:<8}{LOG_COLORS['RESET']} | {record.funcName}:{record.lineno} - {message_bold}"
 
 
 def parse_rotation(rotation):
@@ -99,10 +108,17 @@ class Logger:
         stdout_handler.setFormatter(PlainTextFormatter())
         self.logger.addHandler(stdout_handler)
 
-    def add(self, filepath, level, colorize, rotation, retention, text, serialize):
-        rotation_unit, rotation_value = parse_rotation(rotation)
-        handler = TimedRotatingFileHandler(
-            filepath, when=rotation_unit, interval=rotation_value, backupCount=retention
+    def add(self, filepath, level, colorize, max_size_mb, retention, text, serialize):
+        for handler in self.logger.handlers[:]:
+            if isinstance(handler, RotatingFileHandler):
+                self.logger.removeHandler(handler)
+                handler.close()
+
+        handler = RotatingFileHandler(
+            filepath,
+            maxBytes=max_size_mb * 1024 * 1024,
+            backupCount=retention,
+            encoding="utf-8",
         )
         handler.setLevel(level)
         handler.setFormatter(JSONFormatter(text(None)))
@@ -125,6 +141,9 @@ class Logger:
 
     def success(self, message):
         self.logger.log(SUCCESS_LEVEL, message, stacklevel=2)
+
+    def critical(self, message):
+        self.logger.log(CRITICAL_LEVEL, message, exc_info=True, stacklevel=2)
 
 
 logger = Logger()
