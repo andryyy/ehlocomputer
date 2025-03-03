@@ -51,9 +51,9 @@
           put '' into me
         end
         ">
-          {% set peer_critical = data.status.peer_critical.get(peer, None) %}
-          {% if peer_critical %}
-            <b class="color-red">{{ peer_critical }}</b>
+          {% set PEER_CRIT = data.status.PEER_CRIT.get(peer, None) %}
+          {% if PEER_CRIT %}
+            <b class="color-red">{{ PEER_CRIT }}</b>
           {% endif %}
         </td>
         <td>

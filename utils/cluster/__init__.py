@@ -34,8 +34,49 @@ class Health:
     def __init__(self, Cluster):
         self.cluster = Cluster
         self.tasks = set()
+        self.locks = dict()
 
-    def get_streams_by_bind(self, raddr):
+        self.locks["ESTABLISHING"] = dict()
+        for peer in defaults.CLUSTER_PEERS_THEM:
+            self.locks["ESTABLISHING"][peer] = asyncio.Lock()
+
+    async def connect(self, peer) -> bool:
+        async with self.locks["ESTABLISHING"][peer]:
+            if not peer in self.cluster.connections:
+                # Preflight check
+                with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as sock:
+                    sock.settimeout(defaults.CLUSTER_PEERS_TIMEOUT)
+                    if sock.connect_ex((peer, self.cluster.port)) != 0:
+                        logger.warning(f"Skipping {peer}: Connection timed out")
+                        IN_MEMORY_DB["PEER_CONNECTION_FAILURES"][peer] += 1
+                        return False
+
+                # Prepare peer dict
+                self.cluster.connections[peer] = {
+                    "meta": dict(),
+                    "requests": 0,
+                    "streams": set(),
+                }
+
+            if not self.cluster.connections[peer]["streams"]:
+                try:
+                    self.cluster.connections[peer][
+                        "streams"
+                    ] = await asyncio.open_connection(
+                        peer, self.cluster.port, ssl=get_ssl_context("client")
+                    )
+                    IN_MEMORY_DB["PEER_CONNECTION_FAILURES"][peer] = 0
+                except KeyError:
+                    return False
+                except ConnectionRefusedError:
+                    if IN_MEMORY_DB["PEER_CONNECTION_FAILURES"][peer] == 0:
+                        logger.warning(f"Skipping {peer}: ConnectionRefusedError")
+                    IN_MEMORY_DB["PEER_CONNECTION_FAILURES"][peer] += 1
+                    return False
+
+            return True
+
+    def get_streams_from_bind(self, raddr):
         for peer, peer_data in self.cluster.connections.items():
             if peer_data.get("meta", {}).get("bind") == raddr:
                 return peer_data.get("streams")
@@ -59,7 +100,7 @@ class Health:
         outbound_streams = None
 
         while not outbound_streams:
-            outbound_streams = self.get_streams_by_bind(peer_info["bind"])
+            outbound_streams = self.get_streams_from_bind(peer_info["bind"])
             if not outbound_streams:
                 logger.info(f"Evaluating stream for {peer_info['bind']}")
                 await asyncio.sleep(1.0)
@@ -135,22 +176,18 @@ class Cluster:
         self.started = ntime_utc_now()
         self.tickets = dict()
         self.swarm = set()
-        self.ping_pong = Health(self)
+        self.health_manager = Health(self)
         self.server_limit = 104857600  # 100 MiB
 
-        IN_MEMORY_DB["connection_failures"] = dict()
-        IN_MEMORY_DB["peer_critical"] = dict()
-
-        self.locks["connecting"] = dict()
-        for peer in defaults.CLUSTER_PEERS_THEM:
-            self.locks["connecting"][peer] = asyncio.Lock()
+        IN_MEMORY_DB["PEER_CONNECTION_FAILURES"] = dict()
+        IN_MEMORY_DB["PEER_CRIT"] = dict()
 
     async def read_command(self, reader: asyncio.StreamReader) -> tuple[str, str, dict]:
         bytes_to_read = int.from_bytes(await reader.readexactly(4), "big")
         input_bytes = await reader.readexactly(bytes_to_read)
 
         input_decoded = input_bytes.strip().decode("utf-8")
-        data, _, meta = input_decoded.partition(" META ")
+        data, _, meta = input_decoded.partition(" :META ")
         ticket, _, cmd = data.partition(" ")
 
         patterns = [
@@ -194,17 +231,22 @@ class Cluster:
             try:
                 ticket, cmd, peer_info = await self.read_command(reader)
 
-                if not raddr in [t.get_name() for t in self.ping_pong.tasks]:
+                if not raddr in [t.get_name() for t in self.health_manager.tasks]:
                     t = asyncio.create_task(
-                        self.ping_pong.create_watchdog(peer_info, (reader, writer)),
+                        self.health_manager.create_watchdog(
+                            peer_info, (reader, writer)
+                        ),
                         name=raddr,
                     )
-                    self.ping_pong.tasks.add(t)
-                    t.add_done_callback(self.ping_pong.tasks.discard)
+                    self.health_manager.tasks.add(t)
+                    t.add_done_callback(self.health_manager.tasks.discard)
 
-                if IN_MEMORY_DB["connection_failures"].get(peer_info["bind"], 0) > 0:
+                if (
+                    IN_MEMORY_DB["PEER_CONNECTION_FAILURES"].get(peer_info["bind"], 0)
+                    > 0
+                ):
                     logger.success(f"Peer {peer_info['bind']} recovered")
-                IN_MEMORY_DB["connection_failures"][peer_info["bind"]] = 0
+                IN_MEMORY_DB["PEER_CONNECTION_FAILURES"][peer_info["bind"]] = 0
 
             except (asyncio.exceptions.IncompleteReadError, ConnectionResetError):
                 break
@@ -223,14 +265,14 @@ class Cluster:
                 elif cmd.startswith("PATCHTABLE") or cmd.startswith("FULLTABLE"):
                     if (
                         cmd.startswith("FULLTABLE")
-                        and IN_MEMORY_DB["peer_critical"].get(peer_info["bind"])
+                        and IN_MEMORY_DB["PEER_CRIT"].get(peer_info["bind"])
                         == "CRIT:TABLE_HASH_MISMATCH"
                     ):
-                        IN_MEMORY_DB["peer_critical"].pop(peer_info["bind"], None)
+                        IN_MEMORY_DB["PEER_CRIT"].pop(peer_info["bind"], None)
 
                     if (
                         cmd.startswith("PATCHTABLE")
-                        and IN_MEMORY_DB["peer_critical"].get(peer_info["bind"])
+                        and IN_MEMORY_DB["PEER_CRIT"].get(peer_info["bind"])
                         == "CRIT:TABLE_HASH_MISMATCH"
                     ):
                         await self.send_command(
@@ -341,25 +383,35 @@ class Cluster:
                 elif cmd.startswith("FILEGET"):
                     _, _, payload = cmd.partition(" ")
                     start, end, file = payload.split(" ")
-                    if not is_path_within_cwd(file):
+
+                    if not is_path_within_cwd(file) or not os.path.exists(file):
                         await self.send_command(
                             CritErrors.INVALID_FILE_PATH.value,
                             [peer_info["bind"]],
                             ticket=ticket,
                         )
-                    else:
-                        with open(file, "rb") as f:
-                            f.seek(int(start))
-                            compressed_data = zlib.compress(f.read(int(end)))
-                            compressed_data_encoded = base64.b64encode(
-                                compressed_data
-                            ).decode("utf-8")
+                        continue
 
+                    if os.stat(file).st_size < int(start):
                         await self.send_command(
-                            f"ACK {file} {defaults.CLUSTER_PEERS_ME} {compressed_data_encoded}",
+                            CritErrors.START_BEHIND_FILE_END.value,
                             [peer_info["bind"]],
                             ticket=ticket,
                         )
+                        continue
+
+                    with open(file, "rb") as f:
+                        f.seek(int(start))
+                        compressed_data = zlib.compress(f.read(int(end)))
+                        compressed_data_encoded = base64.b64encode(
+                            compressed_data
+                        ).decode("utf-8")
+
+                    await self.send_command(
+                        f"ACK {file} {defaults.CLUSTER_PEERS_ME} {compressed_data_encoded}",
+                        [peer_info["bind"]],
+                        ticket=ticket,
+                    )
 
                 elif cmd.startswith("UNLOCK"):
                     _, _, tables_str = cmd.partition(" ")
@@ -446,72 +498,42 @@ class Cluster:
         successful_receivers = []
 
         for peer in receivers:
-            if peer not in IN_MEMORY_DB["connection_failures"]:
-                IN_MEMORY_DB["connection_failures"][peer] = 0
+            if peer not in IN_MEMORY_DB["PEER_CONNECTION_FAILURES"]:
+                IN_MEMORY_DB["PEER_CONNECTION_FAILURES"][peer] = 0
             elif (
-                IN_MEMORY_DB["connection_failures"][peer]
+                IN_MEMORY_DB["PEER_CONNECTION_FAILURES"][peer]
                 > defaults.CLUSTER_PEER_MAX_FAILURES
             ):
                 logger.warning(f"Not trying peer {peer} due to consecutive failures")
                 continue
 
-            if not peer in self.connections:
-                with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as sock:
-                    sock.settimeout(defaults.CLUSTER_PEERS_TIMEOUT)
-                    if sock.connect_ex((peer, self.port)) != 0:
-                        logger.warning(f"Skipping {peer}: Connection timed out")
-                        IN_MEMORY_DB["connection_failures"][peer] += 1
-                        continue
+            if await self.health_manager.connect(peer) == True:
+                reader, writer = self.connections[peer]["streams"]
 
-                self.connections[peer] = {
-                    "meta": dict(),
-                    "requests": 0,
-                    "streams": set(),
-                }
+                buffer_data = [
+                    ticket,
+                    cmd,
+                    ":META",
+                    f"NAME {defaults.CLUSTER_NODENAME}",
+                    "WEBREQUESTS {web_requests}".format(
+                        web_requests=IN_MEMORY_DB["WEB_REQUESTS"]
+                    ),
+                    "SWARM {swarm}".format(swarm=self.swarm or "?CONFUSED"),
+                    f"STARTED {self.started}",
+                    "MASTER {master_node}".format(
+                        master_node=self.master_node or "?CONFUSED"
+                    ),
+                    f"BIND {defaults.CLUSTER_PEERS_ME}",
+                ]
 
-            async with self.locks["connecting"][peer]:
-                if not self.connections[peer]["streams"]:
-                    try:
-                        self.connections[peer][
-                            "streams"
-                        ] = await asyncio.open_connection(
-                            peer, self.port, ssl=get_ssl_context("client")
-                        )
-                        IN_MEMORY_DB["connection_failures"][peer] = 0
-                    except KeyError:
-                        continue
-                    except ConnectionRefusedError:
-                        if IN_MEMORY_DB["connection_failures"][peer] == 0:
-                            logger.warning(f"Skipping {peer}: ConnectionRefusedError")
-                        IN_MEMORY_DB["connection_failures"][peer] += 1
-                        continue
+                buffer_bytes = " ".join(buffer_data).encode("utf-8")
+                writer.write(len(buffer_bytes).to_bytes(4, "big"))
+                writer.write(buffer_bytes)
+                await writer.drain()
 
-            reader, writer = self.connections[peer]["streams"]
+                log_tx(peer, cmd)
 
-            buffer_data = [
-                ticket,
-                cmd,
-                "META",
-                f"NAME {defaults.CLUSTER_NODENAME}",
-                "WEBREQUESTS {web_requests}".format(
-                    web_requests=IN_MEMORY_DB["web_requests"]
-                ),
-                "SWARM {swarm}".format(swarm=self.swarm or "?CONFUSED"),
-                f"STARTED {self.started}",
-                "MASTER {master_node}".format(
-                    master_node=self.master_node or "?CONFUSED"
-                ),
-                f"BIND {defaults.CLUSTER_PEERS_ME}",
-            ]
-
-            buffer_bytes = " ".join(buffer_data).encode("utf-8")
-            writer.write(len(buffer_bytes).to_bytes(4, "big"))
-            writer.write(buffer_bytes)
-            await writer.drain()
-
-            log_tx(peer, cmd)
-
-            successful_receivers.append(peer)
+                successful_receivers.append(peer)
 
         return ticket, successful_receivers
 
@@ -580,16 +602,16 @@ class Cluster:
                         errors.append("master_busy")
 
                     if (
-                        IN_MEMORY_DB["peer_critical"].get(self.master_node)
+                        IN_MEMORY_DB["PEER_CRIT"].get(self.master_node)
                         == "CRIT:PEERS_MISMATCH"
                     ):
-                        IN_MEMORY_DB["peer_critical"][self.master_node] = None
+                        IN_MEMORY_DB["PEER_CRIT"][self.master_node] = None
 
                 except asyncio.CancelledError:
                     errors.append("lock_cancelled")
                 except IncompleteClusterResponses:
                     if (
-                        IN_MEMORY_DB["peer_critical"].get(self.master_node)
+                        IN_MEMORY_DB["PEER_CRIT"].get(self.master_node)
                         == "CRIT:PEERS_MISMATCH"
                     ):
                         errors.append("lock_rejected")
@@ -710,7 +732,7 @@ class Cluster:
                             )
 
             await shutdown_trigger.wait()
-            [t.cancel() for t in self.ping_pong.tasks]
+            [t.cancel() for t in self.health_manager.tasks]
 
     async def await_receivers(
         self,
@@ -743,7 +765,7 @@ class Cluster:
             critical_errors = {p: m for p, m in self.tickets[ticket] if "CRIT" in m}
 
             for peer, critical_error in critical_errors.items():
-                IN_MEMORY_DB["peer_critical"][peer] = critical_error
+                IN_MEMORY_DB["PEER_CRIT"][peer] = critical_error
                 errors.append(f"{peer} reported a critical error: {critical_error}")
 
             if not missing_receivers and len(responses) != len(receivers):

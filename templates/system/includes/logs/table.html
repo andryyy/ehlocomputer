@@ -17,7 +17,7 @@
       autocorrect="off"
       autocapitalize="off"
       spellcheck="false" />
-      <input form="system-logs-form" hx-get="/system/logs/refresh?force=1" data-loading-disable type="submit" value="↺" />
+      <input form="system-logs-form" hx-trigger="click throttle:100ms, forceRefresh from:body" hx-get="/system/logs/refresh?force=1" data-loading-disable type="submit" value="↺" />
     </fieldset>
 </form>
 

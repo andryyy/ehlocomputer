@@ -24,47 +24,21 @@ def cache_buster(object_id: UUID | list[UUID]):
     object_ids = ensure_list(object_id)
     for object_id in object_ids:
         object_id = str(object_id)
-        for cache_user in IN_MEMORY_DB["objects_cache"]:
-            cached_keys = list(IN_MEMORY_DB["objects_cache"][cache_user].keys())
+
+        for user_id in IN_MEMORY_DB["objects_cache"]:
+            cached_keys = list(IN_MEMORY_DB["objects_cache"][user_id].keys())
             if object_id in cached_keys:
-                mapping_name = IN_MEMORY_DB["objects_cache"][cache_user][object_id].name
-                if object_id in IN_MEMORY_DB["objects_cache"][cache_user]:
-                    del IN_MEMORY_DB["objects_cache"][cache_user][object_id]
+                mapping_name = IN_MEMORY_DB["objects_cache"][user_id][object_id].name
+                if object_id in IN_MEMORY_DB["objects_cache"][user_id]:
+                    del IN_MEMORY_DB["objects_cache"][user_id][object_id]
 
-
-@validate_call
-async def user_permitted_objects(user_id: UUID | None = None):
-    from tools.users import get as get_user
-
-    if not user_id and current_app and session.get("id"):
-        user_id = session["id"]
-
-    user = await get_user(user_id=user_id)
-    permissions = {
-        "_meta": {
-            "user_id": user.id,
-            "user_acl": user.acl,
-        }
-    }
-    permissions.update(
-        {
-            object_type: objects
-            for object_type, objects in [
-                (
-                    ot,
-                    await search(
-                        object_type=ot,
-                        match_all={"assigned_users": [user.id]}
-                        if not "system" in user.acl
-                        else {},
-                        fully_resolve=False,
-                    ),
-                )
-                for ot in objects_model.model_classes["types"]
-            ]
-        }
-    )
-    return permissions
+        for user_id in IN_MEMORY_DB["FORM_OPTIONS"]:
+            for option in IN_MEMORY_DB["FORM_OPTIONS"][user_id].copy():
+                if any(
+                    d["value"] == object_id
+                    for d in IN_MEMORY_DB["FORM_OPTIONS"][user_id][option]
+                ):
+                    del IN_MEMORY_DB["FORM_OPTIONS"][user_id][option]
 
 
 @validate_call
@@ -74,61 +48,62 @@ async def get(
     permission_validation=True,
 ):
     get_objects = objects_model.ObjectIdList(object_id=object_id).object_id
-    permitted_objects = await user_permitted_objects()
     db_params = evaluate_db_params()
 
     if current_app and session.get("id"):
-        cache_user = session["id"]
+        user_id = session["id"]
     else:
-        cache_user = "anonymous"
+        user_id = "anonymous"
 
-    if not cache_user in IN_MEMORY_DB["objects_cache"]:
-        IN_MEMORY_DB["objects_cache"][cache_user] = dict()
-
-    if permission_validation == True:
-        get_objects = [
-            o.id for o in permitted_objects[object_type] if o.id in get_objects
-        ]
+    if not user_id in IN_MEMORY_DB["objects_cache"]:
+        IN_MEMORY_DB["objects_cache"][user_id] = dict()
 
     async with TinyDB(**db_params) as db:
         found_objects = db.table(object_type).search(Query().id.one_of(get_objects))
 
     object_data = []
+
     for o in found_objects:
         o_parsed = objects_model.model_classes["base"][object_type].model_validate(o)
+
+        if (
+            not "system" in session["acl"]
+            and permission_validation == True
+            and user_id not in o_parsed.details.assigned_users
+        ):
+            continue
+
         for k, v in o_parsed.details.model_dump(mode="json").items():
             if k == "assigned_domain":
-                if not v in IN_MEMORY_DB["objects_cache"][cache_user]:
-                    IN_MEMORY_DB["objects_cache"][cache_user][v] = await get(
+                if not v in IN_MEMORY_DB["objects_cache"][user_id]:
+                    IN_MEMORY_DB["objects_cache"][user_id][v] = await get(
                         object_type="domains",
                         object_id=v,
                         permission_validation=False,
                     )
 
                 o_parsed.details.assigned_domain = IN_MEMORY_DB["objects_cache"][
-                    cache_user
+                    user_id
                 ][v]
             elif k in ["assigned_arc_keypair", "assigned_dkim_keypair"] and v:
-                if not v in IN_MEMORY_DB["objects_cache"][cache_user]:
-                    IN_MEMORY_DB["objects_cache"][cache_user][v] = await get(
+                if not v in IN_MEMORY_DB["objects_cache"][user_id]:
+                    IN_MEMORY_DB["objects_cache"][user_id][v] = await get(
                         object_type="keypairs",
                         object_id=v,
                         permission_validation=False,
                     )
-                setattr(
-                    o_parsed.details, k, IN_MEMORY_DB["objects_cache"][cache_user][v]
-                )
+                setattr(o_parsed.details, k, IN_MEMORY_DB["objects_cache"][user_id][v])
             elif k == "assigned_emailusers" and v:
                 o_parsed.details.assigned_emailusers = []
                 for u in ensure_list(v):
-                    if not u in IN_MEMORY_DB["objects_cache"][cache_user]:
-                        IN_MEMORY_DB["objects_cache"][cache_user][u] = await get(
+                    if not u in IN_MEMORY_DB["objects_cache"][user_id]:
+                        IN_MEMORY_DB["objects_cache"][user_id][u] = await get(
                             object_type="emailusers",
                             object_id=u,
                             permission_validation=False,
                         )
                     o_parsed.details.assigned_emailusers.append(
-                        IN_MEMORY_DB["objects_cache"][cache_user][u]
+                        IN_MEMORY_DB["objects_cache"][user_id][u]
                     )
 
         object_data.append(o_parsed)
@@ -165,12 +140,13 @@ async def patch(
     object_id: UUID | list[UUID],
     data: dict,
 ):
+    assert current_app and session.get("id")
+
     to_patch_objects = [o for o in ensure_list(await get(object_type, object_id))]
     db_params = evaluate_db_params()
-    permitted_objects = await user_permitted_objects()
 
     for to_patch in to_patch_objects:
-        if not "system" in permitted_objects["_meta"]["user_acl"]:
+        if not "system" in session["acl"]:
             if not "details" in data:
                 data["details"] = dict()
             for f in objects_model.model_classes["system_fields"][object_type]:
@@ -199,7 +175,7 @@ async def patch(
             )
 
         if object_type == "domains":
-            if "system" in permitted_objects["_meta"]["user_acl"]:
+            if "system" in session["acl"]:
                 addresses_in_domain = await search(
                     object_type="addresses",
                     match_all={"assigned_domain": patched_object.id},
@@ -235,33 +211,36 @@ async def patch(
                     )
 
                     if patched_obj_keypair_id != to_patch_obj_keypair_id:
-                        if to_patch_obj_keypair_id not in [
-                            k.id for k in permitted_objects["keypairs"]
-                        ]:
-                            raise ValueError(
-                                f"details.{attr}",
-                                f"Cannot unassign a non-permitted keypair",
-                            )
-                        if patched_obj_keypair_id not in [
-                            k.id for k in permitted_objects["keypairs"]
-                        ]:
-                            raise ValueError(
-                                f"details.{attr}",
-                                f"Cannot assign non-permitted keypair",
-                            )
+                        if not "system" in session["acl"]:
+                            if not await get("keypairs", to_patch_obj_keypair_id):
+                                raise ValueError(
+                                    f"details.{attr}",
+                                    f"Cannot unassign a non-permitted keypair",
+                                )
+                            if not await get("keypairs", patched_obj_keypair_id):
+                                raise ValueError(
+                                    f"details.{attr}",
+                                    f"Cannot assign non-permitted keypair",
+                                )
         if object_type == "addresses":
-            if not "system" in permitted_objects["_meta"]["user_acl"]:
+            if not "system" in session["acl"]:
                 if (
                     patched_object.details.assigned_domain
                     != to_patch.details.assigned_domain.id
                 ):  # only when assigned_domain changed
-                    if any(
-                        domain not in [d.id for d in permitted_objects["domains"]]
-                        for domain in [
-                            patched_object.details.assigned_domain,
-                            to_patch.details.assigned_domain.id,
-                        ]
-                    ):  # disallow a change to a permitted domain if the current domain is not permitted
+                    if (
+                        not len(
+                            await get(
+                                "domains",
+                                [
+                                    patched_object.details.assigned_domain,
+                                    to_patch.details.assigned_domain.id,
+                                ],
+                            )
+                        )
+                        == 2
+                    ):
+                        # disallow a change to a permitted domain if the current domain is not permitted
                         raise ValueError(
                             "details.assigned_domain",
                             f"Cannot assign selected domain for object {to_patch.details.local_part}",
@@ -276,14 +255,12 @@ async def patch(
                         *patched_object.details.assigned_emailusers,
                         *[u.id for u in to_patch.details.assigned_emailusers],
                     ]:
-                        if emailuser and emailuser not in [
-                            u.id for u in permitted_objects["emailusers"]
-                        ]:
-                            _ = await get(
-                                object_type="emailusers",
-                                object_id=emailuser,
-                                permission_validation=False,
-                            )
+                        _ = await get(
+                            object_type="emailusers",
+                            object_id=emailuser,
+                            permission_validation=False,
+                        )
+                        if session["id"] not in _.details.assigned_users:
                             non_permitted_users.add(_.name if _ else "<unknown>")
 
                     if non_permitted_users:
@@ -334,13 +311,14 @@ async def create(
     object_type: Literal[*objects_model.model_classes["types"]],
     data: dict,
 ):
+    assert current_app and session.get("id")
+
     db_params = evaluate_db_params()
-    permitted_objects = await user_permitted_objects()
 
     if not "details" in data:
         data["details"] = dict()
 
-    data["details"]["assigned_users"] = permitted_objects["_meta"]["user_id"]
+    data["details"]["assigned_users"] = session["id"]
 
     create_object = objects_model.model_classes["add"][object_type].model_validate(data)
 
@@ -359,10 +337,9 @@ async def create(
         )
 
     if object_type == "addresses":
-        if not create_object.details.assigned_domain in [
-            domain.id for domain in permitted_objects["domains"]
-        ]:
-            raise ValueError("name", "The provided domain is unavailable")
+        if not "system" in session["acl"]:
+            if not await get("domains", create_object.details.assigned_domain):
+                raise ValueError("name", "The provided domain is unavailable")
 
         addresses_in_domain = await search(
             object_type="addresses",
@@ -376,7 +353,7 @@ async def create(
         )
 
         domain_assigned_users = set(domain_data.details.assigned_users)
-        domain_assigned_users.add(permitted_objects["_meta"]["user_id"])
+        domain_assigned_users.add(session["id"])
         create_object.details.assigned_users = list(domain_assigned_users)
 
         if domain_data.details.n_mailboxes and domain_data.details.n_mailboxes < (
@@ -388,7 +365,7 @@ async def create(
             )
 
     if object_type == "domains":
-        if not "system" in permitted_objects["_meta"]["user_acl"]:
+        if not "system" in session["acl"]:
             raise ValueError("name", "You need system permission to create a domain")
 
     async with TinyDB(**db_params) as db:

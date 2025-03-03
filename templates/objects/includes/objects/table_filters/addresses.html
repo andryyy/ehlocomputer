@@ -3,16 +3,21 @@
 <div id="{{ request.view_args.get("object_type") }}-table-filters" class="filters" _="install objectFilters(submitForm: #{{ request.view_args.get("object_type") }}-table-search)">
   <input type="text" placeholder="Filter domains"
     _="init
-      hide <button:not(.button-pink-300)/> in .filter-buttons
+      hide <button:not(.active)/> in .filter-buttons
       remove @hidden from .filter-buttons
     end
     on keyup
       if my value is ''
-        hide <button:not(.button-pink-300)/> in .filter-buttons
+        hide <button:not(.active)/> in .filter-buttons
       else
         show <button/> in .filter-buttons when its textContent contains my value
       end
-      show <button.button-pink-300/> in .filter-buttons
+      show <button.active/> in .filter-buttons
+      if event.keyCode is 13
+        repeat for button in <button/> in .filter-buttons
+          if button's *display is not 'none' trigger click on it break end
+        end
+      end
     end">
 
   <div class="filter-buttons" hidden>
@@ -21,7 +26,7 @@
       type="submit"
       name="_filters"
       value="assigned_domain:{{ option["value"] }}"
-      class="{{ "active button-pink-300" if option["value"] in filters["assigned_domain"]|ensurelist else "outline primary" }}">
+      class="{{ "active button-blue" if option["value"] in filters["assigned_domain"]|ensurelist else "outline primary" }}">
     {{ option["name"] }}
     </button>
     {% endfor %}

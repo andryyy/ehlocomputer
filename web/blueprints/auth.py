@@ -5,9 +5,15 @@ from base64 import b64decode, b64encode
 from config import defaults
 from utils.cluster.http_lock import ClusterLock
 from config.database import IN_MEMORY_DB
-from models import auth as auth_model
-from pydantic import ValidationError, TypeAdapter
-from uuid import uuid4
+from models.users import (
+    UserSession,
+    AuthToken,
+    TokenConfirmation,
+    UserSession,
+    ValidationError,
+    TypeAdapter,
+    uuid4,
+)
 from quart import Blueprint, render_template, request, session, current_app as app
 from secrets import token_urlsafe
 from utils import wrappers
@@ -123,7 +129,7 @@ async def login_request_confirm_modal(request_token: str):
 @blueprint.route("/login/request/start", methods=["POST"])
 async def login_request_start():
     try:
-        request_data = auth_model.AuthToken.parse_obj(request.form_parsed)
+        request_data = AuthToken.parse_obj(request.form_parsed)
     except ValidationError as e:
         return validation_error(e.errors())
 
@@ -192,7 +198,7 @@ async def login_request_check(request_token: str):
             )
 
         for k, v in (
-            auth_model.UserSession(
+            UserSession(
                 login=user.login,
                 id=user.id,
                 acl=user.acl,
@@ -215,7 +221,7 @@ async def login_request_check(request_token: str):
 @blueprint.route("/login/token", methods=["POST"])
 async def login_token():
     try:
-        request_data = auth_model.AuthToken.parse_obj(request.form_parsed)
+        request_data = AuthToken.parse_obj(request.form_parsed)
         token = request_data.token
         IN_MEMORY_DB[token] = {
             "intention": f"Authenticate user: {request_data.login}",
@@ -242,7 +248,7 @@ async def login_token():
 @blueprint.route("/login/token/verify", methods=["POST"])
 async def login_token_verify():
     try:
-        request_data = auth_model.TokenConfirmation.parse_obj(request.form_parsed)
+        request_data = TokenConfirmation.parse_obj(request.form_parsed)
 
         token_status, token_login, token_confirmation_code = map(
             IN_MEMORY_DB.get(request_data.token, {}).get,
@@ -270,7 +276,7 @@ async def login_token_verify():
         return validation_error(e.errors())
 
     for k, v in (
-        auth_model.UserSession(
+        UserSession(
             login=token_login,
             id=user.id,
             acl=user.acl,
@@ -327,7 +333,7 @@ async def login_webauthn_options():
 @blueprint.route("/register/token", methods=["POST"])
 async def register_token():
     try:
-        request_data = auth_model.AuthToken.parse_obj(request.form_parsed)
+        request_data = AuthToken.parse_obj(request.form_parsed)
         token = request_data.token
         IN_MEMORY_DB[token] = {
             "intention": f"Register user: {request_data.login}",
@@ -360,7 +366,7 @@ async def register_token():
 async def register_webauthn_options():
     if "token" in request.form_parsed:
         try:
-            request_data = auth_model.TokenConfirmation.parse_obj(request.form_parsed)
+            request_data = TokenConfirmation.parse_obj(request.form_parsed)
         except ValidationError as e:
             return validation_error(e.errors())
 
@@ -631,7 +637,7 @@ async def auth_login_verify():
         return "", 204, {"HX-Trigger": "proxyAuthSuccess"}
 
     for k, v in (
-        auth_model.UserSession(
+        UserSession(
             login=user.login,
             id=user.id,
             acl=user.acl,

@@ -3,9 +3,11 @@ import json
 from config import defaults
 from config.logs import logger
 from copy import deepcopy
+from models.objects import model_classes
 from pydantic import constr, validate_call, BaseModel
 from quart import current_app as app, render_template, session, websocket
 from tools.users import search as search_users
+from tools.objects import search as search_object
 from typing import Literal
 
 
@@ -190,3 +192,28 @@ def validation_error(
             ),
         },
     )
+
+
+@validate_call
+async def form_options(option: Literal[*model_classes["types"], "users"]):
+    if option == "users":
+        return sorted(
+            [
+                {"name": user.login, "value": user.id, "groups": user.groups}
+                for user in await search_users(name="")
+            ],
+            key=lambda x: x["name"],
+        )
+    else:
+        return sorted(
+            [
+                {"name": o.name, "value": o.id}
+                for o in await search_object(
+                    object_type=option,
+                    match_all={"assigned_users": [session["id"]]}
+                    if not "system" in session["acl"]
+                    else {},
+                )
+            ],
+            key=lambda x: x["name"],
+        )

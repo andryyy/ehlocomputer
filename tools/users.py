@@ -1,8 +1,15 @@
 import asyncio
-import models.auth as auth_model
-import models.users as users_model
 import re
 
+from models.users import (
+    CredentialRead,
+    UserAdd,
+    AddCredential,
+    User,
+    UserPatch,
+    UserProfile,
+    CredentialPatch,
+)
 from config import defaults
 from config.database import *
 from config.logs import logger
@@ -15,7 +22,7 @@ from uuid import UUID
 def _create_credentials_mapping(credentials: dict):
     user_credentials = dict()
     for c in credentials:
-        user_credentials.update({c["id"]: auth_model.CredentialRead.parse_obj(c)})
+        user_credentials.update({c["id"]: CredentialRead.parse_obj(c)})
     return user_credentials
 
 
@@ -35,7 +42,7 @@ async def what_id(login: str):
 @validate_call
 async def create(data: dict):
     db_params = evaluate_db_params()
-    create_user = users_model.UserAdd.parse_obj(data)
+    create_user = UserAdd.parse_obj(data)
 
     async with TinyDB(**db_params) as db:
         if db.table("users").search(Query().login == create_user.login):
@@ -51,9 +58,7 @@ async def get(user_id: UUID, join_credentials: bool = True):
     db_params = evaluate_db_params()
 
     async with TinyDB(**db_params) as db:
-        user = users_model.User.parse_obj(
-            db.table("users").get(Query().id == str(user_id))
-        )
+        user = User.parse_obj(db.table("users").get(Query().id == str(user_id)))
         credentials = db.table("credentials").search(
             (Query().id.one_of(user.credentials))
         )
@@ -80,7 +85,7 @@ async def delete(user_id: UUID):
 @validate_call
 async def create_credential(user_id: UUID, data: dict):
     db_params = evaluate_db_params()
-    credential = auth_model.AddCredential.parse_obj(data)
+    credential = AddCredential.parse_obj(data)
     user = await get(user_id=user_id, join_credentials=False)
 
     if not user:
@@ -119,7 +124,7 @@ async def delete_credential(
 @validate_call
 async def patch(user_id: UUID, data: dict):
     db_params = evaluate_db_params()
-    patch_user = users_model.UserPatch.parse_obj(data)
+    patch_user = UserPatch.parse_obj(data)
     user = await get(user_id=user_id, join_credentials=False)
 
     if not user:
@@ -151,7 +156,7 @@ async def patch_profile(user_id: UUID, data: dict):
     if not user:
         raise ValueError("name", "The provided user does not exist")
 
-    patch_data = users_model.UserProfile.model_validate(data)
+    patch_data = UserProfile.model_validate(data)
     patched_user_profile = merge_models(user.profile, patch_data)
 
     async with TinyDB(**db_params) as db:
@@ -179,7 +184,7 @@ async def patch_credential(
         )
 
     async with TinyDB(**db_params) as db:
-        patched_credential = auth_model.CredentialPatch.model_validate(
+        patched_credential = CredentialPatch.model_validate(
             merge_deep(user.credentials[hex_id].dict(), data)
         )
         db.table("credentials").update(patched_credential.dict(), Query().id == hex_id)

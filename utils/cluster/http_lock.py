@@ -108,7 +108,7 @@ class ClusterLock:
                             break
 
                     if apply_mode == "FULLTABLE":
-                        IN_MEMORY_DB["peer_critical"] = dict()
+                        IN_MEMORY_DB["PEER_CRIT"] = dict()
 
             if error == False:
                 if commit:

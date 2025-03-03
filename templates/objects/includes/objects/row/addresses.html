@@ -2,8 +2,10 @@
   <td>
     <input type="checkbox" class="multiselect" name="id" value="{{ object.id }}" autocomplete="off">
     <a href="#" hx-target="#body-main" hx-push-url="true" hx-get="/objects/{{ request.view_args.get("object_type") }}/{{ object.id }}">
-    {{- object.details.local_part  -}}</a>＠<a class="{{ "color-pink-350" if session.get(request.view_args.get("object_type") ~ "_filters") else "secondary" }} " href="#" hx-target="#body-main" hx-push-url="true" hx-get="/objects/domains/{{ object.details.assigned_domain.id }}">
-      {{- object.details.assigned_domain.name -}}
+    {{- object.details.local_part  -}}</a> -
+
+    <a class="{{ "color-blue" if session.get(request.view_args.get("object_type") ~ "_filters") else "secondary" }} " href="#" hx-target="#body-main" hx-push-url="true" hx-get="/objects/domains/{{ object.details.assigned_domain.id }}">
+      ＠{{ object.details.assigned_domain.name }}
     </a>
   </td>
   <td class="created-modified">

@@ -145,6 +145,6 @@ behavior objectFilters(submitForm)
         then put the result at the end of .generated-filters in me
       end
 
-      trigger submit on submitForm unless submitForm != ''
+      trigger submit on submitForm unless submitForm == ''
   end
 end

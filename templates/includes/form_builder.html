@@ -13,7 +13,7 @@ DATA FIELDS
 {% for k, v in schema.properties.items() if k not in without %}
   {% if v.type in ["text", "email", "number"] %}
     {% set readonly = True if "readonly" in v.input_extra else False %}
-    <fieldset {% if k in system_fields and not "system" in session["acl"] %}class="system-field" disabled{% endif %}>
+    <fieldset data-loading-disable {% if k in system_fields and not "system" in session["acl"] %}class="system-field" disabled{% endif %}>
       <label for="{{ v.form_id }}">{{ v.title }} {{ "🚫" if readonly }}</label>
       <input {{ v.input_extra|safe }} id="{{ v.form_id }}"
         name="{% if root_key %}{{ root_key }}.{{ k }}{% else %}{{ k }}{% endif %}"
@@ -27,7 +27,7 @@ DATA FIELDS
   {% elif v.type in ["date", "datetime-local"] %}
 
     {% set readonly = True if "readonly" in v.input_extra else False %}
-    <fieldset {% if k in system_fields and not "system" in session["acl"] %}class="system-field" disabled{% endif %}>
+    <fieldset data-loading-disable {% if k in system_fields and not "system" in session["acl"] %}class="system-field" disabled{% endif %}>
       <label for="{{ v.form_id }}">{{ v.title }} {{ "🚫" if readonly }}</label>
       <input {{ v.input_extra|safe }} id="{{ v.form_id }}"
         name="{% if root_key %}{{ root_key }}.{{ k }}{% else %}{{ k }}{% endif %}"
@@ -40,7 +40,7 @@ DATA FIELDS
 
   {% elif v.type == "select:multi" or v.type == "select" %}
 
-    <fieldset {% if k in system_fields and not "system" in session["acl"] %}class="system-field" disabled{% endif %}>
+    <fieldset data-loading-disable {% if k in system_fields and not "system" in session["acl"] %}class="system-field" disabled{% endif %}>
       <label for="{{ v.form_id }}">{{ v.title }}</label>
       <select {{ v.input_extra|safe }}
         {% if v.type == "select:multi" %}
@@ -60,7 +60,7 @@ DATA FIELDS
 
   {% elif v.type == "datalist" %}
 
-    <fieldset {% if k in system_fields and not "system" in session["acl"] %}class="system-field" disabled{% endif %}>
+    <fieldset data-loading-disable {% if k in system_fields and not "system" in session["acl"] %}class="system-field" disabled{% endif %}>
       <label for="{{ v.form_id }}">{{ v.title }}</label>
       <input list="{{ v.form_id }}-datalist"
         name="{% if root_key %}{{ root_key }}.{{ k }}{% else %}{{ k }}{% endif %}"
@@ -82,7 +82,7 @@ DATA FIELDS
     {% if not request.form_options.users or request.form_options.users == [] %}
       <p>No users found</p>
     {% else %}
-      <fieldset {% if k in system_fields and not "system" in session["acl"] %}class="system-field" disabled{% endif %}>
+      <fieldset data-loading-disable {% if k in system_fields and not "system" in session["acl"] %}class="system-field" disabled{% endif %}>
         <label for="{{ v.form_id }}">{{ v.title }}</label>
         <select {{ v.input_extra|safe }}
           {% if v.type == "users:multi" %}
@@ -106,7 +106,7 @@ DATA FIELDS
       <label for="{{ v.form_id }}">{{ v.title }}</label>
       <p><mark>No email users available</mark></p>
     {% else %}
-      <fieldset {% if k in system_fields and not "system" in session["acl"] %}class="system-field" disabled{% endif %}>
+      <fieldset data-loading-disable {% if k in system_fields and not "system" in session["acl"] %}class="system-field" disabled{% endif %}>
         <label for="{{ v.form_id }}">{{ v.title }}</label>
         <select {{ v.input_extra|safe }}
           {% if v.type == "emailusers:multi" %}
@@ -137,7 +137,7 @@ DATA FIELDS
         <small><a href="#" hx-on:click="event.preventDefault();this.closest('div').remove()">Remove</a></small>
       </div>
     </template>
-    <fieldset id="{{ v.form_id }}" _="on click from .add-list-item in me halt the event then render #list:item then put the result at the end of me end">
+    <fieldset data-loading-disable id="{{ v.form_id }}" _="on click from .add-list-item in me halt the event then render #list:item then put the result at the end of me end">
       <legend>{{ v.title }} <a {{ "hidden" if readonly }} href="#" class="add-list-item">Add</a> {{ "🚫" if readonly }}</legend>
       {% for list_value in current_data[k] or v.default %}
       <div>
@@ -155,7 +155,7 @@ DATA FIELDS
 
   {% elif v.type == "radio" %}
 
-    <fieldset {% if k in system_fields and not "system" in session["acl"] %}class="system-field" disabled{% endif %}>
+    <fieldset data-loading-disable {% if k in system_fields and not "system" in session["acl"] %}class="system-field" disabled{% endif %}>
       <legend for="{{ v.form_id }}">{{ v.title }}</legend>
       {% for radio_value in v.enum %}
       <label>
@@ -178,7 +178,7 @@ DATA FIELDS
     {% if not request.form_options.keypairs or request.form_options.keypairs == [] %}
       <p>No key pairs available</p>
     {% else %}
-      <fieldset {% if k in system_fields and not "system" in session["acl"] %}class="system-field keypair" disabled{% endif %} class="keypair">
+      <fieldset data-loading-disable {% if k in system_fields and not "system" in session["acl"] %}class="system-field keypair" disabled{% endif %} class="keypair">
         <label for="{{ v.form_id }}">{{ v.title }}</label>
         <select {{ v.input_extra|safe }}
           name="{% if root_key %}{{ root_key }}.{{ k }}{% else %}{{ k }}{% endif %}"
@@ -226,7 +226,7 @@ DATA FIELDS
       <label for="{{ v.form_id }}">{{ v.title }}</label>
       <p><mark>No domain available</mark></p>
     {% else %}
-      <fieldset {% if k in system_fields and not "system" in session["acl"] %}class="system-field" disabled{% endif %}>
+      <fieldset data-loading-disable {% if k in system_fields and not "system" in session["acl"] %}class="system-field" disabled{% endif %}>
         <label for="{{ v.form_id }}">{{ v.title }}</label>
         <select {{ v.input_extra|safe }}
           name="{% if root_key %}{{ root_key }}.{{ k }}{% else %}{{ k }}{% endif %}"

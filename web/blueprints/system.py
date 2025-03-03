@@ -8,7 +8,7 @@ from utils.cluster.cluster import cluster
 from utils.cluster.http_lock import ClusterLock
 from config.database import *
 from datetime import datetime
-from models import system as system_model
+from models.system import UpdateSystemSettings, SystemSettings
 from models.tables import TableSearchHelper
 from pydantic import ValidationError
 from quart import Blueprint, current_app as app, render_template, request, session
@@ -20,15 +20,14 @@ from web.helpers import trigger_notification, validation_error, ws_htmx
 
 blueprint = Blueprint("system", __name__, url_prefix="/system")
 log_lock = asyncio.Lock()
+IN_MEMORY_DB["application_logs_full_pull"] = dict()
 
 
 @blueprint.context_processor
 def load_context():
     context = dict()
 
-    context["schemas"] = {
-        "system_settings": system_model.SystemSettings.model_json_schema()
-    }
+    context["schemas"] = {"system_settings": SystemSettings.model_json_schema()}
 
     if cluster.master_node != defaults.CLUSTER_PEERS_ME:
         try:
@@ -48,7 +47,7 @@ async def cluster_enforce_commit(action: str):
     if action == "start":
         if not IN_MEMORY_DB.get("enforce_commit", False):
             IN_MEMORY_DB["enforce_commit"] = ntime_utc_now()
-            IN_MEMORY_DB["connection_failures"] = dict()
+            IN_MEMORY_DB["PEER_CONNECTION_FAILURES"] = dict()
             app.add_background_task(
                 expire_key,
                 IN_MEMORY_DB,
@@ -100,9 +99,9 @@ async def cluster_enforce_commit(action: str):
 @wrappers.acl("system")
 async def cluster_reset_failed_peer():
     peer = request.form_parsed.get("peer")
-    if peer and peer in IN_MEMORY_DB["connection_failures"]:
-        IN_MEMORY_DB["connection_failures"][peer] = 0
-        IN_MEMORY_DB["peer_critical"].pop(cluster.master_node, None)
+    if peer and peer in IN_MEMORY_DB["PEER_CONNECTION_FAILURES"]:
+        IN_MEMORY_DB["PEER_CONNECTION_FAILURES"][peer] = 0
+        IN_MEMORY_DB["PEER_CRIT"].pop(cluster.master_node, None)
         return trigger_notification(
             level="success",
             response_code=204,
@@ -122,10 +121,10 @@ async def cluster_reset_failed_peer():
 @wrappers.acl("system")
 async def status():
     status = {
-        "peer_critical": IN_MEMORY_DB["peer_critical"],
-        "connection_failures": IN_MEMORY_DB["connection_failures"],
+        "PEER_CRIT": IN_MEMORY_DB["PEER_CRIT"],
+        "connection_failures": IN_MEMORY_DB["PEER_CONNECTION_FAILURES"],
         "enforce_commit": IN_MEMORY_DB.get("enforce_commit", False),
-        "web_requests": IN_MEMORY_DB["web_requests"],
+        "web_requests": IN_MEMORY_DB["WEB_REQUESTS"],
         "connections": cluster.connections,
     }
     return await render_template("system/status.html", data={"status": status})
@@ -190,10 +189,26 @@ async def cluster_logs():
     if request.method == "POST":
         _logs = []
         async with log_lock:
+            parser_failed = False
+
             with fileinput.input(list_application_log_files(), encoding="utf-8") as f:
                 for line in f:
                     if search_model.q in line:
-                        _logs.append(json.loads(line.strip()))
+                        try:
+                            _logs.append(json.loads(line.strip()))
+                        except json.decoder.JSONDecodeError:
+                            parser_failed = True
+                            os.unlink(f.filename())
+                            f.nextfile()
+
+            if parser_failed:
+                return trigger_notification(
+                    level="warning",
+                    response_code=409,
+                    title="Trying again",
+                    message="Update failed, retrying...",
+                    additional_triggers={"forceRefresh": ""},
+                )
 
         def system_logs_sort_func(sort_attr):
             if sort_attr == "text":
@@ -253,7 +268,7 @@ async def refresh_cluster_logs():
         '<div class="loading-logs" hidden _="on load trigger '
         + "notification("
         + "title: 'Please wait', level: 'user', "
-        + "message: 'Requesting logs, your view will be updated automatically.', duration: 2000)\">"
+        + "message: 'Requesting logs, your view will be updated automatically.', duration: 10000)\">"
         + "</div>",
         "/system/logs",
     )
@@ -271,13 +286,22 @@ async def refresh_cluster_logs():
         async with log_lock:
             async with ClusterLock("files"):
                 for peer in cluster.connections.keys():
-                    start = -1
-                    file_path = f"peer_files/{peer}/logs/application.log"
-
-                    if os.path.exists(file_path) and os.path.getsize(file_path) > (
-                        5 * 1024 * 1024
-                    ):
+                    if not peer in IN_MEMORY_DB["application_logs_full_pull"]:
+                        IN_MEMORY_DB["application_logs_full_pull"][peer] = True
+                        app.add_background_task(
+                            expire_key,
+                            IN_MEMORY_DB["application_logs_full_pull"],
+                            peer,
+                            36000,
+                        )
                         start = 0
+                    else:
+                        start = -1
+                        file_path = f"peer_files/{peer}/logs/application.log"
+                        if os.path.exists(file_path) and os.path.getsize(file_path) > (
+                            5 * 1024 * 1024
+                        ):
+                            start = 0
 
                     await cluster.request_files(
                         "logs/application.log", [peer], start, -1
@@ -310,7 +334,7 @@ async def refresh_cluster_logs():
         "beforeend",
         '<div hidden _="on load trigger logsReady on #system-logs-table-search '
         + f"then put {refresh_ago} into #system-logs-last-refresh "
-        + f'then trigger removeNotification on .notification-user"></div>',
+        + f'then wait 500 ms then trigger removeNotification on .notification-user"></div>',
         "/system/logs",
     )
 

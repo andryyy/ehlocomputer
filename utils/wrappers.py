@@ -3,10 +3,11 @@ import json
 
 from config import defaults
 from config.logs import logger
+from config.database import IN_MEMORY_DB
 from utils.cluster.cluster import cluster
 from contextlib import suppress
 from functools import wraps
-from models.auth import UserSession
+from models.users import UserSession
 from pydantic import TypeAdapter, ValidationError, validate_call
 from quart import (
     current_app as app,
@@ -17,9 +18,8 @@ from quart import (
     abort,
     websocket,
 )
-from tools.objects import search as search_object
-from tools.users import get as get_user, what_id, search as search_users
-from web.helpers import session_clear, trigger_notification
+from tools.users import get as get_user, what_id
+from web.helpers import session_clear, trigger_notification, form_options
 from typing import Literal
 
 
@@ -150,28 +150,20 @@ def formoptions(options):
     def inject_options(fn):
         @wraps(fn)
         async def wrapper(*args, **kwargs):
+            user_id = session["id"]
             request.form_options = dict()
-            for option in options:
-                if option == "users":
-                    request.form_options[option] = [
-                        {"name": user.login, "value": user.id, "groups": user.groups}
-                        for user in await search_users(name="")
-                    ]
-                else:
-                    request.form_options[option] = [
-                        {"name": o.name, "value": o.id}
-                        for o in await search_object(
-                            object_type=option,
-                            match_all={"assigned_users": [session["id"]]}
-                            if not "system" in session["acl"]
-                            else {},
-                        )
-                    ]
 
-            for o in request.form_options:
-                request.form_options[o] = sorted(
-                    request.form_options[o], key=lambda x: x["name"]
-                )
+            if not user_id in IN_MEMORY_DB["FORM_OPTIONS"]:
+                IN_MEMORY_DB["FORM_OPTIONS"][user_id] = dict()
+
+            for option in options:
+                if option not in IN_MEMORY_DB["FORM_OPTIONS"][user_id]:
+                    IN_MEMORY_DB["FORM_OPTIONS"][user_id][option] = await form_options(
+                        option
+                    )
+                request.form_options[option] = IN_MEMORY_DB["FORM_OPTIONS"][user_id][
+                    option
+                ]
 
             return await fn(*args, **kwargs)
 

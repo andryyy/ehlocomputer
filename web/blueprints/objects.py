@@ -15,7 +15,7 @@ from tools.objects import (
 from utils import wrappers
 from utils.helpers import batch, ensure_list
 from uuid import uuid4
-from web.helpers import trigger_notification, validation_error, render_or_json
+from web.helpers import trigger_notification, validation_error, render_or_json, ws_htmx
 
 blueprint = Blueprint("objects", __name__, url_prefix="/objects")
 
@@ -262,6 +262,13 @@ async def patch_object(object_type: str, object_id: str | None = None):
     except ValueError as e:
         name, message = e.args
         return validation_error([{"loc": [name], "msg": message}])
+
+    await ws_htmx(
+        "user",
+        "beforeend",
+        f'<div hx-trigger="load once" hx-sync="#object-details:drop" hx-target="#object-details" hx-select="#object-details" hx-select-oob="#object-name" hx-swap="outerHTML" hx-get="/objects/{object_type}/{object_id}"></div>',
+        f"/objects/{object_type}/{object_id}",
+    )
 
     return trigger_notification(
         level="success" if len(patched_objects) > 0 else "warning",

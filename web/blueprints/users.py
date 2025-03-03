@@ -2,8 +2,7 @@ import re
 
 from utils.cluster.http_lock import ClusterLock
 from models.tables import TableSearchHelper
-from models.forms.users import UserProfile
-from models.users import UserGroups
+from models.users import UserGroups, UserProfile
 from pydantic import ValidationError, constr, TypeAdapter
 from quart import Blueprint, current_app as app, render_template, request
 from tools.users import (
