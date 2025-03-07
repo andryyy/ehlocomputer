@@ -1,26 +1,14 @@
 #!/usr/bin/env python3
 
-from config import defaults
-from config.logs import logger
 import argparse
 import asyncio
 import json
 import ssl
 import sys
 
-logger.remove()
-logger.configure(
-    **{
-        "handlers": [
-            {
-                "sink": sys.stdout,
-                "format": "<lvl>{message}</lvl>",
-                "level": "INFO",
-                "colorize": False,
-            },
-        ],
-    }
-)
+from components.logs import logger
+from config import defaults
+
 
 parser = argparse.ArgumentParser(
     description="EHLO CTRL", formatter_class=argparse.ArgumentDefaultsHelpFormatter

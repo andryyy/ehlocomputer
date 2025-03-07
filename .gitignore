@@ -1,5 +1,5 @@
 system/certs/*
-database/*
+database/
 logs/*
 misc/*
 

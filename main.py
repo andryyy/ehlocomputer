@@ -3,12 +3,11 @@ import signal
 import ssl
 import sys
 
-from config import defaults
-from utils.cluster.cluster import cluster
+from components.cluster.cluster import cluster
 from hypercorn.asyncio import serve
 from hypercorn.config import Config
 from hypercorn.middleware import ProxyFixMiddleware
-from web import app
+from components.web import *
 
 hypercorn_config = Config()
 hypercorn_config.bind = [defaults.HYPERCORN_BIND]
@@ -57,11 +56,11 @@ async def main():
         ),
         try:
             await hypercorn_shutdown_event.wait()
-            print("Received shutdown event, exit")
-            sys.exit(0)
         except asyncio.CancelledError:
+            hypercorn_shutdown_event.set()
+        finally:
             print("Shutting down")
-            pass
+            sys.exit(0)
 
 
 asyncio.run(main())
