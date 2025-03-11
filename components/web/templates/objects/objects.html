@@ -16,7 +16,7 @@
 <h4>Manage {{ request.view_args.get("object_type") }}</h4>
 
 <details class="show-below-lg">
-  <summary role="button">Create object</summary>
+  <summary role="button" class="button-slate-800">Create object</summary>
   <article>
     <hgroup>
       <h5>New object</h5>
@@ -34,7 +34,6 @@
     </hgroup>
     {% include "objects/includes/create/" ~ request.view_args.get("object_type") ~ ".html" %}
   </article>
-
   <article id="{{ request.view_args.get("object_type") }}-full-table">
     {% include "objects/includes/objects/table.html" %}
   </article>

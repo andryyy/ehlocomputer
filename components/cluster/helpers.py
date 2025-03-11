@@ -61,9 +61,11 @@ async def connect(Cluster, peer) -> bool:
         if not peer in Cluster.connections:
             with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as sock:
                 sock.settimeout(defaults.CLUSTER_PEERS_TIMEOUT)
-                if sock.connect_ex((peer, Cluster.port)) != 0:
-                    logger.warning(f"Skipping {peer}: Connection timed out")
-                    IN_MEMORY_DB["PEER_CONNECTION_FAILURES"][peer] += 1
+                connection_return = sock.connect_ex((peer, Cluster.port))
+                if connection_return != 0:
+                    logger.error(
+                        f"{peer}: Connection failed ({socket.errno.errorcode.get(connection_return)})"
+                    )
                     return False
 
             Cluster.connections[peer] = {
@@ -77,13 +79,8 @@ async def connect(Cluster, peer) -> bool:
                 Cluster.connections[peer]["streams"] = await asyncio.open_connection(
                     peer, Cluster.port, ssl=get_ssl_context("client")
                 )
-                IN_MEMORY_DB["PEER_CONNECTION_FAILURES"][peer] = 0
-            except KeyError:
-                return False
             except ConnectionRefusedError:
-                if IN_MEMORY_DB["PEER_CONNECTION_FAILURES"][peer] == 0:
-                    logger.warning(f"Skipping {peer}: ConnectionRefusedError")
-                IN_MEMORY_DB["PEER_CONNECTION_FAILURES"][peer] += 1
+                logger.error(f"{peer}: Connection refused")
                 return False
 
         return True
@@ -103,7 +100,7 @@ def set_master_node(Cluster) -> None:
     current_master_node = Cluster.master_node
 
     if not (n_online_peers >= (51 / 100) * n_all_peers):
-        logger.info("<set_master_node> skipping election, not enough peers")
+        logger.info("Cannot elect leader node, not enough peers")
         _destroy()
         return
 
@@ -117,11 +114,9 @@ def set_master_node(Cluster) -> None:
         default=(None, float("inf")),
     )
 
-    if Cluster.started < started:  # donkey elects itCluster
+    if Cluster.started < started:
         if Cluster.master_node != defaults.CLUSTER_PEERS_ME:
-            logger.info(
-                f"<set_master_node> elected self ({defaults.CLUSTER_PEERS_ME}) as master"
-            )
+            logger.info("This node has been elected as the leader.")
             Cluster.master_node = defaults.CLUSTER_PEERS_ME
             Cluster.role = Role.MASTER
 
@@ -129,25 +124,22 @@ def set_master_node(Cluster) -> None:
         if Cluster.connections[master_node]["meta"]["master"] == "?CONFUSED":
             _destroy()
             logger.info(
-                f"<set_master_node> potential master {master_node} is still confused, waiting"
+                f"""Potential leader node '{master_node}' is still in the
+election process or confused; waiting."""
             )
             return
 
         if Cluster.connections[master_node]["meta"]["master"] != master_node:
             _destroy()
             logger.warning(
-                f"<set_master_node> not electing {master_node}:"
-                + "node reports different master (are we still joining or changed our swarm size?) - "
-                + "waiting"
+                f"Potential leader node '{master_node}' reports a different leader; waiting"
             )
             return
 
         if Cluster.master_node != master_node:
             Cluster.master_node = master_node
             Cluster.role = Role.SLAVE
-            logger.info(
-                f"<set_master_node> elected foreign peer {Cluster.master_node} as master"
-            )
+            logger.info(f"Elected node {Cluster.master_node} as the leader")
 
     meta_started = to_unique_sorted_str_list(
         data["meta"]["started"] for data in Cluster.connections.values() if data["meta"]
@@ -159,14 +151,11 @@ def set_master_node(Cluster) -> None:
                 {
                     data["meta"]["bind"]
                     for data in Cluster.connections.values()
-                    if data.get("meta")
-                    and data.get("streams")
-                    and IN_MEMORY_DB["PEER_CONNECTION_FAILURES"][data["meta"]["bind"]]
-                    <= defaults.CLUSTER_PEER_MAX_FAILURES
+                    if data.get("meta") and data.get("streams")
                 }
                 | {defaults.CLUSTER_PEERS_ME}
             )
         )
         Cluster.swarm_complete = n_online_peers == n_all_peers
 
-    logger.debug(f"<set_master_node> cluster size {n_online_peers}/{n_all_peers}")
+    logger.debug(f"Cluster size {n_online_peers}/{n_all_peers}")

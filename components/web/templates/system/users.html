@@ -13,14 +13,15 @@
 
 {% block body %}
 
-<h4>Groups</h4>
-<section id="system-groups">
-  {% include "system/includes/users/groups.html" %}
-</section>
+<details name="users-groups">
+  <summary role="button" class="button-slate-800">Manage Groups</summary>
+  <section id="system-groups">
+    {% include "system/includes/users/groups.html" %}
+  </section>
+</details>
 
-<hr>
+<hr />
 
-<h4>Users</h4>
 <div class="grid split-grid">
   <article id="system-users-full-table">
     {% include "system/includes/users/table.html" %}

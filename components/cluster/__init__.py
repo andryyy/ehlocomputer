@@ -26,8 +26,7 @@ from components.database import *
 from components.utils.cryptography import dict_digest_sha1
 from components.utils.datetimes import ntime_utc_now
 from components.utils import ensure_list, is_path_within_cwd
-from typing import Literal
-from pydantic import FilePath, validate_call
+from components.models import FilePath, validate_call, Literal
 
 
 class Monitor:
@@ -48,10 +47,13 @@ class Monitor:
             async with self.cluster.receiving:
                 set_master_node(self.cluster)
                 if self.cluster.swarm:
-                    ticket, receivers = await self.cluster.send_command(
-                        "STATUS",
-                        self.cluster.swarm.split(";"),
-                    )
+                    try:
+                        ticket, receivers = await self.cluster.send_command(
+                            "STATUS",
+                            self.cluster.swarm.split(";"),
+                        )
+                    except ConnectionResetError:
+                        pass
 
     async def _monitor(self, peer_info, inbound_streams):
         ireader, iwriter = inbound_streams
@@ -64,9 +66,9 @@ class Monitor:
                 await asyncio.sleep(1.0)
 
         oreader, owriter = outbound_streams
-
+        timeout_c = 0
         c = -1
-        while True:
+        while True and timeout_c < 3:
             try:
                 assert not all(
                     [
@@ -76,12 +78,14 @@ class Monitor:
                         owriter.is_closing(),
                     ]
                 )
-                async with asyncio.timeout(3):
+
+                async with asyncio.timeout(defaults.CLUSTER_PEERS_TIMEOUT * 3):
                     iwriter.write(b"\x11")
                     await iwriter.drain()
                     res = await oreader.readexactly(1)
                     assert res == b"\x11"
 
+                timeout_c = 0
                 c += 0.25
                 await asyncio.sleep(0.25)
 
@@ -104,9 +108,11 @@ class Monitor:
                             )
                     c = 0
 
+            except TimeoutError:
+                timeout_c += 1
+                continue
             except (
                 AssertionError,
-                TimeoutError,
                 asyncio.exceptions.IncompleteReadError,
             ):
                 logger.error(f'Peer {peer_info["bind"]} failed')
@@ -165,7 +171,6 @@ class Cluster:
         for peer in defaults.CLUSTER_PEERS_THEM:
             self.locks["ESTABLISHING"][peer] = asyncio.Lock()
 
-        IN_MEMORY_DB["PEER_CONNECTION_FAILURES"] = dict()
         IN_MEMORY_DB["PEER_CRIT"] = dict()
 
     async def read_command(self, reader: asyncio.StreamReader) -> tuple[str, str, dict]:
@@ -217,18 +222,9 @@ class Cluster:
         while True:
             try:
                 ticket, cmd, peer_info = await self.read_command(reader)
-
                 if not monitor_init:
                     await self.monitor.create(peer_info, (reader, writer))
                     monitor_init = True
-
-                if (
-                    IN_MEMORY_DB["PEER_CONNECTION_FAILURES"].get(peer_info["bind"], 0)
-                    > 0
-                ):
-                    logger.success(f"Peer {peer_info['bind']} recovered")
-                IN_MEMORY_DB["PEER_CONNECTION_FAILURES"][peer_info["bind"]] = 0
-
             except (asyncio.exceptions.IncompleteReadError, ConnectionResetError):
                 break
             except TimeoutError as e:
@@ -483,15 +479,6 @@ class Cluster:
         successful_receivers = []
 
         for peer in receivers:
-            if peer not in IN_MEMORY_DB["PEER_CONNECTION_FAILURES"]:
-                IN_MEMORY_DB["PEER_CONNECTION_FAILURES"][peer] = 0
-            elif (
-                IN_MEMORY_DB["PEER_CONNECTION_FAILURES"][peer]
-                > defaults.CLUSTER_PEER_MAX_FAILURES
-            ):
-                logger.warning(f"Not trying peer {peer} due to consecutive failures")
-                # continue
-
             if await connect(self, peer) == True:
                 reader, writer = self.connections[peer]["streams"]
 

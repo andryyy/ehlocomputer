@@ -33,18 +33,19 @@ IN_MEMORY_DB["WS_CONNECTIONS"] = dict()
 IN_MEMORY_DB["WEB_REQUESTS"] = 0
 IN_MEMORY_DB["FORM_OPTIONS_CACHE"] = dict()
 IN_MEMORY_DB["OBJECTS_CACHE"] = dict()
+IN_MEMORY_DB["APP_LOGS_FULL_PULL"] = dict()
 
 
 @app.context_processor
 def load_context():
-    enforce_commit = IN_MEMORY_DB.get("enforce_commit", False)
-    if enforce_commit:
-        enforce_commit = defaults.CLUSTER_ENFORCE_COMMIT_TIMEOUT - (
-            round(ntime_utc_now() - enforce_commit)
+    enforce_dbupdate = IN_MEMORY_DB.get("ENFORCE_DBUPDATE", False)
+    if enforce_dbupdate:
+        enforce_dbupdate = defaults.CLUSTER_ENFORCE_DBUPDATE_TIMEOUT - (
+            round(ntime_utc_now() - enforce_dbupdate)
         )
 
     return {
-        "ENFORCE_COMMIT_MODE": enforce_commit,
+        "ENFORCE_DBUPDATE": enforce_dbupdate,
     }
 
 

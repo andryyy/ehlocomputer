@@ -13,8 +13,6 @@ from components.web.utils import *
 blueprint = Blueprint("system", __name__, url_prefix="/system")
 log_lock = asyncio.Lock()
 
-IN_MEMORY_DB["application_logs_full_pull"] = dict()
-
 
 @blueprint.context_processor
 def load_context():
@@ -33,28 +31,28 @@ def load_context():
     return context
 
 
-@blueprint.route("/cluster/enforce-transaction/<action>", methods=["POST"])
+@blueprint.route("/cluster/db/enforce-updates", methods=["POST"])
 @acl("system")
-async def cluster_enforce_commit(action: str):
-    if action == "start":
-        if not IN_MEMORY_DB.get("enforce_commit", False):
-            IN_MEMORY_DB["enforce_commit"] = ntime_utc_now()
-            IN_MEMORY_DB["PEER_CONNECTION_FAILURES"] = dict()
+async def cluster_db_enforce_updates():
+    toggle = request.form_parsed.get("toggle", "off")
+    if toggle == "on":
+        if not IN_MEMORY_DB.get("ENFORCE_DBUPDATE", False):
+            IN_MEMORY_DB["ENFORCE_DBUPDATE"] = ntime_utc_now()
             current_app.add_background_task(
                 expire_key,
                 IN_MEMORY_DB,
-                "enforce_commit",
-                defaults.CLUSTER_ENFORCE_COMMIT_TIMEOUT,
+                "ENFORCE_DBUPDATE",
+                defaults.CLUSTER_ENFORCE_DBUPDATE_TIMEOUT,
             )
             await ws_htmx(
                 "system",
                 "beforeend",
                 """<div hidden _="on load trigger
                     notification(
-                    title: 'Enforced transaction mode',
+                    title: 'Cluster notification',
                     level: 'system',
-                    message: 'Caution: Enforced transaction mode is now enabled',
-                    duration: 10000
+                    message: 'Enforced database updates are enabled',
+                    duration: 5000
                     )"></div>""",
             )
 
@@ -62,22 +60,22 @@ async def cluster_enforce_commit(action: str):
                 level="success",
                 response_code=204,
                 title="Activated",
-                message="Enforced transaction mode is enabled",
+                message="Enforced database updates are enabled",
             )
         else:
             return trigger_notification(
                 level="warning",
                 response_code=409,
                 title="Already active",
-                message="Enforced transaction mode is already enabled",
+                message="Enforced database updates are already enabled",
             )
-    elif action == "stop":
-        IN_MEMORY_DB["enforce_commit"] = False
+    elif toggle == "off":
+        IN_MEMORY_DB["ENFORCE_DBUPDATE"] = False
         await ws_htmx(
             "system",
             "beforeend",
-            '<div hidden _="on load remove #enforce-commit-button trigger '
-            + "notification(title: 'Enforced transaction disabled', level: 'system', message: 'Enforced transaction mode is now disabled', duration: 10000)\"></div>",
+            '<div hidden _="on load remove #enforce-dbupdate-button trigger '
+            + "notification(title: 'Cluster notification', level: 'system', message: 'Enforced database updates are now disabled', duration: 5000)\"></div>",
         )
         return trigger_notification(
             level="success",
@@ -87,37 +85,14 @@ async def cluster_enforce_commit(action: str):
         )
 
 
-@blueprint.route("/cluster/reset-failed-peer", methods=["POST"])
-@acl("system")
-async def cluster_reset_failed_peer():
-    peer = request.form_parsed.get("peer")
-    if peer and peer in IN_MEMORY_DB["PEER_CONNECTION_FAILURES"]:
-        IN_MEMORY_DB["PEER_CONNECTION_FAILURES"][peer] = 0
-        IN_MEMORY_DB["PEER_CRIT"].pop(cluster.master_node, None)
-        return trigger_notification(
-            level="success",
-            response_code=204,
-            title="Peer reset",
-            message="Peer failed counter was reset",
-        )
-    else:
-        return trigger_notification(
-            level="error",
-            response_code=409,
-            title="Unknown peer",
-            message="Peer was not reset",
-        )
-
-
 @blueprint.route("/status", methods=["GET"])
 @acl("system")
 async def status():
     status = {
         "PEER_CRIT": IN_MEMORY_DB["PEER_CRIT"],
-        "connection_failures": IN_MEMORY_DB["PEER_CONNECTION_FAILURES"],
-        "enforce_commit": IN_MEMORY_DB.get("enforce_commit", False),
-        "web_requests": IN_MEMORY_DB["WEB_REQUESTS"],
-        "connections": cluster.connections,
+        "ENFORCE_DBUPDATE": IN_MEMORY_DB.get("ENFORCE_DBUPDATE", False),
+        "WEB_REQUESTS": IN_MEMORY_DB["WEB_REQUESTS"],
+        "CLUSTER_CONNECTIONS": cluster.connections,
     }
     return await render_template("system/status.html", data={"status": status})
 
@@ -278,11 +253,11 @@ async def refresh_cluster_logs():
         async with log_lock:
             async with ClusterLock("files", current_app):
                 for peer in cluster.connections.keys():
-                    if not peer in IN_MEMORY_DB["application_logs_full_pull"]:
-                        IN_MEMORY_DB["application_logs_full_pull"][peer] = True
+                    if not peer in IN_MEMORY_DB["APP_LOGS_FULL_PULL"]:
+                        IN_MEMORY_DB["APP_LOGS_FULL_PULL"][peer] = True
                         current_app.add_background_task(
                             expire_key,
-                            IN_MEMORY_DB["application_logs_full_pull"],
+                            IN_MEMORY_DB["APP_LOGS_FULL_PULL"],
                             peer,
                             36000,
                         )
