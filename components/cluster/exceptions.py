@@ -9,6 +9,10 @@ class IncompleteClusterResponses(Exception):
     pass
 
 
+class UnknownPeer(Exception):
+    pass
+
+
 class ClusterHTTPException(HTTPException):
     def __init__(self, description=None):
         super().__init__(description)

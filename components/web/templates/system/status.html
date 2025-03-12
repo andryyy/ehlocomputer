@@ -16,38 +16,65 @@
 <h4>System Status</h4>
 
 <article id="system-status">
-  <p>You are connected to <mark>{{ CLUSTER_PEERS_ME }}</mark> (Requests: {{ data.status.WEB_REQUESTS }})</p>
   <div class="overflow-auto">
-  <table>
-    <tbody>
+  <table id="system-status-table">
+    <thead>
       <tr>
-        <th scope="row" colspan="4">
-          <h5>Cluster status</h5>
+        <th scope="row" colspan="3">
+          <b>Cluster status</b>
+          - <a href="#"
+            hx-on:click="!window.s?s=this.textContent:null;this.textContent='Throttling...';setTimeout(()=>{this.textContent=s}, 1000)"
+            hx-target="#system-status-table-body"
+            hx-select="#system-status-table-body"
+            hx-swap="outerHTML"
+            hx-post="/system/cluster/update-status"
+            hx-trigger="click throttle:1000ms"
+            hx-vals="">
+            Request status update
+          </a>
         </th>
       </tr>
+    </thead>
+    <tbody id="system-status-table-body">
       <tr>
-        <th scope="row">Peer</th>
-        <th scope="row">Errors<sup>1</sup></th>
-        <th scope="row">Meta <sup>2</sup></th>
+        <th scope="col">Peer</th>
+        <th scope="col">Errors<sup>1</sup></th>
+        <th scope="col">Meta <sup>2</sup></th>
       </tr>
-      {% for peer in CLUSTER_PEERS_THEM %}
       <tr>
-        <th scope="row"><code>{{ peer }}</code></th>
+        <th scope="row">
+          {{ data.status.CLUSTER___META.name }}<br>
+          <span class="color-cyan-350">* this node</span>
+        </th>
+        <td></td>
+        <td>
+          <small>
+          {% for k, v in data.status.CLUSTER___META.items() %}
+            {{ k|capitalize }}: {{ v }}<br>
+          {% endfor %}
+          </small>
+        </td>
+      </tr>
+      {% for peer in CLUSTER_PEERS if not peer.self %}
+      <tr>
+        <th scope="row">
+          {{ peer.name }}
+        </th>
         <td _="on htmx:afterRequest[event.detail.successful==true]
           put '' into me
         end
         ">
-          {% set PEER_CRIT = data.status.PEER_CRIT.get(peer, None) %}
+          {% set PEER_CRIT = data.status.PEER_CRIT.get(peer.name, None) %}
           {% if PEER_CRIT %}
             <b class="color-red">{{ PEER_CRIT }}</b>
           {% endif %}
         </td>
         <td>
           <small>
-          {% for k, v in data.status.CLUSTER_CONNECTIONS.get(peer, {}).get("meta", {}).items() %}
+          {% for k, v in data.status.CLUSTER_CONNECTIONS.get(peer.name, {}).get("meta", {}).items() %}
             {{ k|capitalize }}: {{ v }}<br>
           {% else %}
-            <b class="color-red">No active connection</b>
+            <mark>No active connection</b>
           {% endfor %}
           </small>
         </td>
@@ -77,6 +104,7 @@
     {% endif %}
 
     {% if ENFORCE_DBUPDATE and request.headers.get("Hx-Request") %}
+    {# oob-swapping a button to menu #}
     <div id="enforce-dbupdate" hx-swap-oob="outerHTML">
       <button data-tooltip="Enforced database updates are enabled"
           class="button-red-800"
@@ -87,7 +115,7 @@
       </button>
     </div>
     {% endif %}
-
+    <hr>
   </div>
 
   <p class="no-text-wrap">

@@ -10,12 +10,12 @@ from pydantic import (
     Field,
     field_validator,
     FilePath,
-    IPvAnyAddress,
     model_validator,
     TypeAdapter,
     validate_call,
     ValidationError,
 )
+from pydantic.networks import IPvAnyAddress
 from pydantic_core import PydanticCustomError
 from typing import List, Dict, Any, Literal, Annotated
 from uuid import UUID, uuid4

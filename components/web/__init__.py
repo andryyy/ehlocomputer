@@ -34,6 +34,7 @@ IN_MEMORY_DB["WEB_REQUESTS"] = 0
 IN_MEMORY_DB["FORM_OPTIONS_CACHE"] = dict()
 IN_MEMORY_DB["OBJECTS_CACHE"] = dict()
 IN_MEMORY_DB["APP_LOGS_FULL_PULL"] = dict()
+IN_MEMORY_DB["PEER_CRIT"] = dict()
 
 
 @app.context_processor

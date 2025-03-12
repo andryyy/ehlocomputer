@@ -1,5 +1,4 @@
-from config.defaults import CLUSTER_PEERS_ME
+from config.defaults import CLUSTER_PEERS
 from components.cluster import Cluster
 
-
-cluster = Cluster(host=CLUSTER_PEERS_ME, port=2102)
+cluster = Cluster(peers=CLUSTER_PEERS, port=2102)

@@ -19,7 +19,7 @@ def load_context():
     context = dict()
     context["schemas"] = {"system_settings": SystemSettings.model_json_schema()}
 
-    if cluster.master_node != defaults.CLUSTER_PEERS_ME:
+    if cluster.master_node != cluster.peers.local_name:
         try:
             current_master = cluster.connections[cluster.master_node]["meta"]["name"]
         except:
@@ -29,6 +29,17 @@ def load_context():
     context["current_master"] = current_master
 
     return context
+
+
+@blueprint.route("/cluster/update-status", methods=["POST"])
+@acl("system")
+async def cluster_status_update():
+    async with ClusterLock("status", current_app):
+        async with cluster.receiving:
+            ticket, receivers = await cluster.send_command("STATUS", "*")
+            await cluster.await_receivers(ticket, receivers, raise_err=False)
+
+    return redirect(url_for("system.status"))
 
 
 @blueprint.route("/cluster/db/enforce-updates", methods=["POST"])
@@ -74,7 +85,7 @@ async def cluster_db_enforce_updates():
         await ws_htmx(
             "system",
             "beforeend",
-            '<div hidden _="on load remove #enforce-dbupdate-button trigger '
+            '<div hidden _="on load remove #enforce-dbupdate-button then trigger '
             + "notification(title: 'Cluster notification', level: 'system', message: 'Enforced database updates are now disabled', duration: 5000)\"></div>",
         )
         return trigger_notification(
@@ -91,8 +102,8 @@ async def status():
     status = {
         "PEER_CRIT": IN_MEMORY_DB["PEER_CRIT"],
         "ENFORCE_DBUPDATE": IN_MEMORY_DB.get("ENFORCE_DBUPDATE", False),
-        "WEB_REQUESTS": IN_MEMORY_DB["WEB_REQUESTS"],
         "CLUSTER_CONNECTIONS": cluster.connections,
+        "CLUSTER___META": cluster._meta,
     }
     return await render_template("system/status.html", data={"status": status})
 
@@ -270,14 +281,12 @@ async def refresh_cluster_logs():
                         ):
                             start = 0
 
-                    await cluster.request_files(
-                        "logs/application.log", [peer], start, -1
-                    )
+                    await cluster.request_files("logs/application.log", peer, start, -1)
 
             missing_peers = ", ".join(
                 [
-                    p
-                    for p in defaults.CLUSTER_PEERS_THEM
+                    p["name"]
+                    for p in defaults.CLUSTER_PEERS
                     if p not in cluster.connections.keys()
                 ]
             )

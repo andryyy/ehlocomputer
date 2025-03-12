@@ -10,7 +10,11 @@ import zlib
 
 from config import defaults
 from contextlib import closing, suppress
-from components.cluster.exceptions import IncompleteClusterResponses, DistLockCancelled
+from components.cluster.exceptions import (
+    IncompleteClusterResponses,
+    DistLockCancelled,
+    UnknownPeer,
+)
 from components.cluster.cli import cli_processor
 from components.cluster.helpers import (
     set_master_node,
@@ -20,6 +24,7 @@ from components.cluster.helpers import (
     CritErrors,
     Role,
     connect,
+    PeersHelper,
 )
 from components.logs import logger
 from components.database import *
@@ -34,35 +39,37 @@ class Monitor:
         self.cluster = Cluster
         self.tasks = set()
 
-    def _get_outbound_streams(self, raddr):
+    def _get_outbound_streams(self, name):
         for peer, peer_data in self.cluster.connections.items():
-            if peer_data.get("meta", {}).get("bind") == raddr:
+            if peer_data.get("meta", {}).get("name") == name:
                 return peer_data.get("streams")
         return None
 
-    async def _cleanup(self, peer_bind):
-        logger.warning(f"Removing {peer_bind}")
-        self.cluster.connections.pop(peer_bind, None)
+    async def _cleanup(self, peer):
+        logger.warning(f"Removing {peer}")
+        self.cluster.connections.pop(peer, None)
         if not self.cluster._shutdown.is_set():
             async with self.cluster.receiving:
                 set_master_node(self.cluster)
                 if self.cluster.swarm:
-                    try:
-                        ticket, receivers = await self.cluster.send_command(
-                            "STATUS",
-                            self.cluster.swarm.split(";"),
-                        )
-                    except ConnectionResetError:
-                        pass
+                    for p in self.cluster.swarm.split(";"):
+                        if p != self.cluster.peers.local_name:
+                            try:
+                                ticket, receivers = await self.cluster.send_command(
+                                    "STATUS",
+                                    p,
+                                )
+                            except ConnectionResetError:
+                                pass
 
-    async def _monitor(self, peer_info, inbound_streams):
+    async def _monitor(self, peer_meta, inbound_streams):
         ireader, iwriter = inbound_streams
         outbound_streams = None
 
         while not outbound_streams:
-            outbound_streams = self._get_outbound_streams(peer_info["bind"])
+            outbound_streams = self._get_outbound_streams(peer_meta["name"])
             if not outbound_streams:
-                logger.info(f"Evaluating stream for {peer_info['bind']}")
+                logger.info(f"Evaluating stream for {peer_meta['name']}")
                 await asyncio.sleep(1.0)
 
         oreader, owriter = outbound_streams
@@ -98,7 +105,7 @@ class Monitor:
                                     "*"
                                     if self.cluster.master_node
                                     and not self.cluster.swarm_complete
-                                    else [peer_info["bind"]],
+                                    else peer_meta["name"],
                                 )
                             except ConnectionResetError:
                                 break
@@ -115,7 +122,7 @@ class Monitor:
                 AssertionError,
                 asyncio.exceptions.IncompleteReadError,
             ):
-                logger.error(f'Peer {peer_info["bind"]} failed')
+                logger.error(f'Peer {peer_meta["name"]} failed')
                 break
 
         if c != -1:
@@ -139,23 +146,19 @@ class Monitor:
 
     async def create(
         self,
-        peer_info,
+        peer_meta,
         inbound_streams: tuple[asyncio.StreamReader, asyncio.StreamWriter],
     ):
         t = asyncio.create_task(
-            self._monitor(peer_info, inbound_streams), name=peer_info["bind"]
+            self._monitor(peer_meta, inbound_streams), name=peer_meta["name"]
         )
         self.tasks.add(t)
         t.add_done_callback(self._on_task_done)
 
 
 class Cluster:
-    def __init__(self, host, port):
-        assert isinstance(host, str) or isinstance(host, list)
-        assert isinstance(defaults.CLUSTER_CLI_BINDINGS, list)
-
+    def __init__(self, peers, port):
         self.connections = dict()
-        self.host = ensure_list(host) + defaults.CLUSTER_CLI_BINDINGS
         self.locks = dict()
         self.master_node = None
         self.port = port
@@ -168,10 +171,13 @@ class Cluster:
         self.monitor = Monitor(self)
         self.server_limit = 104857600  # 100 MiB
         self.locks["ESTABLISHING"] = dict()
-        for peer in defaults.CLUSTER_PEERS_THEM:
-            self.locks["ESTABLISHING"][peer] = asyncio.Lock()
+        self.peers = PeersHelper(peers)
+        self.host = self.peers.local_bindings + ensure_list(
+            defaults.CLUSTER_CLI_BINDINGS
+        )
 
-        IN_MEMORY_DB["PEER_CRIT"] = dict()
+        for peer in self.peers.get_names():
+            self.locks["ESTABLISHING"][peer] = asyncio.Lock()
 
     async def read_command(self, reader: asyncio.StreamReader) -> tuple[str, str, dict]:
         bytes_to_read = int.from_bytes(await reader.readexactly(4), "big")
@@ -187,25 +193,25 @@ class Cluster:
             r"SWARM (?P<swarm>\S+)",
             r"STARTED (?P<started>\S+)",
             r"MASTER (?P<master>\S+)",
-            r"BIND (?P<bind>\S+)",
         ]
 
         match = re.search(" ".join(patterns), meta)
         meta_dict = match.groupdict()
 
-        if not meta_dict["bind"] in self.connections:
-            self.connections[meta_dict["bind"]] = {
-                "meta": meta_dict,
-                "requests": 0,
-                "streams": set(),
-            }
-        else:
-            self.connections[meta_dict["bind"]]["meta"] = meta_dict
+        async with self.locks["ESTABLISHING"][meta_dict["name"]]:
+            if not meta_dict["name"] in self.connections:
+                if not meta_dict["name"] in self.peers.get_names():
+                    raise UnknownPeer(meta_dict["name"])
+                self.connections[meta_dict["name"]] = {
+                    "meta": meta_dict,
+                    "requests": 0,
+                    "streams": set(),
+                    "_last_established": None,
+                }
+            else:
+                self.connections[meta_dict["name"]]["meta"] = meta_dict
 
-        log_rx(
-            "{bind}[{node}]".format(bind=meta_dict["bind"], node=meta_dict["name"]),
-            f"Ticket {ticket}, Command {cmd}",
-        )
+        log_rx(meta_dict["name"], f"Ticket {ticket}, Command {cmd}")
 
         return ticket, cmd, meta_dict
 
@@ -219,11 +225,14 @@ class Cluster:
         if socket and raddr in defaults.CLUSTER_CLI_BINDINGS:
             return await cli_processor((reader, writer))
 
+        if raddr not in self.peers.gen_get_ips():
+            raise UnknownPeer(raddr)
+
         while True:
             try:
-                ticket, cmd, peer_info = await self.read_command(reader)
+                ticket, cmd, peer_meta = await self.read_command(reader)
                 if not monitor_init:
-                    await self.monitor.create(peer_info, (reader, writer))
+                    await self.monitor.create(peer_meta, (reader, writer))
                     monitor_init = True
             except (asyncio.exceptions.IncompleteReadError, ConnectionResetError):
                 break
@@ -240,25 +249,25 @@ class Cluster:
                     )
                 ):
                     await self.send_command(
-                        CritErrors.NOT_READY.value, [peer_info["bind"]], ticket=ticket
+                        CritErrors.NOT_READY.value, peer_meta["name"], ticket=ticket
                     )
 
                 elif cmd.startswith("PATCHTABLE") or cmd.startswith("FULLTABLE"):
                     if (
                         cmd.startswith("FULLTABLE")
-                        and IN_MEMORY_DB["PEER_CRIT"].get(peer_info["bind"])
+                        and IN_MEMORY_DB["PEER_CRIT"].get(peer_meta["name"])
                         == "CRIT:TABLE_HASH_MISMATCH"
                     ):
-                        IN_MEMORY_DB["PEER_CRIT"].pop(peer_info["bind"], None)
+                        IN_MEMORY_DB["PEER_CRIT"].pop(peer_meta["name"], None)
 
                     if (
                         cmd.startswith("PATCHTABLE")
-                        and IN_MEMORY_DB["PEER_CRIT"].get(peer_info["bind"])
+                        and IN_MEMORY_DB["PEER_CRIT"].get(peer_meta["name"])
                         == "CRIT:TABLE_HASH_MISMATCH"
                     ):
                         await self.send_command(
                             CritErrors.NO_TRUST.value,
-                            [peer_info["bind"]],
+                            peer_meta["name"],
                             ticket=ticket,
                         )
                         continue
@@ -273,7 +282,7 @@ class Cluster:
                         if not table in db.tables():
                             await self.send_command(
                                 CritErrors.NO_SUCH_TABLE.value,
-                                [peer_info["bind"]],
+                                peer_meta["name"],
                                 ticket=ticket,
                             )
                         else:
@@ -287,7 +296,7 @@ class Cluster:
                                     if local_table_digest != table_digest:
                                         await self.send_command(
                                             CritErrors.TABLE_HASH_MISMATCH.value,
-                                            [peer_info["bind"]],
+                                            peer_meta["name"],
                                             ticket=ticket,
                                         )
                                         continue
@@ -300,7 +309,7 @@ class Cluster:
                                         if c != a:
                                             await self.send_command(
                                                 CritErrors.DOC_MISMATCH.value,
-                                                [peer_info["bind"]],
+                                                peer_meta["name"],
                                                 ticket=ticket,
                                             )
                                             break
@@ -332,13 +341,13 @@ class Cluster:
                                         )
 
                                 await self.send_command(
-                                    "ACK", [peer_info["bind"]], ticket=ticket
+                                    "ACK", peer_meta["name"], ticket=ticket
                                 )
 
                             except Exception as e:
                                 await self.send_command(
                                     CritErrors.CANNOT_APPLY.value,
-                                    [peer_info["bind"]],
+                                    peer_meta["name"],
                                     ticket=ticket,
                                 )
                                 continue
@@ -348,18 +357,16 @@ class Cluster:
                     if not os.path.isfile(db_params["filename"]):
                         await self.send_command(
                             CritErrors.NOTHING_TO_COMMIT.value,
-                            [peer_info["bind"]],
+                            peer_meta["name"],
                             ticket=ticket,
                         )
                     else:
                         async with TinyDB(**db_params) as db:  # acquires tinydbs lock
                             os.rename(db_params["filename"], TINYDB_PARAMS["filename"])
-                        await self.send_command(
-                            "ACK", [peer_info["bind"]], ticket=ticket
-                        )
+                        await self.send_command("ACK", peer_meta["name"], ticket=ticket)
 
                 elif cmd == "STATUS" or cmd == "INIT":
-                    await self.send_command("ACK", [peer_info["bind"]], ticket=ticket)
+                    await self.send_command("ACK", peer_meta["name"], ticket=ticket)
 
                 elif cmd.startswith("FILEGET"):
                     _, _, payload = cmd.partition(" ")
@@ -368,7 +375,7 @@ class Cluster:
                     if not is_path_within_cwd(file) or not os.path.exists(file):
                         await self.send_command(
                             CritErrors.INVALID_FILE_PATH.value,
-                            [peer_info["bind"]],
+                            peer_meta["name"],
                             ticket=ticket,
                         )
                         continue
@@ -376,7 +383,7 @@ class Cluster:
                     if os.stat(file).st_size < int(start):
                         await self.send_command(
                             CritErrors.START_BEHIND_FILE_END.value,
-                            [peer_info["bind"]],
+                            peer_meta["name"],
                             ticket=ticket,
                         )
                         continue
@@ -389,8 +396,8 @@ class Cluster:
                         ).decode("utf-8")
 
                     await self.send_command(
-                        f"ACK {file} {defaults.CLUSTER_PEERS_ME} {compressed_data_encoded}",
-                        [peer_info["bind"]],
+                        f"ACK {file} {compressed_data_encoded}",
+                        peer_meta["name"],
                         ticket=ticket,
                     )
 
@@ -403,19 +410,19 @@ class Cluster:
                             self.locks[t]["lock"].release()
                         self.locks[t]["ticket"] = None
 
-                    await self.send_command("ACK", [peer_info["bind"]], ticket=ticket)
+                    await self.send_command("ACK", peer_meta["name"], ticket=ticket)
 
                 elif cmd.startswith("LOCK"):
                     _, _, tables_str = cmd.partition(" ")
                     tables = tables_str.split(",")
 
-                    if peer_info["swarm"] != self.swarm:
+                    if peer_meta["swarm"] != self.swarm:
                         logger.error(
-                            f'Rejecting LOCK for {peer_info["bind"]} due to inconsistent connections'
+                            f'Rejecting LOCK for {peer_meta["name"]} due to inconsistent connections'
                         )
                         await self.send_command(
                             CritErrors.PEERS_MISMATCH.value,
-                            [peer_info["bind"]],
+                            peer_meta["name"],
                             ticket=ticket,
                         )
                         continue
@@ -441,17 +448,15 @@ class Cluster:
                                 self.locks[t]["ticket"] = None
 
                         await self.send_command(
-                            "ACK BUSY", [peer_info["bind"]], ticket=ticket
+                            "ACK BUSY", peer_meta["name"], ticket=ticket
                         )
                     else:
-                        await self.send_command(
-                            "ACK", [peer_info["bind"]], ticket=ticket
-                        )
+                        await self.send_command("ACK", peer_meta["name"], ticket=ticket)
 
                 elif cmd.startswith("ACK"):
                     _, _, payload = cmd.partition(" ")
                     if ticket in self.tickets:
-                        self.tickets[ticket].add((peer_info["bind"], payload))
+                        self.tickets[ticket].add((peer_meta["name"], payload))
 
                 async with self.receiving:
                     set_master_node(self)
@@ -463,22 +468,18 @@ class Cluster:
     async def send_command(self, cmd, peers, ticket: str | None = None):
         if not ticket:
             ticket = str(ntime_utc_now())
+
         if peers == "*":
-            receivers = defaults.CLUSTER_PEERS_THEM
+            peers = self.peers.get_names()
         else:
-            receivers = []
-            for p in peers:
-                if p in defaults.CLUSTER_PEERS_THEM:
-                    receivers.append(p)
-                elif p in self.connections.keys():
-                    receivers.append(self.connections[p]["meta"]["bind"])
+            peers = ensure_list(peers)
 
         if ticket not in self.tickets:
             self.tickets[ticket] = set()
 
         successful_receivers = []
 
-        for peer in receivers:
+        for peer in peers:
             if await connect(self, peer) == True:
                 reader, writer = self.connections[peer]["streams"]
 
@@ -486,7 +487,7 @@ class Cluster:
                     ticket,
                     cmd,
                     ":META",
-                    f"NAME {defaults.CLUSTER_NODENAME}",
+                    f"NAME {self.peers.local_name}",
                     "WEBREQUESTS {web_requests}".format(
                         web_requests=IN_MEMORY_DB["WEB_REQUESTS"]
                     ),
@@ -495,7 +496,6 @@ class Cluster:
                     "MASTER {master_node}".format(
                         master_node=self.master_node or "?CONFUSED"
                     ),
-                    f"BIND {defaults.CLUSTER_PEERS_ME}",
                 ]
 
                 buffer_bytes = " ".join(buffer_data).encode("utf-8")
@@ -506,6 +506,14 @@ class Cluster:
                 log_tx(peer, cmd)
 
                 successful_receivers.append(peer)
+
+        self._meta = {
+            "name": self.peers.local_name,
+            "webrequests": IN_MEMORY_DB["WEB_REQUESTS"],
+            "swarm": self.swarm or "?CONFUSED",
+            "started": self.started,
+            "master": self.master_node or "?CONFUSED",
+        }
 
         return ticket, successful_receivers
 
@@ -565,7 +573,7 @@ class Cluster:
                         raise IncompleteClusterResponses
 
                     ticket, receivers = await self.send_command(
-                        f"LOCK {','.join(tables)}", [self.master_node]
+                        f"LOCK {','.join(tables)}", self.master_node
                     )
                     result, responses = await self.await_receivers(
                         ticket, receivers, raise_err=True
@@ -638,10 +646,10 @@ class Cluster:
                         logger.error(f"File not within cwd: {file}")
                         continue
 
-                    for peer in peers:
+                    for peer in ensure_list(peers):
                         peer_start = start
                         peer_end = end
-                        assert peer in defaults.CLUSTER_PEERS_THEM
+                        assert peer in self.peers.get_names()
                         if peer_start == -1:
                             if os.path.exists(f"peer_files/{peer}/{file}"):
                                 peer_start = os.stat(
@@ -651,16 +659,15 @@ class Cluster:
                                 peer_start = 0
 
                         ticket, receivers = await self.send_command(
-                            f"FILEGET {peer_start} {peer_end} {file}", [peer]
+                            f"FILEGET {peer_start} {peer_end} {file}", peer
                         )
                         _, response = await self.await_receivers(
                             ticket, receivers, raise_err=True
                         )
 
                         for r in response:
-                            r_file, r_peer, r_data = r.split(" ")
+                            r_file, r_data = r.split(" ")
                             assert FilePath(r_file) == file
-                            assert r_peer == peer
                             file_dest = f"peer_files/{peer}/{file}"
                             os.makedirs(os.path.dirname(file_dest), exist_ok=True)
                             payload = zlib.decompress(base64.b64decode(r_data))
@@ -693,13 +700,21 @@ class Cluster:
 
         async with server:
             async with self.receiving:
-                for peer in defaults.CLUSTER_PEERS_THEM:
+                for peer in self.peers.get_names():
                     with closing(
                         socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                     ) as sock:
                         sock.settimeout(defaults.CLUSTER_PEERS_TIMEOUT)
-                        if sock.connect_ex((peer, self.port)) == 0:
-                            ticket, receivers = await self.send_command("INIT", [peer])
+                        if (
+                            sock.connect_ex(
+                                (
+                                    self.peers.get_ip(name=peer, ip_version="best"),
+                                    self.port,
+                                )
+                            )
+                            == 0
+                        ):
+                            ticket, receivers = await self.send_command("INIT", peer)
                             ret, responses = await self.await_receivers(
                                 ticket, receivers, raise_err=False
                             )
@@ -712,9 +727,7 @@ class Cluster:
         ticket,
         receivers,
         raise_err: bool,
-        timeout: float = defaults.CLUSTER_PEERS_TIMEOUT
-        * len(defaults.CLUSTER_PEERS_THEM)
-        + 0.2,
+        timeout: float = defaults.CLUSTER_PEERS_TIMEOUT * len(defaults.CLUSTER_PEERS),
     ):
         errors = []
         missing_receivers = []
