@@ -30,7 +30,6 @@ app.config["TEMPLATES_AUTO_RELOAD"] = defaults.TEMPLATES_AUTO_RELOAD
 app.config["SERVER_NAME"] = defaults.HOSTNAME
 IN_MEMORY_DB["SESSION_VALIDATED"] = dict()
 IN_MEMORY_DB["WS_CONNECTIONS"] = dict()
-IN_MEMORY_DB["WEB_REQUESTS"] = 0
 IN_MEMORY_DB["FORM_OPTIONS_CACHE"] = dict()
 IN_MEMORY_DB["OBJECTS_CACHE"] = dict()
 IN_MEMORY_DB["APP_LOGS_FULL_PULL"] = dict()
@@ -93,8 +92,6 @@ async def before_request():
                     request.form_parsed = merge_deep(
                         request.form_parsed, parse_form_to_dict(k, v)
                     )
-    IN_MEMORY_DB["WEB_REQUESTS"] += 1
-
 
 @app.after_request
 async def after_request(response):

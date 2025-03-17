@@ -23,21 +23,16 @@ SECRET_KEY = os.getenv("SESSION_SECRET", "im-insecure")  # can be overridden by 
 TLS_CERTFILE = "system/certs/fullchain.pem"
 TLS_KEYFILE = "system/certs/privkey.pem"
 TLS_CA = "/etc/ssl/certs/ca-certificates.crt"
-CLUSTER_PEERS_THEM = ["2.58.53.49", "37.27.93.56", "188.245.202.111"]
-CLUSTER_PEERS_ME = "162.55.49.111"
 CLUSTER_PEERS = [
     {"name": "de.kerker.io", "ip4": "2.58.53.49", "nat_ip4": "45.86.125.5"},
-    {"name": "debian-4gb-nbg1-2", "ip4": "162.55.49.111", "self": True},
+    {"name": "debian-4gb-nbg1-2", "ip4": "162.55.49.111", "is_self": True},
     {"name": "arm-2", "ip4": "37.27.93.56"},
     {"name": "4th", "ip4": "188.245.202.111"},
 ]
-CLUSTER_NODENAME = "debian-4gb-nbg1-2"
 CLUSTER_CLI_BINDINGS = ["127.0.0.1", "::1"]
 CLUSTER_PEERS_TIMEOUT = 1.25
-PREFERED_MASTER_PEER = "162.55.49.111"
 CLUSTER_LOGS_REFRESH_AFTER = 120  # force refresh of remote logs after n seconds
 CLUSTER_ENFORCE_DBUPDATE_TIMEOUT = 300
 ACCESS_TOKEN_FORMAT = constr(
     min_length=16,
 )
-CLUSTER_HEALTH_INTERVAL = 15  # seconds plus jitter (+- 2 seconds)

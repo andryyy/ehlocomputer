@@ -20,37 +20,6 @@ class SystemSettings(BaseModel):
         },
     )
 
-    CLUSTER_PEERS_THEM: Annotated[
-        list[IPvAnyAddress],
-        AfterValidator(
-            lambda x: [str(x)] if not isinstance(x, list) else [str(s) for s in x]
-        ),
-    ] = Field(
-        min_length=0,
-        default=defaults.CLUSTER_PEERS_THEM,
-        json_schema_extra={
-            "title": "Cluster peers",
-            "description": "Other peers in cluster. Must not include the local address.",
-            "type": "list:text",
-            "input_extra": 'autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" readonly',
-            "form_id": f"cluster-peers-them-{str(uuid4())}",
-        },
-    )
-
-    CLUSTER_PEERS_ME: Annotated[
-        IPvAnyAddress,
-        AfterValidator(lambda x: str(x)),
-    ] = Field(
-        default=defaults.CLUSTER_PEERS_ME,
-        json_schema_extra={
-            "title": "Cluster address",
-            "description": "This nodes cluster address bound to port 2102",
-            "type": "text",
-            "input_extra": 'autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" readonly',
-            "form_id": f"cluster-peers-me-{str(uuid4())}",
-        },
-    )
-
     AUTH_REQUEST_TIMEOUT: int = Field(
         default=defaults.AUTH_REQUEST_TIMEOUT,
         json_schema_extra={

@@ -67,7 +67,7 @@ class ClusterLock:
         error = False
 
         async with TinyDB(**self.db_params) as db:
-            ticket = str(ntime_utc_now())
+            ticket = CTX_TICKET.get()
 
             for t in self.tables:
                 table_data = {doc.doc_id: doc for doc in db.table(t).all()}
@@ -118,9 +118,7 @@ class ClusterLock:
                             await cluster.await_receivers(
                                 ticket, receivers, raise_err=True
                             )
-                            os.rename(
-                                self.db_params["filename"], TINYDB_PARAMS["filename"]
-                            )
+                            await dbcommit(self.tables)
                         except:
                             logger.error(f"<ClusterLock> failed to commit {ticket}")
                 else:

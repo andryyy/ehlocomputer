@@ -4,7 +4,6 @@ import fileinput
 import json
 import os
 
-from components.cluster.cluster import cluster
 from components.models.system import SystemSettings, UpdateSystemSettings
 from components.utils import batch, expire_key
 from components.utils.datetimes import datetime, ntime_utc_now
@@ -16,17 +15,10 @@ log_lock = asyncio.Lock()
 
 @blueprint.context_processor
 def load_context():
+    from components.cluster.cluster import cluster
+
     context = dict()
     context["schemas"] = {"system_settings": SystemSettings.model_json_schema()}
-
-    if cluster.master_node != cluster.peers.local_name:
-        try:
-            current_master = cluster.connections[cluster.master_node]["meta"]["name"]
-        except:
-            current_master = "Starting..."
-    else:
-        current_master = defaults.CLUSTER_NODENAME
-    context["current_master"] = current_master
 
     return context
 
@@ -34,12 +26,11 @@ def load_context():
 @blueprint.route("/cluster/update-status", methods=["POST"])
 @acl("system")
 async def cluster_status_update():
-    async with ClusterLock("status", current_app):
-        async with cluster.receiving:
-            ticket, receivers = await cluster.send_command("STATUS", "*")
-            await cluster.await_receivers(ticket, receivers, raise_err=False)
+    async with cluster.receiving:
+        ticket, receivers = await cluster.send_command("STATUS", "*")
+        await cluster.await_receivers(ticket, receivers, raise_err=False)
 
-    return redirect(url_for("system.status"))
+    return await status()
 
 
 @blueprint.route("/cluster/db/enforce-updates", methods=["POST"])
@@ -102,8 +93,8 @@ async def status():
     status = {
         "PEER_CRIT": IN_MEMORY_DB["PEER_CRIT"],
         "ENFORCE_DBUPDATE": IN_MEMORY_DB.get("ENFORCE_DBUPDATE", False),
-        "CLUSTER_CONNECTIONS": cluster.connections,
-        "CLUSTER___META": cluster._meta,
+        "CLUSTER_PEERS_REMOTE_PEERS": cluster.peers.remotes,
+        "CLUSTER_PEERS_LOCAL": cluster.peers.local,
     }
     return await render_template("system/status.html", data={"status": status})
 
@@ -263,7 +254,7 @@ async def refresh_cluster_logs():
 
         async with log_lock:
             async with ClusterLock("files", current_app):
-                for peer in cluster.connections.keys():
+                for peer in cluster.peers.get_established():
                     if not peer in IN_MEMORY_DB["APP_LOGS_FULL_PULL"]:
                         IN_MEMORY_DB["APP_LOGS_FULL_PULL"][peer] = True
                         current_app.add_background_task(
@@ -283,13 +274,7 @@ async def refresh_cluster_logs():
 
                     await cluster.request_files("logs/application.log", peer, start, -1)
 
-            missing_peers = ", ".join(
-                [
-                    p["name"]
-                    for p in defaults.CLUSTER_PEERS
-                    if p not in cluster.connections.keys()
-                ]
-            )
+            missing_peers = ", ".join(cluster.peers.get_offline_peers())
 
             if missing_peers:
                 await ws_htmx(

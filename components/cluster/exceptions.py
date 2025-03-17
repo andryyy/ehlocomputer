@@ -9,6 +9,10 @@ class IncompleteClusterResponses(Exception):
     pass
 
 
+class ZombiePeer(Exception):
+    pass
+
+
 class UnknownPeer(Exception):
     pass
 
