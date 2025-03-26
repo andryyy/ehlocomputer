@@ -41,6 +41,43 @@ def setCheckboxes(el, option)
   end
 end
 
+behavior trCheckboxSelect
+  on click
+    document.getSelection().removeAllRanges()
+    if not event.shiftKey
+      take .select-tr-element from <tr/> in closest <table/> for me
+      call setCheckboxes(me, 'toggle') unless event.target.tagName.toLowerCase() === 'a'
+    else
+      document.getSelection().removeAllRanges()
+      get first .select-tr-element in closest <table/>
+      if it
+        set toggleTo to 'none'
+        if checked of first .multiselect in it
+          set toggleTo to 'all'
+        end
+        set selectedTrElement to it
+        if it.rowIndex < my.rowIndex
+          repeat while selectedTrElement.nextElementSibling
+            set selectedTrElement to selectedTrElement.nextElementSibling
+            call setCheckboxes(selectedTrElement, toggleTo)
+            if selectedTrElement is me
+              break
+            end
+          end
+        else
+          repeat while selectedTrElement.previousElementSibling
+            call setCheckboxes(selectedTrElement, toggleTo)
+            if selectedTrElement is me
+              break
+            end
+            set selectedTrElement to selectedTrElement.previousElementSibling
+          end
+        end
+      end
+    end
+  end
+end
+
 behavior buttonCheckHtmxResponse
   on htmx:afterRequest from closest <form/> to me
     if (closest <form/> to me) != (event.target) exit end

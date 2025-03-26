@@ -4,8 +4,7 @@ import random
 
 
 async def cli_processor(streams: tuple[asyncio.StreamReader, asyncio.StreamWriter]):
-    from components.users import what_id, get, patch
-    from components.web.utils.locking import ClusterLock
+    from components.users import what_id, get
     from components.database import IN_MEMORY_DB
 
     try:
@@ -19,17 +18,7 @@ async def cli_processor(streams: tuple[asyncio.StreamReader, asyncio.StreamWrite
                     user_id = await what_id(login=login)
                     user = await get(user_id=user_id)
                     if "system" not in user.acl:
-                        user.acl.append("system")
-
-                        async with ClusterLock("users"):
-                            await patch(
-                                user_id=user_id,
-                                data={
-                                    "login": login,
-                                    "acl": user.acl,
-                                    "credentials": list(user.credentials.keys()),
-                                },
-                            )
+                        IN_MEMORY_DB["PROMOTE_USERS"].add(user_id)
                         writer.write(b"\x01")
                     else:
                         writer.write(b"\x02")

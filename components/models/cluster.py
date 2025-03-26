@@ -18,20 +18,25 @@ class ConnectionStatus(Enum):
     REFUSED = 1
     SOCKET_REFUSED = 2
     ALL_AVAILABLE_FAILED = 3
+    OK = 4
+    OK_WITH_PREVIOUS_ERRORS = 5
 
 
 class CritErrors(Enum):
-    NOT_READY = "ACK CRIT:NOT_READY"
-    NO_SUCH_TABLE = "ACK CRIT:NO_SUCH_TABLE"
-    TABLE_HASH_MISMATCH = "ACK CRIT:TABLE_HASH_MISMATCH"
-    CANNOT_APPLY = "ACK CRIT:CANNOT_APPLY"
-    NOTHING_TO_COMMIT = "ACK CRIT:NOTHING_TO_COMMIT"
-    INVALID_FILE_PATH = "ACK CRIT:INVALID_FILE_PATH"
-    START_BEHIND_FILE_END = "ACK CRIT:START_BEHIND_FILE_END"
-    NO_TRUST = "ACK CRIT:NO_TRUST"
-    PEERS_MISMATCH = "ACK CRIT:PEERS_MISMATCH"
-    DOC_MISMATCH = "ACK CRIT:DOC_MISMATCH"
-    ZOMBIE = "ACK CRIT:ZOMBIE"
+    NOT_READY = "CRIT:NOT_READY"
+    NO_SUCH_TABLE = "CRIT:NO_SUCH_TABLE"
+    TABLE_HASH_MISMATCH = "CRIT:TABLE_HASH_MISMATCH"
+    CANNOT_APPLY = "CRIT:CANNOT_APPLY"
+    NOTHING_TO_COMMIT = "CRIT:NOTHING_TO_COMMIT"
+    INVALID_FILE_PATH = "CRIT:INVALID_FILE_PATH"
+    START_BEHIND_FILE_END = "CRIT:START_BEHIND_FILE_END"
+    PEERS_MISMATCH = "CRIT:PEERS_MISMATCH"
+    DOC_MISMATCH = "CRIT:DOC_MISMATCH"
+    ZOMBIE = "CRIT:ZOMBIE"
+
+    @property
+    def response(self):
+        return f"ACK {self.value}"
 
 
 class LocalPeer(BaseModel):
@@ -122,37 +127,52 @@ class RemotePeer(BaseModel):
         self.swarm = ""
         return self
 
-    async def connect(self) -> tuple:
+    def _eval_ip(
+        self,
+    ) -> tuple[IPvAnyAddress | None, tuple[ConnectionStatus, dict]]:
         errors = dict()
-        if not self.streams.out:
-            peer_ips = [ip for ip in [self.ip4, self.ip6] if ip is not None]
-            for ip in peer_ips:
-                with closing(
-                    socket.socket(
-                        socket.AF_INET if ip.version == 4 else socket.AF_INET6,
-                        socket.SOCK_STREAM,
+        peer_ips = [ip for ip in [self.ip4, self.ip6] if ip is not None]
+        for ip in peer_ips:
+            with closing(
+                socket.socket(
+                    socket.AF_INET if ip.version == 4 else socket.AF_INET6,
+                    socket.SOCK_STREAM,
+                )
+            ) as sock:
+                sock.settimeout(defaults.CLUSTER_PEERS_TIMEOUT)
+                connection_return = sock.connect_ex((str(ip), self.port))
+                if connection_return != 0:
+                    errors[ip] = (
+                        ConnectionStatus.SOCKET_REFUSED,
+                        socket.errno.errorcode.get(connection_return),
                     )
-                ) as sock:
-                    sock.settimeout(defaults.CLUSTER_PEERS_TIMEOUT)
-                    connection_return = sock.connect_ex((str(ip), self.port))
-                    if connection_return != 0:
-                        errors[ip] = (
-                            ConnectionStatus.SOCKET_REFUSED,
-                            socket.errno.errorcode.get(connection_return),
-                        )
-                    else:
-                        break
-            else:
-                return ConnectionStatus.ALL_AVAILABLE_FAILED, errors
+                else:
+                    if errors:
+                        return ip, (ConnectionStatus.OK_WITH_PREVIOUS_ERRORS, errors)
+                    return ip, (ConnectionStatus.OK, errors)
+        else:
+            return None, (ConnectionStatus.ALL_AVAILABLE_FAILED, errors)
 
+    async def connect(
+        self,
+        ip: IPvAnyAddress | None = None,
+    ) -> tuple[
+        tuple[asyncio.StreamReader, asyncio.StreamWriter] | None,
+        tuple[ConnectionStatus, Any],
+    ]:
+        if not self.streams.out:
+            if not ip:
+                ip, status = self._eval_ip()
+                if not ip:
+                    return None, status
             try:
                 self.streams.out = await asyncio.open_connection(
                     str(ip), self.port, ssl=get_ssl_context("client")
                 )
-            except ConnectionRefusedError:
-                return ConnectionStatus.REFUSED, ip
+            except ConnectionRefusedError as e:
+                return None, (ConnectionStatus.REFUSED, e)
 
-        return ConnectionStatus.CONNECTED, self.streams.out
+        return self.streams.out, (ConnectionStatus.CONNECTED, None)
 
     @computed_field
     @property

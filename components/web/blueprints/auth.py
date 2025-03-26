@@ -331,6 +331,7 @@ async def register_token():
         IN_MEMORY_DB[token] = {
             "intention": f"Register user: {request_data.login}",
             "status": "awaiting",
+            "token_type": "cli_confirmation",
             "login": request_data.login,
         }
         current_app.add_background_task(
@@ -340,7 +341,7 @@ async def register_token():
             120,
         )
         await ws_htmx(
-            "system",
+            "_system",
             "beforeend",
             f'<div id="auth-permit" hx-trigger="load" hx-get="/auth/register/request/confirm/{request_data.login}"></div>',
         )
@@ -487,7 +488,7 @@ async def register_webauthn():
     }
 
     try:
-        async with ClusterLock("users", current_app):
+        async with ClusterLock(["users", "credentials"], current_app):
             if not appending_passkey:
                 user_id = await create_user(data={"login": login})
 

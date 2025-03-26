@@ -57,6 +57,10 @@ def batch(l: list, n: int):
         yield l[ndx : min(ndx + n, _l)]
 
 
+def chunk_string(s, size=1_000_000):
+    return [s[i : i + size] for i in range(0, len(s), size)]
+
+
 def ensure_list(a: Any | list[Any] | None) -> list:
     if a:
         if not isinstance(a, list):

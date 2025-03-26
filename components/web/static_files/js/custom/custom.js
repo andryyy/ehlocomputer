@@ -1,6 +1,8 @@
 htmx.on("body", "startReg", async function(evt){
   const { startRegistration } = SimpleWebAuthnBrowser
   var reg_button = htmx.find("#register")
+  reg_button.textContent = "Processing..."
+  reg_button.disabled = true
   reg_opts = JSON.parse(evt.detail.value)
   try {
     reg_response = await startRegistration(reg_opts)
@@ -27,6 +29,8 @@ htmx.on("body", "regCompleted", async function(evt){
 htmx.on("body", "startAuth", async function(evt){
   const { startAuthentication } = SimpleWebAuthnBrowser
   var login_button = htmx.find("#authenticate")
+  login_button.textContent = "Processing..."
+  login_button.disabled = true
   auth_opts = JSON.parse(evt.detail.value)
   try {
     auth_response = await startAuthentication(auth_opts)
@@ -46,13 +50,7 @@ htmx.on("body", "startAuth", async function(evt){
 })
 
 htmx.on("body", "authRegFailed", async function(evt){
-	htmx.findAll("#register,#auth").forEach((element) => {
-			element.removeAttribute("hx-ext")
-			element.removeAttribute("hx-vals")
-	    	element.removeAttribute("hx-post")
-	    	htmx.process(element)
-    	}
-	)
+	htmx.ajax("GET", "/", "#body-main")
 })
 
 function datetime_local(add_minutes) {

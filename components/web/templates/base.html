@@ -46,8 +46,8 @@
       <div hx-ext="ws" ws-connect="/ws">
         <input ws-send
           type="hidden"
-          hx-vals='js:{"path": event.detail.requestConfig.path}'
-          hx-trigger="htmx:beforeRequest from:body" />
+          hx-vals='js:{"path": (event.detail.requestConfig?event.detail.requestConfig.path:location.pathname)}'
+          hx-trigger="htmx:beforeRequest from:body, htmx:wsOpen from:body once" />
         <div id="ws-recv"></div>
       </div>
       {% endif %}

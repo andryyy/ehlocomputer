@@ -28,7 +28,6 @@ async def user_group():
             for u in await components.users.search(name="", join_credentials=False)
             if request_data.name in u.groups
         ]
-        print(assigned_to)
 
         assign_to = []
         for user_id in request_data.members:
@@ -36,11 +35,9 @@ async def user_group():
                 await components.users.get(user_id=user_id, join_credentials=False)
             )
 
-        print(assign_to)
         _all = assigned_to + assign_to
-        print(_all)
 
-        async with ClusterLock("users", current_app):
+        async with ClusterLock(["users", "credentials"], current_app):
             for user in _all:
                 user_dict = user.model_dump(mode="json")
                 if request_data.name in user_dict["groups"]:
@@ -142,9 +139,9 @@ async def delete_user(user_id: str | None = None):
         user_ids = request.form_parsed.get("id")
 
     try:
-        async with ClusterLock("users", current_app):
+        async with ClusterLock(["users", "credentials"], current_app):
             for user_id in ensure_list(user_ids):
-                await _delete_user(user_id=user_id)
+                await components.users.delete(user_id=user_id)
 
     except ValidationError as e:
         return validation_error(e.errors())
@@ -156,7 +153,7 @@ async def delete_user(user_id: str | None = None):
         level="success",
         response_code=204,
         title="User removed",
-        message=f"{len(user_ids)} user{'s' if len(user_ids) > 1 else ''} removed",
+        message=f"{len(ensure_list(user_ids))} user{'s' if len(ensure_list(user_ids)) > 1 else ''} removed",
     )
 
 
@@ -192,7 +189,7 @@ async def patch_user(user_id: str | None = None):
         if not user_id:
             user_id = request.form_parsed.get("id")
 
-        async with ClusterLock("users", current_app):
+        async with ClusterLock(["users", "credentials"], current_app):
             await components.users.patch(user_id=user_id, data=request.form_parsed)
             await components.users.patch_profile(
                 user_id=user_id, data=request.form_parsed.get("profile", {})

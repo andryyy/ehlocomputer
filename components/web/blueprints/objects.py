@@ -250,10 +250,11 @@ async def patch_object(object_type: str, object_id: str | None = None):
         return validation_error([{"loc": [name], "msg": message}])
 
     await ws_htmx(
-        "user",
+        "_user",
         "beforeend",
         f'<div hx-trigger="load once" hx-sync="#object-details:drop" hx-target="#object-details" hx-select="#object-details" hx-select-oob="#object-name" hx-swap="outerHTML" hx-get="/objects/{object_type}/{object_id}"></div>',
         f"/objects/{object_type}/{object_id}",
+        exclude_self=True,
     )
 
     return trigger_notification(

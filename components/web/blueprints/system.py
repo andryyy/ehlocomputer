@@ -26,8 +26,8 @@ def load_context():
 @blueprint.route("/cluster/update-status", methods=["POST"])
 @acl("system")
 async def cluster_status_update():
+    ticket, receivers = await cluster.send_command("STATUS", "*")
     async with cluster.receiving:
-        ticket, receivers = await cluster.send_command("STATUS", "*")
         await cluster.await_receivers(ticket, receivers, raise_err=False)
 
     return await status()
@@ -47,7 +47,7 @@ async def cluster_db_enforce_updates():
                 defaults.CLUSTER_ENFORCE_DBUPDATE_TIMEOUT,
             )
             await ws_htmx(
-                "system",
+                "_system",
                 "beforeend",
                 """<div hidden _="on load trigger
                     notification(
@@ -74,7 +74,7 @@ async def cluster_db_enforce_updates():
     elif toggle == "off":
         IN_MEMORY_DB["ENFORCE_DBUPDATE"] = False
         await ws_htmx(
-            "system",
+            "_system",
             "beforeend",
             '<div hidden _="on load remove #enforce-dbupdate-button then trigger '
             + "notification(title: 'Cluster notification', level: 'system', message: 'Enforced database updates are now disabled', duration: 5000)\"></div>",
@@ -91,7 +91,6 @@ async def cluster_db_enforce_updates():
 @acl("system")
 async def status():
     status = {
-        "PEER_CRIT": IN_MEMORY_DB["PEER_CRIT"],
         "ENFORCE_DBUPDATE": IN_MEMORY_DB.get("ENFORCE_DBUPDATE", False),
         "CLUSTER_PEERS_REMOTE_PEERS": cluster.peers.remotes,
         "CLUSTER_PEERS_LOCAL": cluster.peers.local,

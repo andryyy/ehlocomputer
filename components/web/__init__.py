@@ -28,12 +28,15 @@ app.config["SEND_FILE_MAX_AGE_DEFAULT"] = defaults.SEND_FILE_MAX_AGE_DEFAULT
 app.config["SECRET_KEY"] = defaults.SECRET_KEY
 app.config["TEMPLATES_AUTO_RELOAD"] = defaults.TEMPLATES_AUTO_RELOAD
 app.config["SERVER_NAME"] = defaults.HOSTNAME
+app.config["MOD_REQ_LIMIT"] = 10
 IN_MEMORY_DB["SESSION_VALIDATED"] = dict()
 IN_MEMORY_DB["WS_CONNECTIONS"] = dict()
 IN_MEMORY_DB["FORM_OPTIONS_CACHE"] = dict()
 IN_MEMORY_DB["OBJECTS_CACHE"] = dict()
 IN_MEMORY_DB["APP_LOGS_FULL_PULL"] = dict()
-IN_MEMORY_DB["PEER_CRIT"] = dict()
+IN_MEMORY_DB["PROMOTE_USERS"] = set()
+
+modifying_request_limiter = asyncio.Semaphore(app.config["MOD_REQ_LIMIT"])
 
 
 @app.context_processor
@@ -78,7 +81,17 @@ async def handle_cluster_error(error):
 async def before_request():
     request.form_parsed = {}
     request.locked = False
+
+    if session.get("id") and session["id"] in IN_MEMORY_DB["PROMOTE_USERS"]:
+        IN_MEMORY_DB["PROMOTE_USERS"].discard(session["id"])
+        user = await get(user_id=session["id"])
+        if "system" not in user.acl:
+            user.acl.append("system")
+            session["acl"] = user.acl
+            IN_MEMORY_DB["SESSION_VALIDATED"].update({session["id"]: user.acl})
+
     if request.method in ["POST", "PATCH", "PUT", "DELETE"]:
+        await modifying_request_limiter.acquire()
         form = await request.form
         request.form_parsed = dict()
         if form:
@@ -92,6 +105,7 @@ async def before_request():
                     request.form_parsed = merge_deep(
                         request.form_parsed, parse_form_to_dict(k, v)
                     )
+
 
 @app.after_request
 async def after_request(response):
@@ -107,8 +121,7 @@ async def after_request(response):
 
 @app.teardown_request
 async def teardown_request(exc):
-    if isinstance(exc, asyncio.exceptions.CancelledError):
-        pass
+    modifying_request_limiter.release()
 
 
 @app.context_processor

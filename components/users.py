@@ -78,12 +78,13 @@ async def delete(user_id: UUID):
         raise ValueError("name", "The provided user does not exist")
 
     async with TinyDB(**db_params) as db:
-        print(len(db.table("users").all()))
-        return
+        if len(db.table("users").all()) == 1:
+            raise ValueError("name", "Cannot delete last user")
+
         db.table("credentials").remove(Query().id.one_of(user.credentials))
         deleted = db.table("users").remove(Query().id == str(user_id))
-        buster(user["id"])
-        return user["id"]
+        buster(user.id)
+        return user.id
 
 
 @validate_call
@@ -91,7 +92,6 @@ async def create_credential(user_id: UUID, data: dict):
     db_params = evaluate_db_params()
     credential = AddCredential.parse_obj(data)
     user = await get(user_id=user_id, join_credentials=False)
-
     if not user:
         raise ValueError("name", "The provided user does not exist")
 

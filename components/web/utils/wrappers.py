@@ -1,4 +1,5 @@
 from .quart import abort, request, session, websocket, redirect, url_for
+from .notifications import trigger_notification
 from components.database import IN_MEMORY_DB
 from components.logs import logger
 from components.models import TypeAdapter, ValidationError
@@ -42,6 +43,7 @@ async def verify_session(acl: str) -> None:
         try:
             user = await get(user_id=session["id"])
             IN_MEMORY_DB["SESSION_VALIDATED"].update({session["id"]: user.acl})
+            session["acl"] = user.acl
         except:
             session_clear()
             raise AuthException("User unknown")
@@ -95,9 +97,13 @@ def websocket_acl(acl_type):
                 if not session["login"] in IN_MEMORY_DB["WS_CONNECTIONS"]:
                     IN_MEMORY_DB["WS_CONNECTIONS"][session["login"]] = dict()
 
-                IN_MEMORY_DB["WS_CONNECTIONS"][session["login"]].update(
-                    {websocket._get_current_object(): "opened"}
-                )
+                if (
+                    not websocket._get_current_object()
+                    in IN_MEMORY_DB["WS_CONNECTIONS"][session["login"]]
+                ):
+                    IN_MEMORY_DB["WS_CONNECTIONS"][session["login"]][
+                        websocket._get_current_object()
+                    ] = dict()
 
                 return await fn(*args, **kwargs)
             except AuthException as e:

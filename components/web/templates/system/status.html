@@ -47,13 +47,6 @@
     {% for peer, peer_data in data.status.CLUSTER_PEERS_REMOTE_PEERS.items() %}
     <article>
       <h5>{{ peer }} {% if peer == data.status.CLUSTER_PEERS_LOCAL.leader %}👑{% endif %}</h5>
-      <p>
-        {% if data.status.PEER_CRIT.get(peer, None) %}
-          <b class="color-red">{{ PEER_CRIT }}</b>
-        {% else %}
-          <small>No previous error reported.</small>
-        {% endif %}
-      </p>
       <ul>
       {% for k, v in peer_data %}
         <li><span class="color-zinc-600">{{ k.split("_")|join(" ")|capitalize }}</span>:

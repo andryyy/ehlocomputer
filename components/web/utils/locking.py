@@ -72,55 +72,46 @@ class ClusterLock:
             for t in self.tables:
                 table_data = {doc.doc_id: doc for doc in db.table(t).all()}
                 diff = self.compare_tables(self.aenter_db_data[t]["data"], table_data)
-
                 if diff:
                     commit = True
-                    async with cluster.receiving:
-                        try:
-                            if not IN_MEMORY_DB.get("enforce_commit", False):
-                                apply_mode = "PATCHTABLE"
-                                diff_json_bytes = json.dumps(diff).encode("utf-8")
-                                apply_data = base64.b64encode(diff_json_bytes).decode(
-                                    "utf-8"
-                                )
-                            else:
-                                apply_mode = "FULLTABLE"
-                                jb = json.dumps(table_data, sort_keys=True).encode(
-                                    "utf-8"
-                                )
-                                apply_data = base64.b64encode(jb).decode("utf-8")
-
-                            _, receivers = await cluster.send_command(
-                                f"{apply_mode} {t}@{self.aenter_db_data[t]['digest']} {apply_data}",
-                                "*",
-                                ticket=ticket,
+                    try:
+                        if not IN_MEMORY_DB.get("ENFORCE_DBUPDATE", False):
+                            apply_mode = "PATCHTABLE"
+                            diff_json_bytes = json.dumps(diff).encode("utf-8")
+                            apply_data = base64.b64encode(diff_json_bytes).decode(
+                                "utf-8"
                             )
+                        else:
+                            apply_mode = "FULLTABLE"
+                            jb = json.dumps(table_data, sort_keys=True).encode("utf-8")
+                            apply_data = base64.b64encode(jb).decode("utf-8")
+
+                        _, receivers = await cluster.send_command(
+                            f"{apply_mode} {t}@{self.aenter_db_data[t]['digest']} {apply_data}",
+                            "*",
+                            ticket=ticket,
+                        )
+                        async with cluster.receiving:
                             await cluster.await_receivers(
                                 ticket, receivers, raise_err=True
                             )
-                        except Exception as e:
-                            error = e
-                            logger.error(
-                                f"<ClusterLock> command {apply_mode} failed for {ticket}: {error}"
-                            )
-                            break
-
-                    if apply_mode == "FULLTABLE":
-                        IN_MEMORY_DB["PEER_CRIT"] = dict()
+                    except Exception as e:
+                        error = e
+                        break
 
             if error == False:
                 if commit:
-                    async with cluster.receiving:
-                        try:
-                            _, receivers = await cluster.send_command(
-                                f"COMMIT", "*", ticket=ticket
-                            )
+                    try:
+                        _, receivers = await cluster.send_command(
+                            f"COMMIT", "*", ticket=ticket
+                        )
+                        async with cluster.receiving:
                             await cluster.await_receivers(
                                 ticket, receivers, raise_err=True
                             )
-                            await dbcommit(self.tables)
-                        except:
-                            logger.error(f"<ClusterLock> failed to commit {ticket}")
+                        await dbcommit(self.tables)
+                    except:
+                        logger.error(f"Failed to commit {ticket}")
                 else:
                     os.unlink(self.db_params["filename"])
 

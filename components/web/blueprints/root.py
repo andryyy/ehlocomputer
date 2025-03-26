@@ -41,7 +41,6 @@ async def ws():
             if "path" in data_dict:
                 IN_MEMORY_DB["WS_CONNECTIONS"][session["login"]][
                     websocket._get_current_object()
-                ] = data_dict["path"]
-
+                ]["path"] = data_dict["path"]
         except:
             pass
